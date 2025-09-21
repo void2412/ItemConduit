@@ -304,14 +304,24 @@ namespace ItemConduit.Core
 			{
 				nodeComponent.NodeLength = length;
 				nodeComponent.NodeType = nodeType;
-<<<<<<< HEAD
-<<<<<<< HEAD
-
-				Debug.Log($"[ItemConduit] Set node {prefabName} length to {length}m (verification: {nodeComponent.NodeLength}m)");
-=======
->>>>>>> parent of 4c82026 (Working version not optimized)
-=======
->>>>>>> parent of 4c82026 (Working version not optimized)
+			}
+						snapCount++;
+						Debug.Log($"[ItemConduit] Found existing snappoint: {child.name} at local pos {child.localPosition}");
+					}
+				}
+				Debug.Log($"[ItemConduit] {prefabName} has {snapCount} existing snappoints from {prefabClone}");
+			}
+						snapCount++;
+						Debug.Log($"[ItemConduit] Found existing snappoint: {child.name} at local pos {child.localPosition}");
+					}
+				}
+				Debug.Log($"[ItemConduit] {prefabName} has {snapCount} existing snappoints from {prefabClone}");
+			}
+						snapCount++;
+						Debug.Log($"[ItemConduit] Found existing snappoint: {child.name} at local pos {child.localPosition}");
+					}
+				}
+				Debug.Log($"[ItemConduit] {prefabName} has {snapCount} existing snappoints from {prefabClone}");
 			}
 
 			// Configure piece component for building system
@@ -360,8 +370,6 @@ namespace ItemConduit.Core
 			if (ShowDebugInfo.Value)
 			{
 				Jotunn.Logger.LogInfo($"Registered {displayName} [{prefabName}]");
-<<<<<<< HEAD
-=======
 			}
 		}
 
@@ -398,106 +406,6 @@ namespace ItemConduit.Core
 				sphere2.transform.SetParent(snapPoint2.transform);
 				sphere2.transform.localScale = Vector3.one * 0.1f;
 				Destroy(sphere2.GetComponent<Collider>());
->>>>>>> parent of 4c82026 (Working version not optimized)
-			}
-		}
-
-		/// <summary>
-		/// Add snap points to node prefab for connections
-		/// </summary>
-		private void AddSnapPoints(GameObject prefab, float length)
-		{
-			// Create snap point at start of node
-			GameObject snapPoint1 = new GameObject("snappoint_start");
-			snapPoint1.transform.SetParent(prefab.transform);
-			snapPoint1.transform.localPosition = new Vector3(-length / 2f, 0, 0);
-			snapPoint1.tag = "snappoint";
-
-			// Add small sphere for debug visualization
-			if (ShowDebugInfo.Value)
-			{
-				GameObject sphere1 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-				sphere1.transform.SetParent(snapPoint1.transform);
-				sphere1.transform.localScale = Vector3.one * 0.1f;
-				Destroy(sphere1.GetComponent<Collider>());
-			}
-
-			// Create snap point at end of node
-			GameObject snapPoint2 = new GameObject("snappoint_end");
-			snapPoint2.transform.SetParent(prefab.transform);
-			snapPoint2.transform.localPosition = new Vector3(length / 2f, 0, 0);
-			snapPoint2.tag = "snappoint";
-
-			// Add small sphere for debug visualization
-			if (ShowDebugInfo.Value)
-			{
-				GameObject sphere2 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-				sphere2.transform.SetParent(snapPoint2.transform);
-				sphere2.transform.localScale = Vector3.one * 0.1f;
-				Destroy(sphere2.GetComponent<Collider>());
-			}
-		}
-
-		/// <summary>
-		/// Add snap points to node prefab for connections
-		/// Snap points are placed at the front and back of the node
-		/// </summary>
-		private void AddSnapPoints(GameObject prefab, float length)
-		{
-			// Clear any existing snap points
-			foreach (Transform child in prefab.transform)
-			{
-				if (child.name.Contains("snappoint"))
-				{
-					DestroyImmediate(child.gameObject);
-				}
-			}
-
-			// Wood beams in Valheim extend along the Z axis (forward/back)
-			Vector3 forwardAxis = Vector3.forward;
-
-			// Create snap point at the FRONT of node (positive Z)
-			GameObject snapPointFront = new GameObject("snappoint_front");
-			snapPointFront.transform.SetParent(prefab.transform);
-			snapPointFront.transform.localPosition = forwardAxis * (length / 2f);
-			snapPointFront.tag = "snappoint";
-
-			// Add visual indicator in debug mode for front (cyan)
-			if (ShowDebugInfo.Value)
-			{
-				GameObject sphereFront = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-				sphereFront.transform.SetParent(snapPointFront.transform);
-				sphereFront.transform.localPosition = Vector3.zero;
-				sphereFront.transform.localScale = Vector3.one * 0.2f;
-
-				Destroy(sphereFront.GetComponent<Collider>());
-				var rendererFront = sphereFront.GetComponent<Renderer>();
-				if (rendererFront != null)
-				{
-					rendererFront.material.color = Color.cyan;
-				}
-			}
-
-			// Create snap point at the BACK of node (negative Z)
-			GameObject snapPointBack = new GameObject("snappoint_back");
-			snapPointBack.transform.SetParent(prefab.transform);
-			snapPointBack.transform.localPosition = -forwardAxis * (length / 2f);
-			snapPointBack.tag = "snappoint";
-
-			// Add visual indicator in debug mode for back (magenta)
-			if (ShowDebugInfo.Value)
-			{
-				GameObject sphereBack = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-				sphereBack.transform.SetParent(snapPointBack.transform);
-				sphereBack.transform.localPosition = Vector3.zero;
-				sphereBack.transform.localScale = Vector3.one * 0.2f;
-
-				Destroy(sphereBack.GetComponent<Collider>());
-				var rendererBack = sphereBack.GetComponent<Renderer>();
-				if (rendererBack != null)
-				{
-					rendererBack.material.color = Color.magenta;
-				}
 			}
 
 			Debug.Log($"[ItemConduit] Added snap points - Front: {snapPointFront.transform.localPosition}, Back: {snapPointBack.transform.localPosition} for {prefab.name}");
