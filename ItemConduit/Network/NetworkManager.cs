@@ -59,6 +59,7 @@ namespace ItemConduit.Network
 		/// <summary>Coroutine reference for incremental rebuild</summary>
 		private Coroutine incrementalRebuildCoroutine;
 
+<<<<<<< HEAD
 		/// <summary>Hop distance cache for extract-insert node pairs</summary>
 		private Dictionary<(ExtractNode, InsertNode), int> hopDistanceCache;
 
@@ -71,6 +72,8 @@ namespace ItemConduit.Network
 
 <<<<<<< HEAD
 
+=======
+>>>>>>> parent of 4c82026 (Working version not optimized)
 =======
 >>>>>>> parent of 4c82026 (Working version not optimized)
 		#endregion
@@ -345,7 +348,12 @@ namespace ItemConduit.Network
 		private void RebuildHopCacheForNetwork(ConduitNetwork network)
 		{
 <<<<<<< HEAD
+<<<<<<< HEAD
 			if (network == null) return;
+=======
+			// Wait a frame to batch multiple requests
+			yield return null;
+>>>>>>> parent of 4c82026 (Working version not optimized)
 =======
 			// Wait a frame to batch multiple requests
 			yield return null;
@@ -457,12 +465,16 @@ namespace ItemConduit.Network
 									netNode.SetNetworkId(networkId);
 								}
 							}
+<<<<<<< HEAD
+>>>>>>> parent of 4c82026 (Working version not optimized)
+=======
 >>>>>>> parent of 4c82026 (Working version not optimized)
 						}
 					}
 				}
 			}
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
@@ -496,6 +508,8 @@ namespace ItemConduit.Network
 				int hopDistance = GetCachedHopDistance(extractNode, insertNode);
 				if (hopDistance >= 0) // Only include reachable nodes
 =======
+=======
+>>>>>>> parent of 4c82026 (Working version not optimized)
 				// Reactivate all nodes
 				foreach (var node in allNodes)
 >>>>>>> parent of 4c82026 (Working version not optimized)
@@ -566,10 +580,14 @@ namespace ItemConduit.Network
 				}
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 				if (networksNeedingRebuild != null && networksNeedingRebuild.Count > 0)
 				{
 					yield return StartCoroutine(ProcessNetworkRebuildsIncremental());
 				}
+=======
+				Debug.Log($"[ItemConduit] Network rebuild complete. {networks.Count} networks active.");
+>>>>>>> parent of 4c82026 (Working version not optimized)
 =======
 				Debug.Log($"[ItemConduit] Network rebuild complete. {networks.Count} networks active.");
 >>>>>>> parent of 4c82026 (Working version not optimized)
@@ -583,6 +601,7 @@ namespace ItemConduit.Network
 
 			try
 			{
+<<<<<<< HEAD
 <<<<<<< HEAD
 				while (pendingNodes.Count > 0)
 				{
@@ -598,6 +617,9 @@ namespace ItemConduit.Network
 					node.FindConnections();
 					AssignNodeToNetwork(node);
 				}
+=======
+				Debug.LogError($"[ItemConduit] Error during network rebuild: {ex.Message}");
+>>>>>>> parent of 4c82026 (Working version not optimized)
 =======
 				Debug.LogError($"[ItemConduit] Error during network rebuild: {ex.Message}");
 >>>>>>> parent of 4c82026 (Working version not optimized)
@@ -626,8 +648,11 @@ namespace ItemConduit.Network
 				networksNeedingRebuild.Clear();
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 				foreach (string networkId in networksToRebuild)
 =======
+=======
+>>>>>>> parent of 4c82026 (Working version not optimized)
 				network.AddNode(currentNode);
 
 				// Add all connected nodes to the queue
@@ -728,6 +753,7 @@ namespace ItemConduit.Network
 				}
 			}
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 			if (primaryNetworkId == null) return;
 
@@ -848,6 +874,8 @@ namespace ItemConduit.Network
 
 			return components;
 =======
+=======
+>>>>>>> parent of 4c82026 (Working version not optimized)
 			return network;
 >>>>>>> parent of 4c82026 (Working version not optimized)
 		}
@@ -901,6 +929,10 @@ namespace ItemConduit.Network
 				}
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+				// Simple transfer: from each extract to matching insert nodes
+>>>>>>> parent of 4c82026 (Working version not optimized)
 =======
 				// Simple transfer: from each extract to matching insert nodes
 >>>>>>> parent of 4c82026 (Working version not optimized)
@@ -915,10 +947,13 @@ namespace ItemConduit.Network
 					if (sourceInventory == null) continue;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 					// Get insert nodes for this channel, sorted by priority and hop distance
 					var channelInserts = network.GetSortedInsertNodesForChannel(extractNode.ChannelId);
 					var sortedInserts = GetInsertNodesSortedByHopDistance(extractNode, channelInserts);
 =======
+=======
+>>>>>>> parent of 4c82026 (Working version not optimized)
 					// Find matching insert nodes (same channel)
 					var matchingInserts = network.InsertNodes
 						.Where(n => n != null && n.IsActive && n.ChannelId == extractNode.ChannelId)
@@ -939,9 +974,17 @@ namespace ItemConduit.Network
 							if (insertNode.CanInsertItem(item))
 							{
 <<<<<<< HEAD
+<<<<<<< HEAD
 								var itemToTransfer = item.Clone();
 								itemToTransfer.m_stack = (int)Math.Min(item.m_stack, ItemConduitMod.TransferRate.Value);
 
+=======
+								// Clone item for transfer
+								var itemToTransfer = item.Clone();
+								itemToTransfer.m_stack = (Int32)Math.Min(item.m_stack, ItemConduitMod.TransferRate.Value);
+
+								// Remove from source
+>>>>>>> parent of 4c82026 (Working version not optimized)
 =======
 								// Clone item for transfer
 								var itemToTransfer = item.Clone();
@@ -956,9 +999,13 @@ namespace ItemConduit.Network
 									if (ItemConduitMod.ShowDebugInfo.Value)
 									{
 <<<<<<< HEAD
+<<<<<<< HEAD
 										int hops = GetCachedHopDistance(extractNode, insertNode);
 										Debug.Log($"[ItemConduit] Transferred {itemToTransfer.m_stack}x {item.m_shared.m_name} " +
 												 $"from {extractNode.name} to {insertNode.name} ({hops} hops)");
+=======
+										Debug.Log($"[ItemConduit] Transferred {itemToTransfer.m_stack}x {item.m_shared.m_name}");
+>>>>>>> parent of 4c82026 (Working version not optimized)
 =======
 										Debug.Log($"[ItemConduit] Transferred {itemToTransfer.m_stack}x {item.m_shared.m_name}");
 >>>>>>> parent of 4c82026 (Working version not optimized)

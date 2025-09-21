@@ -305,8 +305,11 @@ namespace ItemConduit.Core
 				nodeComponent.NodeLength = length;
 				nodeComponent.NodeType = nodeType;
 <<<<<<< HEAD
+<<<<<<< HEAD
 
 				Debug.Log($"[ItemConduit] Set node {prefabName} length to {length}m (verification: {nodeComponent.NodeLength}m)");
+=======
+>>>>>>> parent of 4c82026 (Working version not optimized)
 =======
 >>>>>>> parent of 4c82026 (Working version not optimized)
 			}
@@ -357,6 +360,45 @@ namespace ItemConduit.Core
 			if (ShowDebugInfo.Value)
 			{
 				Jotunn.Logger.LogInfo($"Registered {displayName} [{prefabName}]");
+<<<<<<< HEAD
+=======
+			}
+		}
+
+		/// <summary>
+		/// Add snap points to node prefab for connections
+		/// </summary>
+		private void AddSnapPoints(GameObject prefab, float length)
+		{
+			// Create snap point at start of node
+			GameObject snapPoint1 = new GameObject("snappoint_start");
+			snapPoint1.transform.SetParent(prefab.transform);
+			snapPoint1.transform.localPosition = new Vector3(-length / 2f, 0, 0);
+			snapPoint1.tag = "snappoint";
+
+			// Add small sphere for debug visualization
+			if (ShowDebugInfo.Value)
+			{
+				GameObject sphere1 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				sphere1.transform.SetParent(snapPoint1.transform);
+				sphere1.transform.localScale = Vector3.one * 0.1f;
+				Destroy(sphere1.GetComponent<Collider>());
+			}
+
+			// Create snap point at end of node
+			GameObject snapPoint2 = new GameObject("snappoint_end");
+			snapPoint2.transform.SetParent(prefab.transform);
+			snapPoint2.transform.localPosition = new Vector3(length / 2f, 0, 0);
+			snapPoint2.tag = "snappoint";
+
+			// Add small sphere for debug visualization
+			if (ShowDebugInfo.Value)
+			{
+				GameObject sphere2 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				sphere2.transform.SetParent(snapPoint2.transform);
+				sphere2.transform.localScale = Vector3.one * 0.1f;
+				Destroy(sphere2.GetComponent<Collider>());
+>>>>>>> parent of 4c82026 (Working version not optimized)
 			}
 		}
 
