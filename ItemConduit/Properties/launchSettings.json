@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "ItemConduit": {
+      "commandName": "Project",
+      "remoteDebugEnabled": false,
+      "nativeDebugging": false,
+      "sqlDebugging": false,
+      "jsWebView2Debugging": false
+    }
+  }
+}

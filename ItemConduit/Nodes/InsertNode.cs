@@ -1,0 +1,392 @@
+using UnityEngine;
+using ItemConduit.Core;
+using ItemConduit.GUI;
+
+namespace ItemConduit.Nodes
+{
+	/// <summary>
+	/// Insert node implementation
+	/// Receives items from the network and inserts them into attached containers
+	/// </summary>
+	public class InsertNode : BaseNode
+	{
+		#region Configuration Properties
+
+		/// <summary>Channel ID for receiving items from specific extract nodes</summary>
+		public string ChannelId { get; private set; } = "None";
+
+		/// <summary>Priority level for filling order (higher = filled first)</summary>
+		public int Priority { get; private set; } = 0;
+
+		#endregion
+
+		#region Private Fields
+
+		/// <summary>Reference to the container this node inserts into</summary>
+		private Container targetContainer;
+
+		/// <summary>GUI component for configuration</summary>
+		private InsertNodeGUI gui;
+
+		/// <summary>Search radius for finding containers</summary>
+		private const float CONTAINER_SEARCH_RADIUS = 2f;
+
+		/// <summary>Time since last insertion</summary>
+		private float lastInsertionTime;
+
+		#endregion
+
+		#region Unity Lifecycle
+
+		/// <summary>
+		/// Initialize insert node with additional RPCs
+		/// </summary>
+		protected override void Awake()
+		{
+			base.Awake();
+			NodeType = NodeType.Insert;
+
+			// Register additional RPCs for insert node configuration
+			if (zNetView != null && zNetView.IsValid())
+			{
+				zNetView.Register<string>("RPC_UpdateChannel", RPC_UpdateChannel);
+				zNetView.Register<int>("RPC_UpdatePriority", RPC_UpdatePriority);
+			}
+		}
+
+		/// <summary>
+		/// Find target container on start
+		/// </summary>
+		protected override void Start()
+		{
+			base.Start();
+			FindTargetContainer();
+		}
+
+		#endregion
+
+		#region Container Management
+
+		/// <summary>
+		/// Find the nearest container to insert items into
+		/// </summary>
+		private void FindTargetContainer()
+		{
+			// Find all colliders within search radius
+			Collider[] colliders = Physics.OverlapSphere(transform.position, CONTAINER_SEARCH_RADIUS);
+
+			float nearestDistance = float.MaxValue;
+			Container nearestContainer = null;
+
+			foreach (Collider col in colliders)
+			{
+				// Check for standard container
+				Container container = col.GetComponent<Container>();
+				if (container != null)
+				{
+					float distance = Vector3.Distance(transform.position, col.transform.position);
+					if (distance < nearestDistance)
+					{
+						nearestDistance = distance;
+						nearestContainer = container;
+					}
+				}
+
+				// Special containers are handled by wrapper components
+			}
+
+			targetContainer = nearestContainer;
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				if (targetContainer != null)
+				{
+					Debug.Log($"[ItemConduit] Insert node {name} connected to container: {targetContainer.name}");
+				}
+				else
+				{
+					Debug.Log($"[ItemConduit] Insert node {name} found no container within {CONTAINER_SEARCH_RADIUS}m");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Get the container this node inserts into
+		/// </summary>
+		public Container GetTargetContainer()
+		{
+			// Validate container still exists
+			if (targetContainer == null)
+			{
+				FindTargetContainer();
+			}
+			return targetContainer;
+		}
+
+		#endregion
+
+		#region Item Insertion
+
+		/// <summary>
+		/// Check if an item can be inserted into the container
+		/// </summary>
+		/// <param name="item">The item to check</param>
+		/// <returns>True if the item can be inserted</returns>
+		public bool CanInsertItem(ItemDrop.ItemData item)
+		{
+			if (targetContainer == null || item == null) return false;
+
+			Inventory inventory = targetContainer.GetInventory();
+			if (inventory == null) return false;
+
+			// Check if inventory has space
+			return inventory.CanAddItem(item);
+		}
+
+		/// <summary>
+		/// Insert an item into the container
+		/// </summary>
+		/// <param name="item">The item to insert</param>
+		/// <returns>True if insertion was successful</returns>
+		public bool InsertItem(ItemDrop.ItemData item)
+		{
+			if (!CanInsertItem(item)) return false;
+
+			Inventory inventory = targetContainer.GetInventory();
+			bool success = inventory.AddItem(item);
+
+			if (success)
+			{
+				lastInsertionTime = Time.time;
+
+				// Visual feedback
+				if (ItemConduitMod.EnableVisualEffects.Value)
+				{
+					// TODO: Add insertion effect (particles, sound, etc.)
+				}
+
+				if (ItemConduitMod.ShowDebugInfo.Value)
+				{
+					Debug.Log($"[ItemConduit] Insert node {name} inserted {item.m_shared.m_name} x{item.m_stack}");
+				}
+			}
+
+			return success;
+		}
+
+		/// <summary>
+		/// Get available space in the container
+		/// </summary>
+		/// <returns>Number of free slots</returns>
+		public int GetAvailableSpace()
+		{
+			if (targetContainer == null) return 0;
+
+			Inventory inventory = targetContainer.GetInventory();
+			if (inventory == null) return 0;
+
+			return inventory.GetEmptySlots();
+		}
+
+		#endregion
+
+		#region Configuration
+
+		/// <summary>
+		/// Set the channel ID for this insert node
+		/// </summary>
+		/// <param name="channelId">The channel ID to set</param>
+		public void SetChannel(string channelId)
+		{
+			ChannelId = string.IsNullOrEmpty(channelId) ? "None" : channelId;
+
+			// Sync to all clients
+			if (zNetView != null && zNetView.IsValid() && ZNet.instance.IsServer())
+			{
+				zNetView.InvokeRPC(ZNetView.Everybody, "RPC_UpdateChannel", ChannelId);
+			}
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Debug.Log($"[ItemConduit] Insert node {name} channel set to: {ChannelId}");
+			}
+		}
+
+		/// <summary>
+		/// Set the priority for this insert node
+		/// </summary>
+		/// <param name="priority">The priority value (higher = filled first)</param>
+		public void SetPriority(int priority)
+		{
+			Priority = priority;
+
+			// Sync to all clients
+			if (zNetView != null && zNetView.IsValid() && ZNet.instance.IsServer())
+			{
+				zNetView.InvokeRPC(ZNetView.Everybody, "RPC_UpdatePriority", Priority);
+			}
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Debug.Log($"[ItemConduit] Insert node {name} priority set to: {Priority}");
+			}
+		}
+
+		#endregion
+
+		#region RPC Handlers
+
+		/// <summary>
+		/// RPC handler for channel updates
+		/// </summary>
+		private void RPC_UpdateChannel(long sender, string channelId)
+		{
+			ChannelId = channelId;
+		}
+
+		/// <summary>
+		/// RPC handler for priority updates
+		/// </summary>
+		private void RPC_UpdatePriority(long sender, int priority)
+		{
+			Priority = priority;
+		}
+
+		#endregion
+
+		#region User Interaction
+
+		/// <summary>
+		/// Handle player interaction to open configuration GUI
+		/// </summary>
+		public override bool Interact(Humanoid user, bool hold, bool alt)
+		{
+			// Only local player can configure
+			if (user != Player.m_localPlayer) return false;
+
+			// Create GUI if it doesn't exist
+			if (gui == null)
+			{
+				GameObject guiObj = new GameObject("InsertNodeGUI");
+				gui = guiObj.AddComponent<InsertNodeGUI>();
+				gui.Initialize(this);
+			}
+
+			// Show the GUI
+			gui.Show();
+			return true;
+		}
+
+		/// <summary>
+		/// Provide detailed hover text for insert nodes
+		/// </summary>
+		public override string GetHoverText()
+		{
+			string baseText = base.GetHoverText();
+
+			// Add channel info
+			string channelInfo = $"[Channel: <color=cyan>{ChannelId}</color>]";
+
+			// Add priority info
+			string priorityColor = Priority > 0 ? "yellow" : "white";
+			string priorityInfo = $"[Priority: <color={priorityColor}>{Priority}</color>]";
+
+			// Add container status
+			string containerStatus;
+			if (targetContainer != null)
+			{
+				Inventory inv = targetContainer.GetInventory();
+				if (inv != null)
+				{
+					int emptySlots = inv.GetEmptySlots();
+					int totalSlots = inv.GetWidth() * inv.GetHeight();
+					int usedSlots = totalSlots - emptySlots;
+
+					string fullnessColor = emptySlots > 0 ? "green" : "red";
+					containerStatus = $"[Container: <color={fullnessColor}>Connected</color> ({usedSlots}/{totalSlots} slots)]";
+				}
+				else
+				{
+					containerStatus = "[Container: <color=yellow>Connected (Invalid)</color>]";
+				}
+			}
+			else
+			{
+				containerStatus = "[Container: <color=red>Not Connected</color>]";
+			}
+
+			// Add interaction hint
+			string interactionHint = "\n[<color=yellow>E</color>] Configure";
+
+			return $"{baseText}\n{channelInfo}\n{priorityInfo}\n{containerStatus}{interactionHint}";
+		}
+
+		#endregion
+
+		#region Visual Updates
+
+		/// <summary>
+		/// Update visual state for insert node
+		/// </summary>
+		protected override void UpdateVisualState(bool active)
+		{
+			base.UpdateVisualState(active);
+
+			if (!ItemConduitMod.EnableVisualEffects.Value) return;
+
+			// Apply blue tint when active
+			MeshRenderer renderer = GetComponentInChildren<MeshRenderer>();
+			if (renderer != null)
+			{
+				if (active)
+				{
+					renderer.material.EnableKeyword("_EMISSION");
+					renderer.material.SetColor("_EmissionColor", Color.blue * 0.3f);
+				}
+				else
+				{
+					renderer.material.DisableKeyword("_EMISSION");
+				}
+			}
+		}
+
+		#endregion
+
+		#region Comparison Support
+
+		/// <summary>
+		/// Compare insert nodes for sorting by priority and distance
+		/// Used by the network manager for transfer ordering
+		/// </summary>
+		public class PriorityComparer : System.Collections.Generic.IComparer<InsertNode>
+		{
+			private BaseNode sourceNode;
+
+			public PriorityComparer(BaseNode source)
+			{
+				sourceNode = source;
+			}
+
+			public int Compare(InsertNode x, InsertNode y)
+			{
+				if (x == null || y == null) return 0;
+
+				// First compare by priority (higher first)
+				int priorityComparison = y.Priority.CompareTo(x.Priority);
+				if (priorityComparison != 0) return priorityComparison;
+
+				// Then compare by distance (closer first)
+				if (sourceNode != null)
+				{
+					float distX = Vector3.Distance(sourceNode.transform.position, x.transform.position);
+					float distY = Vector3.Distance(sourceNode.transform.position, y.transform.position);
+					return distX.CompareTo(distY);
+				}
+
+				return 0;
+			}
+		}
+
+		#endregion
+	}
+}
