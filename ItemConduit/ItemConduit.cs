@@ -65,11 +65,18 @@ namespace ItemConduit.Core
 			// Initialize the network management system
 			ItemConduit.Network.NetworkManager.Instance.Initialize();
 
+
 			Jotunn.Logger.LogInfo($"{PluginName} v{PluginVersion} initialized successfully!");
 		}
 
 		/// <summary>
+		/// Register console commands for debugging
+		/// </summary>
+
+
+		/// <summary>
 		/// Load and bind configuration values from BepInEx config file
+		/// Removed MaxNetworkSize to make networks unlimited
 		/// </summary>
 		private void LoadConfiguration()
 		{
@@ -81,16 +88,6 @@ namespace ItemConduit.Core
 				new ConfigDescription(
 					"Number of items transferred per second",
 					new AcceptableValueRange<float>(0.1f, 100f)
-				)
-			);
-
-			MaxNetworkSize = Config.Bind(
-				"General",
-				"MaxNetworkSize",
-				1000,
-				new ConfigDescription(
-					"Maximum number of nodes allowed in a single network",
-					new AcceptableValueRange<int>(10, 5000)
 				)
 			);
 
@@ -107,20 +104,10 @@ namespace ItemConduit.Core
 			ConnectionRange = Config.Bind(
 				"General",
 				"ConnectionRange",
-				2f,
+				1f,
 				new ConfigDescription(
 					"Additional range for node connections in meters",
-					new AcceptableValueRange<float>(0.5f, 5f)
-				)
-			);
-
-			EndpointConnectionThreshold = Config.Bind(
-				"General",
-				"EndpointConnectionThreshold",
-				0.2f,
-				new ConfigDescription(
-					"Maximum distance between endpoints to form a connection (very small for snappoints)",
-					new AcceptableValueRange<float>(0.05f, 1f)
+					new AcceptableValueRange<float>(0.1f, 2f)
 				)
 			);
 
@@ -136,8 +123,29 @@ namespace ItemConduit.Core
 			ShowDebugInfo = Config.Bind(
 				"Debug",
 				"ShowDebugInfo",
-				true,
+				false,
 				"Show debug information in console and game"
+			);
+
+			// Performance Settings
+			var maxFrameTime = Config.Bind(
+				"Performance",
+				"MaxFrameTime",
+				2f,
+				new ConfigDescription(
+					"Maximum time per frame for network operations in milliseconds",
+					new AcceptableValueRange<float>(0.5f, 10f)
+				)
+			);
+
+			var rebuildInterval = Config.Bind(
+				"Performance",
+				"RebuildCheckInterval",
+				0.1f,
+				new ConfigDescription(
+					"How often to check for network rebuilds in seconds",
+					new AcceptableValueRange<float>(0.05f, 1f)
+				)
 			);
 		}
 
@@ -298,18 +306,6 @@ namespace ItemConduit.Core
 				nodeComponent.NodeType = nodeType;
 
 				Debug.Log($"[ItemConduit] Set node {prefabName} length to {length}m (verification: {nodeComponent.NodeLength}m)");
-
-				// Log existing snappoints from the cloned prefab
-				int snapCount = 0;
-				foreach (Transform child in nodePrefab.transform)
-				{
-					if (child.tag == "snappoint")
-					{
-						snapCount++;
-						Debug.Log($"[ItemConduit] Found existing snappoint: {child.name} at local pos {child.localPosition}");
-					}
-				}
-				Debug.Log($"[ItemConduit] {prefabName} has {snapCount} existing snappoints from {prefabClone}");
 			}
 
 			// Configure piece component for building system
@@ -320,7 +316,8 @@ namespace ItemConduit.Core
 				piece.m_description = description;
 				piece.m_category = Piece.PieceCategory.Misc;
 
-				// DON'T add custom snappoints - use the existing ones from wood_beam
+				// Add connection snap points for proper alignment
+				AddSnapPoints(nodePrefab, length);
 
 				// Add visual customization based on node type
 				CustomizeNodeVisuals(nodePrefab, nodeType);
@@ -374,6 +371,71 @@ namespace ItemConduit.Core
 			{
 				Jotunn.Logger.LogInfo($"Registered {displayName} [{prefabName}] with length {length}m");
 			}
+		}
+
+		/// <summary>
+		/// Add snap points to node prefab for connections
+		/// Snap points are placed at the front and back of the node
+		/// </summary>
+		private void AddSnapPoints(GameObject prefab, float length)
+		{
+			// Clear any existing snap points
+			foreach (Transform child in prefab.transform)
+			{
+				if (child.name.Contains("snappoint"))
+				{
+					DestroyImmediate(child.gameObject);
+				}
+			}
+
+			// Wood beams in Valheim extend along the Z axis (forward/back)
+			Vector3 forwardAxis = Vector3.forward;
+
+			// Create snap point at the FRONT of node (positive Z)
+			GameObject snapPointFront = new GameObject("snappoint_front");
+			snapPointFront.transform.SetParent(prefab.transform);
+			snapPointFront.transform.localPosition = forwardAxis * (length / 2f);
+			snapPointFront.tag = "snappoint";
+
+			// Add visual indicator in debug mode for front (cyan)
+			if (ShowDebugInfo.Value)
+			{
+				GameObject sphereFront = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				sphereFront.transform.SetParent(snapPointFront.transform);
+				sphereFront.transform.localPosition = Vector3.zero;
+				sphereFront.transform.localScale = Vector3.one * 0.2f;
+
+				Destroy(sphereFront.GetComponent<Collider>());
+				var rendererFront = sphereFront.GetComponent<Renderer>();
+				if (rendererFront != null)
+				{
+					rendererFront.material.color = Color.cyan;
+				}
+			}
+
+			// Create snap point at the BACK of node (negative Z)
+			GameObject snapPointBack = new GameObject("snappoint_back");
+			snapPointBack.transform.SetParent(prefab.transform);
+			snapPointBack.transform.localPosition = -forwardAxis * (length / 2f);
+			snapPointBack.tag = "snappoint";
+
+			// Add visual indicator in debug mode for back (magenta)
+			if (ShowDebugInfo.Value)
+			{
+				GameObject sphereBack = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				sphereBack.transform.SetParent(snapPointBack.transform);
+				sphereBack.transform.localPosition = Vector3.zero;
+				sphereBack.transform.localScale = Vector3.one * 0.2f;
+
+				Destroy(sphereBack.GetComponent<Collider>());
+				var rendererBack = sphereBack.GetComponent<Renderer>();
+				if (rendererBack != null)
+				{
+					rendererBack.material.color = Color.magenta;
+				}
+			}
+
+			Debug.Log($"[ItemConduit] Added snap points - Front: {snapPointFront.transform.localPosition}, Back: {snapPointBack.transform.localPosition} for {prefab.name}");
 		}
 
 		/// <summary>

@@ -408,10 +408,12 @@ namespace ItemConduit.Nodes
 
 		/// <summary>
 		/// Set the priority for this insert node
+		/// Now notifies the network manager for efficient re-sorting
 		/// </summary>
 		/// <param name="priority">The priority value (higher = filled first)</param>
 		public void SetPriority(int priority)
 		{
+			int oldPriority = Priority;
 			Priority = priority;
 
 			// Sync to all clients
@@ -420,9 +422,15 @@ namespace ItemConduit.Nodes
 				zNetView.InvokeRPC(ZNetView.Everybody, "RPC_UpdatePriority", Priority);
 			}
 
+			// Notify network manager if priority actually changed
+			if (oldPriority != priority && ZNet.instance.IsServer())
+			{
+				ItemConduit.Network.NetworkManager.Instance.OnInsertNodePriorityChanged(this);
+			}
+
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Insert node {name} priority set to: {Priority}");
+				Debug.Log($"[ItemConduit] Insert node {name} priority changed from {oldPriority} to {Priority}");
 			}
 		}
 
