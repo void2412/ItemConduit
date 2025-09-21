@@ -69,7 +69,10 @@ namespace ItemConduit.Network
 		private const float MAX_FRAME_TIME = 2f; // 2ms per frame
 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> parent of 4c82026 (Working version not optimized)
 		#endregion
 
 		#region Initialization
@@ -341,11 +344,17 @@ namespace ItemConduit.Network
 		/// </summary>
 		private void RebuildHopCacheForNetwork(ConduitNetwork network)
 		{
+<<<<<<< HEAD
 			if (network == null) return;
+=======
+			// Wait a frame to batch multiple requests
+			yield return null;
+>>>>>>> parent of 4c82026 (Working version not optimized)
 
 			// Clear existing cache entries for this network
 			var keysToRemove = new List<(ExtractNode, InsertNode)>();
 
+<<<<<<< HEAD
 			foreach (var key in hopDistanceCache.Keys)
 			{
 				if (network.ExtractNodes.Contains(key.Item1) || network.InsertNodes.Contains(key.Item2))
@@ -375,6 +384,24 @@ namespace ItemConduit.Network
 				var matchingInserts = network.GetSortedInsertNodesForChannel(extractNode.ChannelId);
 
 				foreach (var insertNode in matchingInserts)
+=======
+			rebuildRequested = false;
+			isRebuildingNetworks = true;
+
+			Debug.Log("[ItemConduit] Starting network rebuild...");
+
+			try
+			{
+				// Ensure collections exist
+				if (networks == null)
+					networks = new Dictionary<string, ConduitNetwork>();
+
+				if (allNodes == null)
+					allNodes = new HashSet<BaseNode>();
+
+				// Deactivate all nodes during rebuild
+				foreach (var node in allNodes)
+>>>>>>> parent of 4c82026 (Working version not optimized)
 				{
 					if (insertNode == null || !insertNode.IsActive) continue;
 
@@ -382,15 +409,61 @@ namespace ItemConduit.Network
 					var key = (extractNode, insertNode);
 					if (!hopDistanceCache.ContainsKey(key))
 					{
+<<<<<<< HEAD
 						int hopDistance = CalculateHopDistance(extractNode, insertNode);
 						if (hopDistance >= 0) // Only cache valid paths
 						{
 							hopDistanceCache[key] = hopDistance;
+=======
+						node.SetActive(false);
+					}
+				}
+
+				// Clear existing networks
+				networks.Clear();
+
+				// Remove any null nodes
+				allNodes.RemoveWhere(n => n == null);
+
+				// Rebuild connections for all nodes
+				foreach (var node in allNodes)
+				{
+					if (node != null)
+					{
+						node.FindConnections();
+					}
+				}
+
+				// Build new networks
+				HashSet<BaseNode> visited = new HashSet<BaseNode>();
+
+				foreach (var node in allNodes)
+				{
+					if (node != null && !visited.Contains(node))
+					{
+						ConduitNetwork network = BuildNetworkFromNode(node, visited);
+
+						if (network != null && network.Nodes.Count > 0)
+						{
+							string networkId = Guid.NewGuid().ToString();
+							network.NetworkId = networkId;
+							networks[networkId] = network;
+
+							// Set network ID on all nodes
+							foreach (var netNode in network.Nodes)
+							{
+								if (netNode != null)
+								{
+									netNode.SetNetworkId(networkId);
+								}
+							}
+>>>>>>> parent of 4c82026 (Working version not optimized)
 						}
 					}
 				}
 			}
 
+<<<<<<< HEAD
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
 				int validPaths = hopDistanceCache.Count(kvp =>
@@ -422,6 +495,10 @@ namespace ItemConduit.Network
 
 				int hopDistance = GetCachedHopDistance(extractNode, insertNode);
 				if (hopDistance >= 0) // Only include reachable nodes
+=======
+				// Reactivate all nodes
+				foreach (var node in allNodes)
+>>>>>>> parent of 4c82026 (Working version not optimized)
 				{
 					nodesWithHops.Add((insertNode, hopDistance, insertNode.Priority));
 				}
@@ -488,10 +565,14 @@ namespace ItemConduit.Network
 					yield return StartCoroutine(ProcessPendingNodesIncremental());
 				}
 
+<<<<<<< HEAD
 				if (networksNeedingRebuild != null && networksNeedingRebuild.Count > 0)
 				{
 					yield return StartCoroutine(ProcessNetworkRebuildsIncremental());
 				}
+=======
+				Debug.Log($"[ItemConduit] Network rebuild complete. {networks.Count} networks active.");
+>>>>>>> parent of 4c82026 (Working version not optimized)
 			}
 		}
 
@@ -502,6 +583,7 @@ namespace ItemConduit.Network
 
 			try
 			{
+<<<<<<< HEAD
 				while (pendingNodes.Count > 0)
 				{
 					if (Time.realtimeSinceStartup - frameStartTime > MAX_FRAME_TIME / 1000f)
@@ -516,6 +598,9 @@ namespace ItemConduit.Network
 					node.FindConnections();
 					AssignNodeToNetwork(node);
 				}
+=======
+				Debug.LogError($"[ItemConduit] Error during network rebuild: {ex.Message}");
+>>>>>>> parent of 4c82026 (Working version not optimized)
 			}
 			finally
 			{
@@ -523,7 +608,14 @@ namespace ItemConduit.Network
 			}
 		}
 
+<<<<<<< HEAD
 		private IEnumerator ProcessNetworkRebuildsIncremental()
+=======
+		/// <summary>
+		/// Build a network starting from a specific node
+		/// </summary>
+		private ConduitNetwork BuildNetworkFromNode(BaseNode startNode, HashSet<BaseNode> visited)
+>>>>>>> parent of 4c82026 (Working version not optimized)
 		{
 			isRebuildingNetworks = true;
 			float frameStartTime = Time.realtimeSinceStartup;
@@ -533,7 +625,14 @@ namespace ItemConduit.Network
 				var networksToRebuild = new List<string>(networksNeedingRebuild);
 				networksNeedingRebuild.Clear();
 
+<<<<<<< HEAD
 				foreach (string networkId in networksToRebuild)
+=======
+				network.AddNode(currentNode);
+
+				// Add all connected nodes to the queue
+				foreach (var connectedNode in currentNode.GetConnectedNodes())
+>>>>>>> parent of 4c82026 (Working version not optimized)
 				{
 					if (Time.realtimeSinceStartup - frameStartTime > MAX_FRAME_TIME / 1000f)
 					{
@@ -629,6 +728,7 @@ namespace ItemConduit.Network
 				}
 			}
 
+<<<<<<< HEAD
 			if (primaryNetworkId == null) return;
 
 			ConduitNetwork primaryNetwork = networks[primaryNetworkId];
@@ -747,6 +847,9 @@ namespace ItemConduit.Network
 			}
 
 			return components;
+=======
+			return network;
+>>>>>>> parent of 4c82026 (Working version not optimized)
 		}
 
 		#endregion
@@ -797,6 +900,10 @@ namespace ItemConduit.Network
 					return;
 				}
 
+<<<<<<< HEAD
+=======
+				// Simple transfer: from each extract to matching insert nodes
+>>>>>>> parent of 4c82026 (Working version not optimized)
 				foreach (var extractNode in network.ExtractNodes)
 				{
 					if (extractNode == null || !extractNode.IsActive) continue;
@@ -807,9 +914,17 @@ namespace ItemConduit.Network
 					Inventory sourceInventory = sourceContainer.GetInventory();
 					if (sourceInventory == null) continue;
 
+<<<<<<< HEAD
 					// Get insert nodes for this channel, sorted by priority and hop distance
 					var channelInserts = network.GetSortedInsertNodesForChannel(extractNode.ChannelId);
 					var sortedInserts = GetInsertNodesSortedByHopDistance(extractNode, channelInserts);
+=======
+					// Find matching insert nodes (same channel)
+					var matchingInserts = network.InsertNodes
+						.Where(n => n != null && n.IsActive && n.ChannelId == extractNode.ChannelId)
+						.OrderByDescending(n => n.Priority)
+						.ToList();
+>>>>>>> parent of 4c82026 (Working version not optimized)
 
 					if (sortedInserts.Count == 0) continue;
 
@@ -823,18 +938,30 @@ namespace ItemConduit.Network
 						{
 							if (insertNode.CanInsertItem(item))
 							{
+<<<<<<< HEAD
 								var itemToTransfer = item.Clone();
 								itemToTransfer.m_stack = (int)Math.Min(item.m_stack, ItemConduitMod.TransferRate.Value);
 
+=======
+								// Clone item for transfer
+								var itemToTransfer = item.Clone();
+								itemToTransfer.m_stack = (Int32)Math.Min(item.m_stack, ItemConduitMod.TransferRate.Value);
+
+								// Remove from source
+>>>>>>> parent of 4c82026 (Working version not optimized)
 								sourceInventory.RemoveItem(item, itemToTransfer.m_stack);
 
 								if (insertNode.InsertItem(itemToTransfer))
 								{
 									if (ItemConduitMod.ShowDebugInfo.Value)
 									{
+<<<<<<< HEAD
 										int hops = GetCachedHopDistance(extractNode, insertNode);
 										Debug.Log($"[ItemConduit] Transferred {itemToTransfer.m_stack}x {item.m_shared.m_name} " +
 												 $"from {extractNode.name} to {insertNode.name} ({hops} hops)");
+=======
+										Debug.Log($"[ItemConduit] Transferred {itemToTransfer.m_stack}x {item.m_shared.m_name}");
+>>>>>>> parent of 4c82026 (Working version not optimized)
 									}
 									break;
 								}
@@ -875,4 +1002,9 @@ namespace ItemConduit.Network
 
 		#endregion
 	}
+
+	/// <summary>
+	/// Represents a connected network of conduit nodes
+	/// </summary>
+	
 }

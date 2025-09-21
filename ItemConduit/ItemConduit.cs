@@ -4,7 +4,6 @@ using Jotunn.Configs;
 using Jotunn.Entities;
 using Jotunn.Managers;
 using Jotunn.Utils;
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 using HarmonyLib;
@@ -39,7 +38,6 @@ namespace ItemConduit.Core
 		public static ConfigEntry<bool> ShowDebugInfo;
 		public static ConfigEntry<bool> EnableVisualEffects;
 		public static ConfigEntry<float> ConnectionRange;
-		public static ConfigEntry<float> EndpointConnectionThreshold;
 
 		// Harmony instance for runtime patching
 		private Harmony harmony;
@@ -198,10 +196,11 @@ namespace ItemConduit.Core
 				NodeType.Conduit,
 				3, 1
 			);
+
 		}
 
 		/// <summary>
-		/// Register extract node variants (1m, 2m)
+		/// Register extract node variants (1m, 2m, 4m)
 		/// </summary>
 		private void RegisterExtractNodes()
 		{
@@ -229,7 +228,7 @@ namespace ItemConduit.Core
 		}
 
 		/// <summary>
-		/// Register insert node variants (1m, 2m)
+		/// Register insert node variants (1m, 2m, 4m)
 		/// </summary>
 		private void RegisterInsertNodes()
 		{
@@ -259,6 +258,13 @@ namespace ItemConduit.Core
 		/// <summary>
 		/// Register a single node piece with the game's building system
 		/// </summary>
+		/// <param name="prefabName">Internal name of the prefab</param>
+		/// <param name="displayName">Display name shown to player</param>
+		/// <param name="description">Description shown in build menu</param>
+		/// <param name="length">Length of the node in meters</param>
+		/// <param name="nodeType">Type of node (Conduit/Extract/Insert)</param>
+		/// <param name="woodCost">Amount of wood required to build</param>
+		/// <param name="bronzeCost">Amount of bronze required to build</param>
 		private void RegisterNode(string prefabClone, string prefabName, string displayName, string description,
 			float length, NodeType nodeType, int woodCost, int bronzeCost)
 		{
@@ -266,7 +272,7 @@ namespace ItemConduit.Core
 			GameObject beamPrefab = PrefabManager.Instance.GetPrefab(prefabClone);
 			if (beamPrefab == null)
 			{
-				Jotunn.Logger.LogError($"Could not find {prefabClone} prefab for cloning");
+				Jotunn.Logger.LogError("Could not find wood_beam prefab for cloning");
 				return;
 			}
 
@@ -276,12 +282,6 @@ namespace ItemConduit.Core
 			{
 				Jotunn.Logger.LogError($"Failed to create {prefabName} prefab");
 				return;
-			}
-
-			// Remove any existing node components (in case of re-registration)
-			foreach (var existingNode in nodePrefab.GetComponents<BaseNode>())
-			{
-				DestroyImmediate(existingNode);
 			}
 
 			// Add appropriate component based on node type
@@ -299,13 +299,16 @@ namespace ItemConduit.Core
 					break;
 			}
 
-			// Configure node component properties BEFORE prefab is instantiated
+			// Configure node component properties
 			if (nodeComponent != null)
 			{
 				nodeComponent.NodeLength = length;
 				nodeComponent.NodeType = nodeType;
+<<<<<<< HEAD
 
 				Debug.Log($"[ItemConduit] Set node {prefabName} length to {length}m (verification: {nodeComponent.NodeLength}m)");
+=======
+>>>>>>> parent of 4c82026 (Working version not optimized)
 			}
 
 			// Configure piece component for building system
@@ -351,25 +354,45 @@ namespace ItemConduit.Core
 			CustomPiece customPiece = new CustomPiece(nodePrefab, false, pieceConfig);
 			PieceManager.Instance.AddPiece(customPiece);
 
-			// Add a post-registration hook to ensure values persist
-			PieceManager.OnPiecesRegistered += () =>
-			{
-				var registeredPrefab = PrefabManager.Instance.GetPrefab(prefabName);
-				if (registeredPrefab != null)
-				{
-					var registeredNode = registeredPrefab.GetComponent<BaseNode>();
-					if (registeredNode != null)
-					{
-						registeredNode.NodeLength = length;
-						registeredNode.NodeType = nodeType;
-						Debug.Log($"[ItemConduit] Post-registration: Set {prefabName} length to {length}m, type to {nodeType}");
-					}
-				}
-			};
-
 			if (ShowDebugInfo.Value)
 			{
-				Jotunn.Logger.LogInfo($"Registered {displayName} [{prefabName}] with length {length}m");
+				Jotunn.Logger.LogInfo($"Registered {displayName} [{prefabName}]");
+			}
+		}
+
+		/// <summary>
+		/// Add snap points to node prefab for connections
+		/// </summary>
+		private void AddSnapPoints(GameObject prefab, float length)
+		{
+			// Create snap point at start of node
+			GameObject snapPoint1 = new GameObject("snappoint_start");
+			snapPoint1.transform.SetParent(prefab.transform);
+			snapPoint1.transform.localPosition = new Vector3(-length / 2f, 0, 0);
+			snapPoint1.tag = "snappoint";
+
+			// Add small sphere for debug visualization
+			if (ShowDebugInfo.Value)
+			{
+				GameObject sphere1 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				sphere1.transform.SetParent(snapPoint1.transform);
+				sphere1.transform.localScale = Vector3.one * 0.1f;
+				Destroy(sphere1.GetComponent<Collider>());
+			}
+
+			// Create snap point at end of node
+			GameObject snapPoint2 = new GameObject("snappoint_end");
+			snapPoint2.transform.SetParent(prefab.transform);
+			snapPoint2.transform.localPosition = new Vector3(length / 2f, 0, 0);
+			snapPoint2.tag = "snappoint";
+
+			// Add small sphere for debug visualization
+			if (ShowDebugInfo.Value)
+			{
+				GameObject sphere2 = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				sphere2.transform.SetParent(snapPoint2.transform);
+				sphere2.transform.localScale = Vector3.one * 0.1f;
+				Destroy(sphere2.GetComponent<Collider>());
 			}
 		}
 
@@ -456,12 +479,10 @@ namespace ItemConduit.Core
 				_ => Color.white
 			};
 
-			// Clone the material to avoid affecting the original
-			if (renderer.sharedMaterial != null)
+			// Apply tint to material
+			if (renderer.material != null)
 			{
-				Material newMaterial = new Material(renderer.sharedMaterial);
-				newMaterial.color = tint;
-				renderer.sharedMaterial = newMaterial;
+				renderer.material.color = tint;
 			}
 		}
 
