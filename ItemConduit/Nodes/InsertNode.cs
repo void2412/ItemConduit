@@ -28,8 +28,8 @@ namespace ItemConduit.Nodes
 		/// <summary>GUI component for configuration</summary>
 		private InsertNodeGUI gui;
 
-		/// <summary>Search radius for finding containers</summary>
-		private const float CONTAINER_SEARCH_RADIUS = 2f;
+		/// <summary>Search radius for finding containers - increased for better detection</summary>
+		private const float CONTAINER_SEARCH_RADIUS = 5f;
 
 		/// <summary>Time since last insertion</summary>
 		private float lastInsertionTime;
@@ -68,31 +68,105 @@ namespace ItemConduit.Nodes
 		#region Container Management
 
 		/// <summary>
-		/// Find the nearest container to insert items into
+		/// Enhanced container finding with better debugging and detection
 		/// </summary>
 		private void FindTargetContainer()
 		{
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Debug.Log($"[ItemConduit] {name} searching for containers...");
+				Debug.Log($"[ItemConduit] Node position: {transform.position}");
+				Debug.Log($"[ItemConduit] Search radius: {CONTAINER_SEARCH_RADIUS}");
+			}
+
 			// Find all colliders within search radius
 			Collider[] colliders = Physics.OverlapSphere(transform.position, CONTAINER_SEARCH_RADIUS);
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Debug.Log($"[ItemConduit] Found {colliders.Length} colliders in range");
+			}
 
 			float nearestDistance = float.MaxValue;
 			Container nearestContainer = null;
 
 			foreach (Collider col in colliders)
 			{
-				// Check for standard container
+				if (col == null || col.gameObject == null) continue;
+
+				if (ItemConduitMod.ShowDebugInfo.Value)
+				{
+					Debug.Log($"[ItemConduit] Checking collider: {col.name} on object: {col.gameObject.name}");
+					Debug.Log($"[ItemConduit] Collider position: {col.transform.position}");
+					Debug.Log($"[ItemConduit] Distance: {Vector3.Distance(transform.position, col.transform.position):F2}m");
+					Debug.Log($"[ItemConduit] Container layer: {col.gameObject.layer}");
+					Debug.Log($"[ItemConduit] Container layer name: {LayerMask.LayerToName(col.gameObject.layer)}");
+				}
+
+				// Check for Container component on the collider's GameObject
 				Container container = col.GetComponent<Container>();
+
+				// If not found, check parent objects (some containers have nested colliders)
+				if (container == null)
+				{
+					container = col.GetComponentInParent<Container>();
+				}
+
+				// If still not found, check children (some containers have child colliders)
+				if (container == null)
+				{
+					container = col.GetComponentInChildren<Container>();
+				}
+
 				if (container != null)
 				{
-					float distance = Vector3.Distance(transform.position, col.transform.position);
+					float distance = Vector3.Distance(transform.position, container.transform.position);
+
+					if (ItemConduitMod.ShowDebugInfo.Value)
+					{
+						Debug.Log($"[ItemConduit] Found Container: {container.name}");
+						Debug.Log($"[ItemConduit] Container m_name: {container.m_name}");
+						Debug.Log($"[ItemConduit] Container position: {container.transform.position}");
+						Debug.Log($"[ItemConduit] Distance to container: {distance:F2}m");
+
+						// Check if container has inventory
+						Inventory inv = container.GetInventory();
+						if (inv != null)
+						{
+							Debug.Log($"[ItemConduit] Container has inventory: {inv.GetWidth()}x{inv.GetHeight()} slots");
+							Debug.Log($"[ItemConduit] Container items: {inv.GetAllItems().Count}");
+							Debug.Log($"[ItemConduit] Container empty slots: {inv.GetEmptySlots()}");
+						}
+						else
+						{
+							Debug.Log($"[ItemConduit] Container has NO inventory!");
+						}
+					}
+
 					if (distance < nearestDistance)
 					{
 						nearestDistance = distance;
 						nearestContainer = container;
 					}
 				}
+				else
+				{
+					if (ItemConduitMod.ShowDebugInfo.Value)
+					{
+						Debug.Log($"[ItemConduit] No Container component found on {col.gameObject.name}");
 
-				// Special containers are handled by wrapper components
+						// List all components on this object for debugging
+						Component[] components = col.GetComponents<Component>();
+						Debug.Log($"[ItemConduit] Components on {col.gameObject.name}:");
+						foreach (var comp in components)
+						{
+							if (comp != null)
+							{
+								Debug.Log($"[ItemConduit]   - {comp.GetType().Name}");
+							}
+						}
+					}
+				}
 			}
 
 			targetContainer = nearestContainer;
@@ -101,25 +175,142 @@ namespace ItemConduit.Nodes
 			{
 				if (targetContainer != null)
 				{
-					Debug.Log($"[ItemConduit] Insert node {name} connected to container: {targetContainer.name}");
+					Debug.Log($"[ItemConduit] *** {name} FOUND container: {targetContainer.name} at distance {nearestDistance:F2}m ***");
 				}
 				else
 				{
-					Debug.Log($"[ItemConduit] Insert node {name} found no container within {CONTAINER_SEARCH_RADIUS}m");
+					Debug.Log($"[ItemConduit] *** {name} found NO containers within {CONTAINER_SEARCH_RADIUS}m ***");
+
+					// Additional debugging - check if there are any containers in the scene at all
+					DebugAllContainers();
 				}
 			}
 		}
 
 		/// <summary>
-		/// Get the container this node inserts into
+		/// Debug method to list all containers in the scene
+		/// </summary>
+		private void DebugAllContainers()
+		{
+			Container[] allContainers = FindObjectsOfType<Container>();
+			Debug.Log($"[ItemConduit] === All containers in scene ({allContainers.Length}) ===");
+
+			foreach (var container in allContainers)
+			{
+				if (container != null)
+				{
+					float distance = Vector3.Distance(transform.position, container.transform.position);
+					Debug.Log($"[ItemConduit] Container: {container.name} ({container.m_name}) at {distance:F2}m");
+					Debug.Log($"[ItemConduit]   Position: {container.transform.position}");
+					Debug.Log($"[ItemConduit]   Has Inventory: {container.GetInventory() != null}");
+					Debug.Log($"[ItemConduit]   Layer: {container.gameObject.layer} ({LayerMask.LayerToName(container.gameObject.layer)})");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Alternative method using raycast detection for more precise container finding
+		/// </summary>
+		private Container FindContainerWithRaycast()
+		{
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Debug.Log($"[ItemConduit] {name} trying raycast detection...");
+			}
+
+			// Cast rays in multiple directions to find containers
+			Vector3[] directions = {
+				Vector3.forward,
+				Vector3.back,
+				Vector3.left,
+				Vector3.right,
+				Vector3.up,
+				Vector3.down
+			};
+
+			float maxDistance = CONTAINER_SEARCH_RADIUS;
+
+			foreach (Vector3 direction in directions)
+			{
+				Vector3 worldDirection = transform.TransformDirection(direction);
+
+				if (Physics.Raycast(transform.position, worldDirection, out RaycastHit hit, maxDistance))
+				{
+					if (ItemConduitMod.ShowDebugInfo.Value)
+					{
+						Debug.Log($"[ItemConduit] Raycast hit: {hit.collider.name} at {hit.distance:F2}m in direction {direction}");
+					}
+
+					Container container = hit.collider.GetComponent<Container>();
+					if (container == null)
+					{
+						container = hit.collider.GetComponentInParent<Container>();
+					}
+					if (container == null)
+					{
+						container = hit.collider.GetComponentInChildren<Container>();
+					}
+
+					if (container != null)
+					{
+						if (ItemConduitMod.ShowDebugInfo.Value)
+						{
+							Debug.Log($"[ItemConduit] *** Raycast found container: {container.name} ***");
+						}
+						return container;
+					}
+				}
+			}
+
+			return null;
+		}
+
+		/// <summary>
+		/// Enhanced GetTargetContainer method with fallback detection
 		/// </summary>
 		public Container GetTargetContainer()
 		{
-			// Validate container still exists
+			// First try the normal detection
 			if (targetContainer == null)
 			{
 				FindTargetContainer();
 			}
+
+			// If still no container found, try raycast detection
+			if (targetContainer == null)
+			{
+				targetContainer = FindContainerWithRaycast();
+			}
+
+			// If still no container, try increasing search radius temporarily
+			if (targetContainer == null && ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Debug.Log($"[ItemConduit] {name} trying expanded search...");
+
+				// Temporarily increase search radius
+				const float expandedRadius = 10f; // Increase to 10 meters
+
+				Collider[] expandedColliders = Physics.OverlapSphere(transform.position, expandedRadius);
+				Debug.Log($"[ItemConduit] Expanded search found {expandedColliders.Length} colliders");
+
+				foreach (Collider col in expandedColliders)
+				{
+					if (col == null) continue;
+
+					Container container = col.GetComponent<Container>();
+					if (container == null)
+						container = col.GetComponentInParent<Container>();
+					if (container == null)
+						container = col.GetComponentInChildren<Container>();
+
+					if (container != null)
+					{
+						float distance = Vector3.Distance(transform.position, container.transform.position);
+						Debug.Log($"[ItemConduit] Found container '{container.name}' at {distance:F2}m (outside normal range)");
+					}
+				}
+			}
+
 			return targetContainer;
 		}
 
@@ -134,9 +325,10 @@ namespace ItemConduit.Nodes
 		/// <returns>True if the item can be inserted</returns>
 		public bool CanInsertItem(ItemDrop.ItemData item)
 		{
-			if (targetContainer == null || item == null) return false;
+			Container container = GetTargetContainer();
+			if (container == null || item == null) return false;
 
-			Inventory inventory = targetContainer.GetInventory();
+			Inventory inventory = container.GetInventory();
 			if (inventory == null) return false;
 
 			// Check if inventory has space
@@ -152,7 +344,8 @@ namespace ItemConduit.Nodes
 		{
 			if (!CanInsertItem(item)) return false;
 
-			Inventory inventory = targetContainer.GetInventory();
+			Container container = GetTargetContainer();
+			Inventory inventory = container.GetInventory();
 			bool success = inventory.AddItem(item);
 
 			if (success)
@@ -180,9 +373,10 @@ namespace ItemConduit.Nodes
 		/// <returns>Number of free slots</returns>
 		public int GetAvailableSpace()
 		{
-			if (targetContainer == null) return 0;
+			Container container = GetTargetContainer();
+			if (container == null) return 0;
 
-			Inventory inventory = targetContainer.GetInventory();
+			Inventory inventory = container.GetInventory();
 			if (inventory == null) return 0;
 
 			return inventory.GetEmptySlots();
@@ -293,9 +487,10 @@ namespace ItemConduit.Nodes
 
 			// Add container status
 			string containerStatus;
-			if (targetContainer != null)
+			Container container = GetTargetContainer();
+			if (container != null)
 			{
-				Inventory inv = targetContainer.GetInventory();
+				Inventory inv = container.GetInventory();
 				if (inv != null)
 				{
 					int emptySlots = inv.GetEmptySlots();

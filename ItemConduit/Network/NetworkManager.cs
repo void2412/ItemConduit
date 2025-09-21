@@ -53,6 +53,9 @@ namespace ItemConduit.Network
 		/// <summary>Queue for pending network rebuild requests</summary>
 		private bool rebuildRequested = false;
 
+		/// <summary>Delay before rebuilding to batch multiple node placements</summary>
+		private const float REBUILD_DELAY = 0.5f;
+
 		#endregion
 
 		#region Initialization
@@ -207,8 +210,8 @@ namespace ItemConduit.Network
 		/// </summary>
 		private IEnumerator RebuildNetworksCoroutine()
 		{
-			// Wait a frame to batch multiple requests
-			yield return null;
+			// Wait for batch delay to collect multiple node placements
+			yield return new WaitForSeconds(REBUILD_DELAY);
 
 			// Check if rebuild is still needed
 			if (!rebuildRequested || isRebuildingNetworks) yield break;
@@ -216,7 +219,9 @@ namespace ItemConduit.Network
 			rebuildRequested = false;
 			isRebuildingNetworks = true;
 
+			Debug.Log("[ItemConduit] ========================================");
 			Debug.Log("[ItemConduit] Starting network rebuild...");
+			Debug.Log("[ItemConduit] ========================================");
 
 			try
 			{
@@ -227,12 +232,23 @@ namespace ItemConduit.Network
 				if (allNodes == null)
 					allNodes = new HashSet<BaseNode>();
 
+				// Log all registered nodes
+				Debug.Log($"[ItemConduit] Registered nodes count: {allNodes.Count}");
+				foreach (var node in allNodes)
+				{
+					if (node != null)
+					{
+						Debug.Log($"[ItemConduit] Registered: {node.name} - Type: {node.NodeType}, Pos: {node.transform.position}");
+					}
+				}
+
 				// Deactivate all nodes during rebuild
 				foreach (var node in allNodes)
 				{
 					if (node != null)
 					{
 						node.SetActive(false);
+						node.SetNetworkId(null); // Clear network assignment
 					}
 				}
 
@@ -242,22 +258,27 @@ namespace ItemConduit.Network
 				// Remove any null nodes
 				allNodes.RemoveWhere(n => n == null);
 
-				// Rebuild connections for all nodes
+				// Step 1: Have all nodes find their connections
+				Debug.Log($"[ItemConduit] === STEP 1: Finding connections for {allNodes.Count} nodes ===");
 				foreach (var node in allNodes)
 				{
 					if (node != null)
 					{
+						Debug.Log($"[ItemConduit] Processing node: {node.name}");
 						node.FindConnections();
 					}
 				}
 
-				// Build new networks
+				// Step 2: Build networks from connected components
+				Debug.Log("[ItemConduit] === STEP 2: Building networks from connected components ===");
 				HashSet<BaseNode> visited = new HashSet<BaseNode>();
+				int networkCount = 0;
 
 				foreach (var node in allNodes)
 				{
 					if (node != null && !visited.Contains(node))
 					{
+						Debug.Log($"[ItemConduit] Building network from unvisited node: {node.name}");
 						ConduitNetwork network = BuildNetworkFromNode(node, visited);
 
 						if (network != null && network.Nodes.Count > 0)
@@ -265,6 +286,7 @@ namespace ItemConduit.Network
 							string networkId = Guid.NewGuid().ToString();
 							network.NetworkId = networkId;
 							networks[networkId] = network;
+							networkCount++;
 
 							// Set network ID on all nodes
 							foreach (var netNode in network.Nodes)
@@ -274,11 +296,24 @@ namespace ItemConduit.Network
 									netNode.SetNetworkId(networkId);
 								}
 							}
+
+							Debug.Log($"[ItemConduit] Created network {networkId.Substring(0, 8)} with {network.Nodes.Count} nodes " +
+									 $"({network.ExtractNodes.Count} extract, {network.InsertNodes.Count} insert, {network.ConduitNodes.Count} conduit)");
+
+							// Log all nodes in this network
+							foreach (var netNode in network.Nodes)
+							{
+								if (netNode != null)
+								{
+									Debug.Log($"[ItemConduit]   - {netNode.name} (Type: {netNode.NodeType})");
+								}
+							}
 						}
 					}
 				}
 
-				// Reactivate all nodes
+				// Step 3: Reactivate all nodes
+				Debug.Log("[ItemConduit] === STEP 3: Reactivating nodes ===");
 				foreach (var node in allNodes)
 				{
 					if (node != null)
@@ -287,11 +322,13 @@ namespace ItemConduit.Network
 					}
 				}
 
-				Debug.Log($"[ItemConduit] Network rebuild complete. {networks.Count} networks active.");
+				Debug.Log("[ItemConduit] ========================================");
+				Debug.Log($"[ItemConduit] Network rebuild complete. {networkCount} networks active with {allNodes.Count} total nodes.");
+				Debug.Log("[ItemConduit] ========================================");
 			}
 			catch (Exception ex)
 			{
-				Debug.LogError($"[ItemConduit] Error during network rebuild: {ex.Message}");
+				Debug.LogError($"[ItemConduit] Error during network rebuild: {ex.Message}\n{ex.StackTrace}");
 			}
 			finally
 			{
@@ -300,7 +337,7 @@ namespace ItemConduit.Network
 		}
 
 		/// <summary>
-		/// Build a network starting from a specific node
+		/// Build a network starting from a specific node using BFS
 		/// </summary>
 		private ConduitNetwork BuildNetworkFromNode(BaseNode startNode, HashSet<BaseNode> visited)
 		{
@@ -317,6 +354,7 @@ namespace ItemConduit.Network
 				BaseNode currentNode = queue.Dequeue();
 				if (currentNode == null) continue;
 
+				// Add to network
 				network.AddNode(currentNode);
 
 				// Add all connected nodes to the queue
@@ -328,6 +366,13 @@ namespace ItemConduit.Network
 						queue.Enqueue(connectedNode);
 					}
 				}
+			}
+
+			// Log the network composition for debugging
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Debug.Log($"[ItemConduit] Built network from {startNode.name}: " +
+						 $"{network.Nodes.Count} nodes total");
 			}
 
 			return network;
@@ -368,7 +413,7 @@ namespace ItemConduit.Network
 					foreach (var kvp in networks.ToList()) // ToList to avoid modification during iteration
 					{
 						var network = kvp.Value;
-						if (network != null && network.IsActive)
+						if (network != null && network.IsActive && network.IsValid())
 						{
 							ProcessNetworkTransfers(network);
 						}
@@ -396,7 +441,7 @@ namespace ItemConduit.Network
 					return;
 				}
 
-				// Simple transfer: from each extract to matching insert nodes
+				// Process each extract node
 				foreach (var extractNode in network.ExtractNodes)
 				{
 					if (extractNode == null || !extractNode.IsActive) continue;
@@ -407,18 +452,26 @@ namespace ItemConduit.Network
 					Inventory sourceInventory = sourceContainer.GetInventory();
 					if (sourceInventory == null) continue;
 
-					// Find matching insert nodes (same channel)
+					// Find matching insert nodes (same channel or "None")
 					var matchingInserts = network.InsertNodes
-						.Where(n => n != null && n.IsActive && n.ChannelId == extractNode.ChannelId)
+						.Where(n => n != null && n.IsActive &&
+								   (n.ChannelId == extractNode.ChannelId ||
+									extractNode.ChannelId == "None" ||
+									n.ChannelId == "None"))
 						.OrderByDescending(n => n.Priority)
+						.ThenBy(n => Vector3.Distance(extractNode.transform.position, n.transform.position))
 						.ToList();
 
 					if (matchingInserts.Count == 0) continue;
 
 					// Get items to transfer
 					var items = extractNode.GetExtractableItems();
+					if (items.Count == 0) continue;
 
-					foreach (var item in items)
+					// Calculate items per transfer based on transfer rate
+					int itemsPerTransfer = Mathf.Max(1, Mathf.RoundToInt(ItemConduitMod.TransferRate.Value * ItemConduitMod.TransferInterval.Value));
+
+					foreach (var item in items.Take(itemsPerTransfer))
 					{
 						if (item == null) continue;
 
@@ -427,19 +480,19 @@ namespace ItemConduit.Network
 						{
 							if (insertNode.CanInsertItem(item))
 							{
-								// Clone item for transfer
+								// Clone item for transfer (transfer 1 at a time for simplicity)
 								var itemToTransfer = item.Clone();
-								itemToTransfer.m_stack = (Int32)Math.Min(item.m_stack, ItemConduitMod.TransferRate.Value);
+								itemToTransfer.m_stack = 1;
 
 								// Remove from source
-								sourceInventory.RemoveItem(item, itemToTransfer.m_stack);
+								sourceInventory.RemoveItem(item, 1);
 
 								// Add to destination
 								if (insertNode.InsertItem(itemToTransfer))
 								{
 									if (ItemConduitMod.ShowDebugInfo.Value)
 									{
-										Debug.Log($"[ItemConduit] Transferred {itemToTransfer.m_stack}x {item.m_shared.m_name}");
+										Debug.Log($"[ItemConduit] Transferred 1x {item.m_shared.m_name} from {extractNode.name} to {insertNode.name}");
 									}
 									break; // Item transferred, move to next item
 								}
@@ -450,6 +503,9 @@ namespace ItemConduit.Network
 								}
 							}
 						}
+
+						// Break if item has been depleted
+						if (item.m_stack <= 0) break;
 					}
 				}
 			}
@@ -461,9 +517,4 @@ namespace ItemConduit.Network
 
 		#endregion
 	}
-
-	/// <summary>
-	/// Represents a connected network of conduit nodes
-	/// </summary>
-	
 }
