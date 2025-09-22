@@ -44,17 +44,14 @@ namespace ItemConduit.Network
 		/// <summary>All registered nodes in the system</summary>
 		private HashSet<BaseNode> allNodes;
 
-		/// <summary>Flag indicating if networks are being rebuilt</summary>
-		private bool isRebuildingNetworks = false;
+		/// <summary>Map of nodes to their current network IDs for quick lookup</summary>
+		private Dictionary<BaseNode, string> nodeNetworkMap;
 
 		/// <summary>Coroutine reference for transfer loop</summary>
 		private Coroutine transferCoroutine;
 
-		/// <summary>Queue for pending network rebuild requests</summary>
-		private bool rebuildRequested = false;
-
-		/// <summary>Delay before rebuilding to batch multiple node placements</summary>
-		private const float REBUILD_DELAY = 0.5f;
+		/// <summary>Reference to the rebuild manager</summary>
+		private RebuildManager rebuildManager;
 
 		#endregion
 
@@ -70,6 +67,12 @@ namespace ItemConduit.Network
 
 			if (allNodes == null)
 				allNodes = new HashSet<BaseNode>();
+
+			if (nodeNetworkMap == null)
+				nodeNetworkMap = new Dictionary<BaseNode, string>();
+
+			// Initialize rebuild manager
+			rebuildManager = RebuildManager.Instance;
 
 			Debug.Log("[ItemConduit] NetworkManager fields initialized");
 		}
@@ -129,12 +132,21 @@ namespace ItemConduit.Network
 				transferCoroutine = null;
 			}
 
+			// Cancel any pending rebuilds
+			if (rebuildManager != null)
+			{
+				rebuildManager.CancelPendingRebuilds();
+			}
+
 			// Clear all data
 			if (networks != null)
 				networks.Clear();
 
 			if (allNodes != null)
 				allNodes.Clear();
+
+			if (nodeNetworkMap != null)
+				nodeNetworkMap.Clear();
 
 			Debug.Log("[ItemConduit] NetworkManager shutdown complete");
 		}
@@ -162,7 +174,8 @@ namespace ItemConduit.Network
 					Debug.Log($"[ItemConduit] Registered node: {node.name} (Total: {allNodes.Count})");
 				}
 
-				RequestNetworkRebuild();
+				// Request rebuild through RebuildManager
+				rebuildManager.RequestRebuildForNode(node);
 			}
 		}
 
@@ -174,208 +187,175 @@ namespace ItemConduit.Network
 			if (node == null) return;
 			if (!ZNet.instance.IsServer()) return;
 
+			// Store connected nodes before removing
+			List<BaseNode> connectedNodes = node.GetConnectedNodes();
+
 			if (allNodes != null && allNodes.Remove(node))
 			{
+				// Remove from network map
+				if (nodeNetworkMap != null)
+					nodeNetworkMap.Remove(node);
+
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
 					Debug.Log($"[ItemConduit] Unregistered node: {node.name} (Remaining: {allNodes.Count})");
 				}
 
-				RequestNetworkRebuild();
+				// Request rebuild for connected nodes
+				foreach (var connectedNode in connectedNodes)
+				{
+					if (connectedNode != null && allNodes.Contains(connectedNode))
+					{
+						rebuildManager.RequestRebuildForNode(connectedNode);
+					}
+				}
 			}
 		}
 
 		#endregion
 
-		#region Network Building
+		#region Network Management
 
 		/// <summary>
-		/// Request a network rebuild
+		/// Register a new network
+		/// </summary>
+		public void RegisterNetwork(ConduitNetwork network)
+		{
+			if (network == null || string.IsNullOrEmpty(network.NetworkId)) return;
+
+			networks[network.NetworkId] = network;
+
+			// Update node-network mapping
+			foreach (var node in network.Nodes)
+			{
+				if (node != null)
+				{
+					nodeNetworkMap[node] = network.NetworkId;
+					node.SetNetworkId(network.NetworkId);
+				}
+			}
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Debug.Log($"[ItemConduit] Registered network {network.NetworkId.Substring(0, 8)} with {network.Nodes.Count} nodes");
+			}
+		}
+
+		/// <summary>
+		/// Remove a network
+		/// </summary>
+		public void RemoveNetwork(string networkId)
+		{
+			if (string.IsNullOrEmpty(networkId)) return;
+
+			if (networks.ContainsKey(networkId))
+			{
+				var network = networks[networkId];
+
+				// Clear network ID from nodes
+				foreach (var node in network.Nodes)
+				{
+					if (node != null)
+					{
+						nodeNetworkMap.Remove(node);
+					}
+				}
+
+				networks.Remove(networkId);
+
+				if (ItemConduitMod.ShowDebugInfo.Value)
+				{
+					Debug.Log($"[ItemConduit] Removed network {networkId.Substring(0, 8)}");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Get the network ID for a specific node
+		/// </summary>
+		public string GetNodeNetworkId(BaseNode node)
+		{
+			if (node == null) return null;
+			return nodeNetworkMap.ContainsKey(node) ? nodeNetworkMap[node] : null;
+		}
+
+		/// <summary>
+		/// Get all nodes in a specific network
+		/// </summary>
+		public List<BaseNode> GetNetworkNodes(string networkId)
+		{
+			if (string.IsNullOrEmpty(networkId) || !networks.ContainsKey(networkId))
+				return new List<BaseNode>();
+
+			return networks[networkId].Nodes.ToList();
+		}
+
+		/// <summary>
+		/// Get all registered nodes
+		/// </summary>
+		public HashSet<BaseNode> GetAllNodes()
+		{
+			return new HashSet<BaseNode>(allNodes);
+		}
+
+		/// <summary>
+		/// Request a full network rebuild (backward compatibility)
 		/// </summary>
 		public void RequestNetworkRebuild()
 		{
 			if (!ZNet.instance.IsServer()) return;
-
-			rebuildRequested = true;
-
-			// Start rebuild coroutine if not already running
-			if (!isRebuildingNetworks)
-			{
-				StartCoroutine(RebuildNetworksCoroutine());
-			}
+			rebuildManager.RequestFullRebuild();
 		}
 
 		/// <summary>
-		/// Coroutine to rebuild all networks
+		/// Check if network manager is currently rebuilding
 		/// </summary>
-		private IEnumerator RebuildNetworksCoroutine()
+		public bool IsRebuilding()
 		{
-			// Wait for batch delay to collect multiple node placements
-			yield return new WaitForSeconds(REBUILD_DELAY);
-
-			// Check if rebuild is still needed
-			if (!rebuildRequested || isRebuildingNetworks) yield break;
-
-			rebuildRequested = false;
-			isRebuildingNetworks = true;
-
-			Debug.Log("[ItemConduit] ========================================");
-			Debug.Log("[ItemConduit] Starting network rebuild...");
-			Debug.Log("[ItemConduit] ========================================");
-
-			try
-			{
-				// Ensure collections exist
-				if (networks == null)
-					networks = new Dictionary<string, ConduitNetwork>();
-
-				if (allNodes == null)
-					allNodes = new HashSet<BaseNode>();
-
-				// Log all registered nodes
-				Debug.Log($"[ItemConduit] Registered nodes count: {allNodes.Count}");
-				foreach (var node in allNodes)
-				{
-					if (node != null)
-					{
-						Debug.Log($"[ItemConduit] Registered: {node.name} - Type: {node.NodeType}, Pos: {node.transform.position}");
-					}
-				}
-
-				// Deactivate all nodes during rebuild
-				foreach (var node in allNodes)
-				{
-					if (node != null)
-					{
-						node.SetActive(false);
-						node.SetNetworkId(null); // Clear network assignment
-					}
-				}
-
-				// Clear existing networks
-				networks.Clear();
-
-				// Remove any null nodes
-				allNodes.RemoveWhere(n => n == null);
-
-				// Step 1: Have all nodes find their connections
-				Debug.Log($"[ItemConduit] === STEP 1: Finding connections for {allNodes.Count} nodes ===");
-				foreach (var node in allNodes)
-				{
-					if (node != null)
-					{
-						Debug.Log($"[ItemConduit] Processing node: {node.name}");
-						node.FindConnections();
-					}
-				}
-
-				// Step 2: Build networks from connected components
-				Debug.Log("[ItemConduit] === STEP 2: Building networks from connected components ===");
-				HashSet<BaseNode> visited = new HashSet<BaseNode>();
-				int networkCount = 0;
-
-				foreach (var node in allNodes)
-				{
-					if (node != null && !visited.Contains(node))
-					{
-						Debug.Log($"[ItemConduit] Building network from unvisited node: {node.name}");
-						ConduitNetwork network = BuildNetworkFromNode(node, visited);
-
-						if (network != null && network.Nodes.Count > 0)
-						{
-							string networkId = Guid.NewGuid().ToString();
-							network.NetworkId = networkId;
-							networks[networkId] = network;
-							networkCount++;
-
-							// Set network ID on all nodes
-							foreach (var netNode in network.Nodes)
-							{
-								if (netNode != null)
-								{
-									netNode.SetNetworkId(networkId);
-								}
-							}
-
-							Debug.Log($"[ItemConduit] Created network {networkId.Substring(0, 8)} with {network.Nodes.Count} nodes " +
-									 $"({network.ExtractNodes.Count} extract, {network.InsertNodes.Count} insert, {network.ConduitNodes.Count} conduit)");
-
-							// Log all nodes in this network
-							foreach (var netNode in network.Nodes)
-							{
-								if (netNode != null)
-								{
-									Debug.Log($"[ItemConduit]   - {netNode.name} (Type: {netNode.NodeType})");
-								}
-							}
-						}
-					}
-				}
-
-				// Step 3: Reactivate all nodes
-				Debug.Log("[ItemConduit] === STEP 3: Reactivating nodes ===");
-				foreach (var node in allNodes)
-				{
-					if (node != null)
-					{
-						node.SetActive(true);
-					}
-				}
-
-				Debug.Log("[ItemConduit] ========================================");
-				Debug.Log($"[ItemConduit] Network rebuild complete. {networkCount} networks active with {allNodes.Count} total nodes.");
-				Debug.Log("[ItemConduit] ========================================");
-			}
-			catch (Exception ex)
-			{
-				Debug.LogError($"[ItemConduit] Error during network rebuild: {ex.Message}\n{ex.StackTrace}");
-			}
-			finally
-			{
-				isRebuildingNetworks = false;
-			}
+			return rebuildManager != null && rebuildManager.IsRebuildInProgress();
 		}
 
+		#endregion
+
+		#region Statistics
+
 		/// <summary>
-		/// Build a network starting from a specific node using BFS
+		/// Get current network statistics
 		/// </summary>
-		private ConduitNetwork BuildNetworkFromNode(BaseNode startNode, HashSet<BaseNode> visited)
+		public string GetStatistics()
 		{
-			if (startNode == null) return null;
+			int totalNodes = allNodes?.Count ?? 0;
+			int totalNetworks = networks?.Count ?? 0;
+			int activeNetworks = 0;
+			int totalExtractNodes = 0;
+			int totalInsertNodes = 0;
+			int totalConduitNodes = 0;
 
-			ConduitNetwork network = new ConduitNetwork();
-			Queue<BaseNode> queue = new Queue<BaseNode>();
-
-			queue.Enqueue(startNode);
-			visited.Add(startNode);
-
-			while (queue.Count > 0)
+			if (networks != null)
 			{
-				BaseNode currentNode = queue.Dequeue();
-				if (currentNode == null) continue;
-
-				// Add to network
-				network.AddNode(currentNode);
-
-				// Add all connected nodes to the queue
-				foreach (var connectedNode in currentNode.GetConnectedNodes())
+				foreach (var network in networks.Values)
 				{
-					if (connectedNode != null && !visited.Contains(connectedNode))
-					{
-						visited.Add(connectedNode);
-						queue.Enqueue(connectedNode);
-					}
+					if (network.IsActive && network.IsValid())
+						activeNetworks++;
+
+					totalExtractNodes += network.ExtractNodes.Count;
+					totalInsertNodes += network.InsertNodes.Count;
+					totalConduitNodes += network.ConduitNodes.Count;
 				}
 			}
 
-			// Log the network composition for debugging
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			string stats = $"Networks: {totalNetworks} ({activeNetworks} active)\n";
+			stats += $"Total Nodes: {totalNodes}\n";
+			stats += $"  Extract: {totalExtractNodes}\n";
+			stats += $"  Insert: {totalInsertNodes}\n";
+			stats += $"  Conduit: {totalConduitNodes}\n";
+
+			if (rebuildManager != null)
 			{
-				Debug.Log($"[ItemConduit] Built network from {startNode.name}: " +
-						 $"{network.Nodes.Count} nodes total");
+				stats += $"\nRebuild Stats:\n{rebuildManager.GetStatistics()}";
 			}
 
-			return network;
+			return stats;
 		}
 
 		#endregion
@@ -395,7 +375,7 @@ namespace ItemConduit.Network
 				yield return new WaitForSeconds(ItemConduitMod.TransferInterval.Value);
 
 				// Skip if not server or rebuilding
-				if (!ZNet.instance.IsServer() || isRebuildingNetworks)
+				if (!ZNet.instance.IsServer() || IsRebuilding())
 				{
 					continue;
 				}
@@ -512,6 +492,32 @@ namespace ItemConduit.Network
 			catch (Exception ex)
 			{
 				Debug.LogError($"[ItemConduit] Error processing network transfers: {ex.Message}");
+			}
+		}
+
+		#endregion
+
+		#region Debug
+
+		/// <summary>
+		/// Log all networks and their nodes (for debugging)
+		/// </summary>
+		public void LogNetworkState()
+		{
+			Debug.Log("[ItemConduit] === Current Network State ===");
+			Debug.Log($"Total Networks: {networks.Count}");
+			Debug.Log($"Total Nodes: {allNodes.Count}");
+
+			foreach (var kvp in networks)
+			{
+				var network = kvp.Value;
+				Debug.Log($"\nNetwork {kvp.Key.Substring(0, 8)}:");
+				Debug.Log($"  Nodes: {network.Nodes.Count}");
+				Debug.Log($"  Extract: {network.ExtractNodes.Count}");
+				Debug.Log($"  Insert: {network.InsertNodes.Count}");
+				Debug.Log($"  Conduit: {network.ConduitNodes.Count}");
+				Debug.Log($"  Active: {network.IsActive}");
+				Debug.Log($"  Valid: {network.IsValid()}");
 			}
 		}
 

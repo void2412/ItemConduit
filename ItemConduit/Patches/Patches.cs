@@ -24,6 +24,8 @@ namespace ItemConduit.Patches
 			/// </summary>
 			private static void Postfix(Player __instance, Piece piece)
 			{
+				if (__instance == null) return;
+				if (ZNet.instance == null) return;
 				// Only process on server
 				if (!ZNet.instance.IsServer()) return;
 
@@ -55,6 +57,8 @@ namespace ItemConduit.Patches
 			/// </summary>
 			private static void Prefix(Piece __instance)
 			{
+				if (__instance == null) return;
+				if (ZNet.instance == null) return;
 				// Only process on server
 				if (!ZNet.instance.IsServer()) return;
 

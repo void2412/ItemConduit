@@ -34,7 +34,6 @@ namespace ItemConduit.Core
 
 		// Configuration entries accessible throughout the mod
 		public static ConfigEntry<float> TransferRate;
-		public static ConfigEntry<int> MaxNetworkSize;
 		public static ConfigEntry<float> TransferInterval;
 		public static ConfigEntry<bool> ShowDebugInfo;
 		public static ConfigEntry<bool> EnableVisualEffects;
@@ -81,16 +80,6 @@ namespace ItemConduit.Core
 				new ConfigDescription(
 					"Number of items transferred per second",
 					new AcceptableValueRange<float>(0.1f, 100f)
-				)
-			);
-
-			MaxNetworkSize = Config.Bind(
-				"General",
-				"MaxNetworkSize",
-				1000,
-				new ConfigDescription(
-					"Maximum number of nodes allowed in a single network",
-					new AcceptableValueRange<int>(10, 5000)
 				)
 			);
 
