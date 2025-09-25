@@ -1,6 +1,5 @@
 ﻿using ItemConduit.Core;
 using ItemConduit.Network;
-using Jotunn.Managers;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -9,12 +8,9 @@ using UnityEngine;
 
 namespace ItemConduit.Nodes
 {
-
-	
-
 	/// <summary>
 	/// Base class for all conduit nodes
-	/// Handles common functionality like connections, network registration, and hover text
+	/// Optimized with physics-based connection detection
 	/// </summary>
 	public abstract class BaseNode : MonoBehaviour, Interactable, Hoverable
 	{
@@ -46,13 +42,21 @@ namespace ItemConduit.Nodes
 		/// <summary>Piece component for building system integration</summary>
 		protected Piece piece;
 
+		/// <summary>Colliders used for connection detection</summary>
+		private List<SphereCollider> connectionColliders = new List<SphereCollider>();
+
+		/// <summary>Flag to prevent multiple connection updates</summary>
+		private bool isUpdatingConnections = false;
+
+		/// <summary>Coroutine reference for connection finding</summary>
+		private Coroutine connectionCoroutine;
+
 		#endregion
 
 		#region Unity Lifecycle
 
 		/// <summary>
-		/// Initialize component references and register RPCs
-		/// Called when the node is first created
+		/// Initialize component references and setup connection detection
 		/// </summary>
 		protected virtual void Awake()
 		{
@@ -87,10 +91,12 @@ namespace ItemConduit.Nodes
 			{
 				// Register RPC for network ID synchronization
 				zNetView.Register<string>("RPC_UpdateNetworkId", RPC_UpdateNetworkId);
-
 				// Register RPC for active state synchronization
 				zNetView.Register<bool>("RPC_SetActive", RPC_SetActive);
 			}
+
+			// Setup connection detection colliders
+			SetupConnectionDetection();
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
@@ -100,7 +106,6 @@ namespace ItemConduit.Nodes
 
 		/// <summary>
 		/// Register node with network manager on start
-		/// Only runs on server/host
 		/// </summary>
 		protected virtual void Start()
 		{
@@ -124,17 +129,27 @@ namespace ItemConduit.Nodes
 
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
-					Debug.Log($"[ItemConduit] Node {name} registered with NetworkManager (Type: {NodeType}, Length: {nodeLength}m, Pos: {transform.position})");
+					Debug.Log($"[ItemConduit] Node {name} registered with NetworkManager");
 				}
 			}
+
+			// Start connection detection after a short delay
+			yield return new WaitForSeconds(0.5f);
+			StartConnectionDetection();
 		}
 
 		/// <summary>
 		/// Cleanup on node destruction
-		/// Unregisters from network manager
 		/// </summary>
 		protected virtual void OnDestroy()
 		{
+			// Stop any running coroutines
+			if (connectionCoroutine != null)
+			{
+				StopCoroutine(connectionCoroutine);
+				connectionCoroutine = null;
+			}
+
 			// Remove this node from all connected nodes
 			foreach (var connectedNode in connectedNodes.ToList())
 			{
@@ -144,26 +159,314 @@ namespace ItemConduit.Nodes
 				}
 			}
 
+			// Cleanup connection colliders
+			foreach (var collider in connectionColliders)
+			{
+				if (collider != null)
+					Destroy(collider.gameObject);
+			}
+			connectionColliders.Clear();
+
 			// Unregister from network manager
 			if (ZNet.instance != null && ZNet.instance.IsServer())
 			{
 				ItemConduit.Network.NetworkManager.Instance.UnregisterNode(this);
-
-				if (ItemConduitMod.ShowDebugInfo.Value)
-				{
-					Debug.Log($"[ItemConduit] Node {name} unregistered from NetworkManager");
-				}
 			}
 		}
 
 		#endregion
 
+		#region Physics-Based Connection Detection
+
+		/// <summary>
+		/// Setup trigger colliders for connection detection
+		/// </summary>
+		private void SetupConnectionDetection()
+		{
+			// Get existing snappoints
+			Transform[] snapPoints = GetSnapPoints();
+
+			if (snapPoints.Length > 0)
+			{
+				// Create trigger colliders at each snappoint
+				foreach (var snapPoint in snapPoints)
+				{
+					GameObject triggerObj = new GameObject($"ConnectionTrigger_{snapPoint.name}");
+					triggerObj.transform.SetParent(snapPoint);
+					triggerObj.transform.localPosition = Vector3.zero;
+					triggerObj.transform.localRotation = Quaternion.identity;
+					triggerObj.layer = gameObject.layer;
+
+					// Add sphere collider as trigger
+					SphereCollider trigger = triggerObj.AddComponent<SphereCollider>();
+					trigger.isTrigger = true;
+					trigger.radius = 0.3f; // 30cm radius for connection detection
+
+					// Add connection detector component
+					ConnectionDetector detector = triggerObj.AddComponent<ConnectionDetector>();
+					detector.parentNode = this;
+
+					connectionColliders.Add(trigger);
+				}
+			}
+			else
+			{
+				// Fallback: create triggers at node endpoints
+				Vector3 forward = transform.forward;
+				float halfLength = nodeLength / 2f;
+
+				// Front trigger
+				CreateConnectionTrigger("front", forward * halfLength);
+
+				// Back trigger
+				CreateConnectionTrigger("back", -forward * halfLength);
+			}
+		}
+
+		/// <summary>
+		/// Create a connection trigger at specified local position
+		/// </summary>
+		private void CreateConnectionTrigger(string name, Vector3 localPosition)
+		{
+			GameObject triggerObj = new GameObject($"ConnectionTrigger_{name}");
+			triggerObj.transform.SetParent(transform);
+			triggerObj.transform.localPosition = localPosition;
+			triggerObj.transform.localRotation = Quaternion.identity;
+			triggerObj.layer = gameObject.layer;
+
+			SphereCollider trigger = triggerObj.AddComponent<SphereCollider>();
+			trigger.isTrigger = true;
+			trigger.radius = 0.3f;
+
+			ConnectionDetector detector = triggerObj.AddComponent<ConnectionDetector>();
+			detector.parentNode = this;
+
+			connectionColliders.Add(trigger);
+		}
+
+		/// <summary>
+		/// Start the connection detection process
+		/// </summary>
+		public void StartConnectionDetection()
+		{
+			if (connectionCoroutine != null)
+			{
+				StopCoroutine(connectionCoroutine);
+			}
+			connectionCoroutine = StartCoroutine(FindConnectionsCoroutine());
+		}
+
+		/// <summary>
+		/// Optimized coroutine-based connection finding
+		/// </summary>
+		private IEnumerator FindConnectionsCoroutine()
+		{
+			if (isUpdatingConnections)
+			{
+				yield break;
+			}
+
+			isUpdatingConnections = true;
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Debug.Log($"[ItemConduit] Starting connection detection for {name}");
+			}
+
+			// Small delay to let physics settle
+			yield return new WaitForSeconds(0.1f);
+
+			// Clear existing connections (but notify connected nodes)
+			foreach (var node in connectedNodes.ToList())
+			{
+				if (node != null)
+				{
+					node.RemoveConnection(this);
+				}
+			}
+			connectedNodes.Clear();
+
+			// Use physics overlap to find nearby nodes
+			float searchRadius = nodeLength + ItemConduitMod.ConnectionRange.Value;
+			Collider[] nearbyColliders = Physics.OverlapSphere(transform.position, searchRadius);
+
+			int nodesChecked = 0;
+			const int nodesPerFrame = 5; // Process 5 nodes per frame to avoid spikes
+
+			foreach (Collider col in nearbyColliders)
+			{
+				if (col == null) continue;
+
+				BaseNode otherNode = col.GetComponent<BaseNode>();
+				if (otherNode == null)
+				{
+					// Check parent for node component
+					otherNode = col.GetComponentInParent<BaseNode>();
+				}
+
+				if (otherNode != null && otherNode != this && !connectedNodes.Contains(otherNode))
+				{
+					// Check if nodes are touching or very close
+					if (CheckNodeConnection(otherNode))
+					{
+						EstablishConnection(otherNode);
+					}
+
+					nodesChecked++;
+
+					// Yield every few nodes to prevent frame drops
+					if (nodesChecked % nodesPerFrame == 0)
+					{
+						yield return null; // Wait one frame
+					}
+				}
+			}
+
+			// Update visual state after connections are established
+			UpdateVisualState(connectedNodes.Count > 0);
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Debug.Log($"[ItemConduit] {name} connection detection complete: {connectedNodes.Count} connections");
+			}
+
+			isUpdatingConnections = false;
+		}
+
+		/// <summary>
+		/// Check if this node should connect to another based on proximity
+		/// </summary>
+		private bool CheckNodeConnection(BaseNode otherNode)
+		{
+			if (otherNode == null || !CanConnectTo(otherNode))
+				return false;
+
+			// Get connection points for both nodes
+			Vector3[] myPoints = GetConnectionPoints();
+			Vector3[] otherPoints = otherNode.GetConnectionPoints();
+
+			float connectionThreshold = ItemConduitMod.EndpointConnectionThreshold.Value;
+
+			// Check all point combinations
+			foreach (var myPoint in myPoints)
+			{
+				foreach (var otherPoint in otherPoints)
+				{
+					float distance = Vector3.Distance(myPoint, otherPoint);
+
+					// Very tight threshold for snapped connections
+					if (distance <= connectionThreshold)
+					{
+						if (ItemConduitMod.ShowDebugInfo.Value)
+						{
+							Debug.Log($"[ItemConduit] Connection detected: {name} <-> {otherNode.name} (dist: {distance:F3}m)");
+						}
+						return true;
+					}
+				}
+			}
+
+			// Also check if the nodes are overlapping (colliding)
+			Bounds myBounds = GetNodeBounds();
+			Bounds otherBounds = otherNode.GetNodeBounds();
+
+			if (myBounds.Intersects(otherBounds))
+			{
+				if (ItemConduitMod.ShowDebugInfo.Value)
+				{
+					Debug.Log($"[ItemConduit] Collision connection: {name} <-> {otherNode.name}");
+				}
+				return true;
+			}
+
+			return false;
+		}
+
+		/// <summary>
+		/// Get the bounds of this node for collision detection
+		/// </summary>
+		private Bounds GetNodeBounds()
+		{
+			// Get all colliders on this node
+			Collider[] colliders = GetComponentsInChildren<Collider>();
+
+			if (colliders.Length == 0)
+			{
+				// Fallback to calculated bounds
+				return new Bounds(transform.position, Vector3.one * nodeLength);
+			}
+
+			// Combine all collider bounds
+			Bounds bounds = colliders[0].bounds;
+			for (int i = 1; i < colliders.Length; i++)
+			{
+				if (!colliders[i].isTrigger) // Skip trigger colliders
+				{
+					bounds.Encapsulate(colliders[i].bounds);
+				}
+			}
+
+			return bounds;
+		}
+
+		/// <summary>
+		/// Establish a bidirectional connection between nodes
+		/// </summary>
+		private void EstablishConnection(BaseNode otherNode)
+		{
+			if (otherNode == null) return;
+
+			AddConnection(otherNode);
+			otherNode.AddConnection(this);
+
+			// Visual feedback for successful connection
+			if (ItemConduitMod.EnableVisualEffects.Value)
+			{
+				CreateConnectionEffect(transform.position, otherNode.transform.position);
+			}
+		}
+
+		/// <summary>
+		/// Handle trigger events for connection detection
+		/// </summary>
+		public void OnConnectionTriggerEnter(BaseNode otherNode)
+		{
+			if (otherNode == null || otherNode == this || connectedNodes.Contains(otherNode))
+				return;
+
+			if (CanConnectTo(otherNode))
+			{
+				EstablishConnection(otherNode);
+
+				// Update visual state
+				UpdateVisualState(true);
+			}
+		}
+
+		/// <summary>
+		/// Handle trigger exit events
+		/// </summary>
+		public void OnConnectionTriggerExit(BaseNode otherNode)
+		{
+			// Optionally disconnect when nodes move apart
+			// For now, connections persist until node is destroyed or rebuilt
+		}
+
+		#endregion
+
 		#region Connection Management
+
+		/// <summary>
+		/// Legacy FindConnections method - now uses coroutine
+		/// </summary>
+		public virtual void FindConnections()
+		{
+			StartConnectionDetection();
+		}
+
 		/// <summary>
 		/// Get connection points for this node
-		/// These are the positions where other nodes can connect
 		/// </summary>
-		/// <returns>Array of world positions for connection points</returns>
 		public virtual Vector3[] GetConnectionPoints()
 		{
 			// Find snap points created during node registration
@@ -177,16 +480,6 @@ namespace ItemConduit.Nodes
 				{
 					points[i] = snapPoints[i].position;
 				}
-
-				if (ItemConduitMod.ShowDebugInfo.Value)
-				{
-					Debug.Log($"[ItemConduit] {name} GetConnectionPoints: Using {points.Length} snappoints");
-					for (int i = 0; i < points.Length; i++)
-					{
-						Debug.Log($"[ItemConduit]   Snappoint {i}: {points[i]}");
-					}
-				}
-
 				return points;
 			}
 
@@ -200,225 +493,7 @@ namespace ItemConduit.Nodes
 			// End point (front)
 			fallbackPoints[1] = transform.position + forward * (nodeLength / 2f);
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
-			{
-				Debug.Log($"[ItemConduit] {name} GetConnectionPoints: Using calculated fallback points");
-				Debug.Log($"[ItemConduit]   Back point: {fallbackPoints[0]}");
-				Debug.Log($"[ItemConduit]   Front point: {fallbackPoints[1]}");
-			}
-
 			return fallbackPoints;
-		}
-
-		/// <summary>
-		/// Find and establish connections to nearby nodes
-		/// Any snappoint can connect to any other snappoint
-		/// </summary>
-		public virtual void FindConnections()
-		{
-			Debug.Log($"[ItemConduit] === FindConnections START for {name} ===");
-			Debug.Log($"[ItemConduit] Node details - Type: {NodeType}, Length: {nodeLength}m, Position: {transform.position}");
-
-			// Clear existing connections (but notify connected nodes)
-			foreach (var node in connectedNodes.ToList())
-			{
-				if (node != null)
-				{
-					node.RemoveConnection(this);
-				}
-			}
-			connectedNodes.Clear();
-
-			// Get all my connection points (snappoints)
-			Vector3[] myPoints = GetConnectionPoints();
-			Debug.Log($"[ItemConduit] My connection points: {myPoints.Length} snappoints found");
-			for (int i = 0; i < myPoints.Length; i++)
-			{
-				Debug.Log($"[ItemConduit]   Point {i}: {myPoints[i]}");
-			}
-
-			// Find all other nodes in the scene
-			BaseNode[] allNodesInScene = FindObjectsOfType<BaseNode>();
-			Debug.Log($"[ItemConduit] Total BaseNodes in scene: {allNodesInScene.Length}");
-
-			// Connection threshold - very tight for snap connections
-			float connectionThreshold = 0.1f; // 10cm tolerance for snapped connections
-
-			// Check each node for connections
-			foreach (var otherNode in allNodesInScene)
-			{
-				if (otherNode == null || otherNode == this) continue;
-
-				// Skip if already connected
-				if (connectedNodes.Contains(otherNode)) continue;
-
-				// Get the other node's connection points
-				Vector3[] otherPoints = otherNode.GetConnectionPoints();
-
-				bool connected = false;
-				string connectionDetail = "";
-
-				// Check all point combinations - any snappoint can connect to any other
-				float closestDistance = float.MaxValue;
-				int myClosestIndex = -1;
-				int otherClosestIndex = -1;
-
-				for (int i = 0; i < myPoints.Length; i++)
-				{
-					for (int j = 0; j < otherPoints.Length; j++)
-					{
-						float distance = Vector3.Distance(myPoints[i], otherPoints[j]);
-
-						if (distance < closestDistance)
-						{
-							closestDistance = distance;
-							myClosestIndex = i;
-							otherClosestIndex = j;
-						}
-
-						// Check if close enough to connect
-						if (distance <= connectionThreshold)
-						{
-							connectionDetail = $"Point {i} to Point {j} (dist: {distance:F3}m)";
-
-							if (CanConnectTo(otherNode))
-							{
-								AddConnection(otherNode);
-								otherNode.AddConnection(this);
-								connected = true;
-
-								// Visual feedback for successful connection
-								if (ItemConduitMod.EnableVisualEffects.Value)
-								{
-									CreateConnectionEffect(myPoints[i], otherPoints[j]);
-								}
-
-								Debug.Log($"[ItemConduit] *** CONNECTED: {name} to {otherNode.name} via {connectionDetail} ***");
-								break; // Connection made, stop checking this node
-							}
-						}
-					}
-					if (connected) break;
-				}
-
-				// Log why connection failed if in debug mode
-				if (!connected && ItemConduitMod.ShowDebugInfo.Value && closestDistance < 1f)
-				{
-					if (closestDistance > connectionThreshold)
-					{
-						Debug.Log($"[ItemConduit] {name} close but not connected to {otherNode.name} (closest: {closestDistance:F3}m > {connectionThreshold}m)");
-						if (myClosestIndex >= 0 && otherClosestIndex >= 0)
-						{
-							Debug.Log($"[ItemConduit]   Closest points: My point {myClosestIndex} to their point {otherClosestIndex}");
-						}
-					}
-				}
-			}
-
-			Debug.Log($"[ItemConduit] === FindConnections END: {name} has {connectedNodes.Count} connections ===");
-
-			// Update visual state after connections are established
-			UpdateVisualState(connectedNodes.Count > 0);
-		}
-
-		/// <summary>
-		/// Create a visual effect for successful snappoint connections
-		/// </summary>
-		private void CreateConnectionEffect(Vector3 point1, Vector3 point2)
-		{
-			// Create a temporary particle effect or flash at the connection point
-			Vector3 connectionPoint = (point1 + point2) / 2f;
-
-			GameObject effect = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-			effect.name = "connection_flash";
-			effect.transform.position = connectionPoint;
-			effect.transform.localScale = Vector3.one * 0.5f;
-
-			Destroy(effect.GetComponent<Collider>());
-
-			var renderer = effect.GetComponent<Renderer>();
-			if (renderer != null)
-			{
-				renderer.material = new Material(Shader.Find("Sprites/Default"));
-				renderer.material.color = Color.yellow;
-			}
-
-			// Destroy after a short time
-			Destroy(effect, 0.5f);
-		}
-
-		/// <summary>
-		/// Get the world positions of this node's front and back connection points
-		/// Primarily uses snappoints if they exist
-		/// </summary>
-		/// <returns>Array containing front and back positions</returns>
-		public Vector3[] GetNodeEndpoints()
-		{
-			Vector3[] endpoints = new Vector3[2];
-
-			// Always prefer snappoints if they exist
-			Transform[] snapPoints = GetSnapPoints();
-			if (snapPoints.Length >= 2)
-			{
-				// Sort snappoints by their local Z position to determine front/back
-				var sortedSnapPoints = snapPoints.OrderBy(sp => sp.localPosition.z).ToArray();
-				endpoints[0] = sortedSnapPoints[1].position; // Front (higher Z)
-				endpoints[1] = sortedSnapPoints[0].position; // Back (lower Z)
-
-				if (ItemConduitMod.ShowDebugInfo.Value)
-				{
-					Debug.Log($"[ItemConduit] {name} using snappoints - Front: {endpoints[0]}, Back: {endpoints[1]}");
-				}
-				return endpoints;
-			}
-
-			// Fallback: calculate based on node orientation if no snappoints
-			Vector3 forwardDirection = transform.forward;
-			Vector3 halfLength = forwardDirection * (nodeLength / 2f);
-
-			endpoints[0] = transform.position + halfLength; // Front
-			endpoints[1] = transform.position - halfLength; // Back
-
-			if (ItemConduitMod.ShowDebugInfo.Value)
-			{
-				Debug.Log($"[ItemConduit] {name} calculated endpoints (no snappoints) - Front: {endpoints[0]}, Back: {endpoints[1]}");
-			}
-
-			return endpoints;
-		}
-
-		/// <summary>
-		/// Get the front connection point (forward direction)
-		/// Prefers front snappoint if it exists
-		/// </summary>
-		public Vector3 GetFrontConnectionPoint()
-		{
-			// Check for front snappoint
-			Transform frontSnap = GetSnapPointByName("front");
-			if (frontSnap != null)
-			{
-				return frontSnap.position;
-			}
-
-			// Fallback to calculated position
-			return transform.position + transform.forward * (nodeLength / 2f);
-		}
-
-		/// <summary>
-		/// Get the back connection point (backward direction)
-		/// Prefers back snappoint if it exists
-		/// </summary>
-		public Vector3 GetBackConnectionPoint()
-		{
-			// Check for back snappoint
-			Transform backSnap = GetSnapPointByName("back");
-			if (backSnap != null)
-			{
-				return backSnap.position;
-			}
-
-			// Fallback to calculated position
-			return transform.position - transform.forward * (nodeLength / 2f);
 		}
 
 		/// <summary>
@@ -430,7 +505,7 @@ namespace ItemConduit.Nodes
 
 			foreach (Transform child in transform)
 			{
-				if (child.name.Contains("snappoint"))
+				if (child.tag == "snappoint")
 				{
 					snapPoints.Add(child);
 				}
@@ -440,21 +515,6 @@ namespace ItemConduit.Nodes
 			snapPoints.Sort((a, b) => a.name.CompareTo(b.name));
 
 			return snapPoints.ToArray();
-		}
-
-		/// <summary>
-		/// Get a specific snappoint by name suffix
-		/// </summary>
-		public Transform GetSnapPointByName(string suffix)
-		{
-			foreach (Transform child in transform)
-			{
-				if (child.name.Contains("snappoint") && child.name.Contains(suffix))
-				{
-					return child;
-				}
-			}
-			return null;
 		}
 
 		/// <summary>
@@ -482,8 +542,6 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Check if this node can connect to another node based on type rules
 		/// </summary>
-		/// <param name="other">The other node to check connection compatibility</param>
-		/// <returns>True if connection is allowed</returns>
 		protected virtual bool CanConnectTo(BaseNode other)
 		{
 			if (other == null || other == this) return false;
@@ -511,10 +569,74 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Get a copy of the connected nodes list
 		/// </summary>
-		/// <returns>List of connected nodes</returns>
 		public List<BaseNode> GetConnectedNodes()
 		{
 			return new List<BaseNode>(connectedNodes);
+		}
+
+		#endregion
+
+		#region Visual Effects
+
+		/// <summary>
+		/// Create a visual effect for successful connections
+		/// </summary>
+		private void CreateConnectionEffect(Vector3 point1, Vector3 point2)
+		{
+			if (!ItemConduitMod.EnableVisualEffects.Value) return;
+
+			// Create a temporary particle effect or flash at the connection point
+			Vector3 connectionPoint = (point1 + point2) / 2f;
+
+			GameObject effect = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+			effect.name = "connection_flash";
+			effect.transform.position = connectionPoint;
+			effect.transform.localScale = Vector3.one * 0.3f;
+
+			Destroy(effect.GetComponent<Collider>());
+
+			var renderer = effect.GetComponent<Renderer>();
+			if (renderer != null)
+			{
+				renderer.material = new Material(Shader.Find("Sprites/Default"));
+				renderer.material.color = Color.yellow;
+			}
+
+			// Destroy after a short time
+			Destroy(effect, 0.5f);
+		}
+
+		/// <summary>
+		/// Update visual indicators based on active state
+		/// </summary>
+		protected virtual void UpdateVisualState(bool active)
+		{
+			// Base implementation - can be overridden for visual effects
+			if (ItemConduitMod.EnableVisualEffects.Value)
+			{
+				// Update material or particle effects based on active state
+				MeshRenderer renderer = GetComponentInChildren<MeshRenderer>();
+				if (renderer != null)
+				{
+					if (active)
+					{
+						renderer.material.EnableKeyword("_EMISSION");
+						// Use appropriate color based on node type
+						Color emissionColor = NodeType switch
+						{
+							NodeType.Extract => Color.green * 0.3f,
+							NodeType.Insert => Color.blue * 0.3f,
+							NodeType.Conduit => Color.gray * 0.5f,
+							_ => Color.white * 0.3f
+						};
+						renderer.material.SetColor("_EmissionColor", emissionColor);
+					}
+					else
+					{
+						renderer.material.DisableKeyword("_EMISSION");
+					}
+				}
+			}
 		}
 
 		#endregion
@@ -524,7 +646,6 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Set the network ID for this node and sync to clients
 		/// </summary>
-		/// <param name="networkId">The network ID to assign</param>
 		public virtual void SetNetworkId(string networkId)
 		{
 			NetworkId = networkId;
@@ -533,11 +654,6 @@ namespace ItemConduit.Nodes
 			if (zNetView != null && zNetView.IsValid() && ZNet.instance.IsServer())
 			{
 				zNetView.InvokeRPC(ZNetView.Everybody, "RPC_UpdateNetworkId", networkId ?? "");
-			}
-
-			if (ItemConduitMod.ShowDebugInfo.Value)
-			{
-				Debug.Log($"[ItemConduit] {name} assigned to network: {networkId ?? "None"}");
 			}
 		}
 
@@ -552,7 +668,6 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Set the active state of this node and sync to clients
 		/// </summary>
-		/// <param name="active">Whether the node should be active</param>
 		public virtual void SetActive(bool active)
 		{
 			IsActive = active;
@@ -574,79 +689,6 @@ namespace ItemConduit.Nodes
 		{
 			IsActive = active;
 			UpdateVisualState(active);
-		}
-
-		/// <summary>
-		/// Update visual indicators based on active state
-		/// Override in derived classes for custom visuals
-		/// </summary>
-		protected virtual void UpdateVisualState(bool active)
-		{
-			// Base implementation - can be overridden for visual effects
-			if (ItemConduitMod.EnableVisualEffects.Value)
-			{
-				// Add visual indicators at endpoints
-				UpdateEndpointVisuals();
-			}
-		}
-
-		/// <summary>
-		/// Update visual indicators at connection endpoints
-		/// </summary>
-		private void UpdateEndpointVisuals()
-		{
-			// Clean up old indicators
-			foreach (Transform child in transform)
-			{
-				if (child.name.Contains("endpoint_indicator"))
-				{
-					Destroy(child.gameObject);
-				}
-			}
-
-			if (!ItemConduitMod.EnableVisualEffects.Value) return;
-
-			// Get all connection points
-			Vector3[] connectionPoints = GetConnectionPoints();
-
-			// Create visual indicators at each connection point
-			for (int i = 0; i < connectionPoints.Length; i++)
-			{
-				GameObject indicator = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-				indicator.name = $"endpoint_indicator_{i}";
-				indicator.transform.position = connectionPoints[i];
-				indicator.transform.localScale = Vector3.one * 0.3f;
-				Destroy(indicator.GetComponent<Collider>());
-
-				// Check if this point is connected to another node
-				bool isConnected = false;
-				foreach (var connectedNode in connectedNodes)
-				{
-					if (connectedNode != null)
-					{
-						Vector3[] otherPoints = connectedNode.GetConnectionPoints();
-						foreach (var otherPoint in otherPoints)
-						{
-							if (Vector3.Distance(connectionPoints[i], otherPoint) < 0.15f)
-							{
-								isConnected = true;
-								break;
-							}
-						}
-						if (isConnected) break;
-					}
-				}
-
-				// Set indicator color (green if connected, yellow if available)
-				var renderer = indicator.GetComponent<Renderer>();
-				if (renderer != null)
-				{
-					renderer.material = new Material(Shader.Find("Sprites/Default"));
-					renderer.material.color = isConnected ? Color.green : Color.yellow;
-				}
-
-				indicator.transform.SetParent(transform);
-			}
 		}
 
 		#endregion
@@ -696,12 +738,7 @@ namespace ItemConduit.Nodes
 
 		/// <summary>
 		/// Handle player interaction with the node
-		/// Base implementation does nothing - override in derived classes
 		/// </summary>
-		/// <param name="user">The player interacting</param>
-		/// <param name="hold">Whether the interaction is being held</param>
-		/// <param name="alt">Whether alt-interaction is used</param>
-		/// <returns>True if interaction was handled</returns>
 		public virtual bool Interact(Humanoid user, bool hold, bool alt)
 		{
 			// Base nodes don't have interactions
@@ -710,11 +747,7 @@ namespace ItemConduit.Nodes
 
 		/// <summary>
 		/// Handle item use on node
-		/// Base implementation does nothing
 		/// </summary>
-		/// <param name="user">The player using the item</param>
-		/// <param name="item">The item being used</param>
-		/// <returns>True if item use was handled</returns>
 		public virtual bool UseItem(Humanoid user, ItemDrop.ItemData item)
 		{
 			return false;
@@ -741,42 +774,13 @@ namespace ItemConduit.Nodes
 			};
 			Gizmos.DrawWireSphere(transform.position, 0.2f);
 
-			// Get connection points - handle potential initialization issues
-			Vector3[] points = null;
-			try
+			// Draw connection triggers
+			foreach (var collider in connectionColliders)
 			{
-				points = GetConnectionPoints();
-			}
-			catch
-			{
-				// If GetConnectionPoints fails, use fallback
-				points = new Vector3[2];
-				Vector3 halfLength = transform.forward * (nodeLength > 0 ? nodeLength : 1f) / 2f;
-				points[0] = transform.position + halfLength;
-				points[1] = transform.position - halfLength;
-			}
-
-			// Draw connection points in yellow
-			Gizmos.color = Color.yellow;
-			foreach (var point in points)
-			{
-				Gizmos.DrawWireSphere(point, 0.3f);
-			}
-
-			// Draw lines between connection points to show the node
-			if (points.Length >= 2)
-			{
-				Gizmos.color = NodeType switch
+				if (collider != null)
 				{
-					NodeType.Conduit => Color.gray,
-					NodeType.Extract => Color.green,
-					NodeType.Insert => Color.blue,
-					_ => Color.white
-				};
-
-				for (int i = 0; i < points.Length - 1; i++)
-				{
-					Gizmos.DrawLine(points[i], points[i + 1]);
+					Gizmos.color = Color.yellow * 0.5f;
+					Gizmos.DrawWireSphere(collider.transform.position, collider.radius);
 				}
 			}
 
@@ -788,44 +792,44 @@ namespace ItemConduit.Nodes
 				{
 					if (node != null)
 					{
-						// Find the closest connection points
-						Vector3[] myPoints = points;
-						Vector3[] otherPoints = null;
-
-						try
-						{
-							otherPoints = node.GetConnectionPoints();
-						}
-						catch
-						{
-							// Fallback if the other node can't provide points
-							otherPoints = new Vector3[] { node.transform.position };
-						}
-
-						float minDist = float.MaxValue;
-						Vector3 myClosest = transform.position;
-						Vector3 otherClosest = node.transform.position;
-
-						foreach (var myPoint in myPoints)
-						{
-							foreach (var otherPoint in otherPoints)
-							{
-								float dist = Vector3.Distance(myPoint, otherPoint);
-								if (dist < minDist)
-								{
-									minDist = dist;
-									myClosest = myPoint;
-									otherClosest = otherPoint;
-								}
-							}
-						}
-
-						Gizmos.DrawLine(myClosest, otherClosest);
+						Gizmos.DrawLine(transform.position, node.transform.position);
 					}
 				}
 			}
 		}
 
 		#endregion
+	}
+
+	/// <summary>
+	/// Helper component for detecting connections via triggers
+	/// </summary>
+	public class ConnectionDetector : MonoBehaviour
+	{
+		public BaseNode parentNode;
+
+		private void OnTriggerEnter(Collider other)
+		{
+			if (other == null || parentNode == null) return;
+
+			// Check if the other collider has a connection detector
+			ConnectionDetector otherDetector = other.GetComponent<ConnectionDetector>();
+			if (otherDetector != null && otherDetector.parentNode != null)
+			{
+				// Notify parent node of potential connection
+				parentNode.OnConnectionTriggerEnter(otherDetector.parentNode);
+			}
+		}
+
+		private void OnTriggerExit(Collider other)
+		{
+			if (other == null || parentNode == null) return;
+
+			ConnectionDetector otherDetector = other.GetComponent<ConnectionDetector>();
+			if (otherDetector != null && otherDetector.parentNode != null)
+			{
+				parentNode.OnConnectionTriggerExit(otherDetector.parentNode);
+			}
+		}
 	}
 }
