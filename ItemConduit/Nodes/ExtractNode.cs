@@ -1,13 +1,15 @@
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using ItemConduit.Core;
 using ItemConduit.GUI;
 using Logger = Jotunn.Logger;
+
 namespace ItemConduit.Nodes
 {
 	/// <summary>
-	/// Extract node implementation
+	/// Extract node implementation with optimized container detection
 	/// Pulls items from attached containers and sends them through the network
 	/// </summary>
 	public class ExtractNode : BaseNode
@@ -33,8 +35,8 @@ namespace ItemConduit.Nodes
 		/// <summary>GUI component for configuration</summary>
 		private ExtractNodeGUI gui;
 
-		/// <summary>Search radius for finding containers - increased for better detection</summary>
-		private const float CONTAINER_SEARCH_RADIUS = 5f;
+		/// <summary>Coroutine for container finding</summary>
+		private Coroutine containerCoroutine;
 
 		/// <summary>Time since last extraction attempt</summary>
 		private float lastExtractionTime;
@@ -65,257 +67,244 @@ namespace ItemConduit.Nodes
 		protected override void Start()
 		{
 			base.Start();
-			FindTargetContainer();
+
+			// Only start container detection for valid placed nodes
+			if (IsValidPlacedNode())
+			{
+				StartContainerDetection();
+			}
+		}
+
+		/// <summary>
+		/// Cleanup
+		/// </summary>
+		protected override void OnDestroy()
+		{
+			if (containerCoroutine != null)
+			{
+				StopCoroutine(containerCoroutine);
+				containerCoroutine = null;
+			}
+
+			base.OnDestroy();
 		}
 
 		#endregion
 
-		#region Container Management
+		#region Optimized Container Management
 
 		/// <summary>
-		/// Enhanced container finding with better debugging and detection
+		/// Start container detection process
 		/// </summary>
-		private void FindTargetContainer()
+		public void StartContainerDetection()
 		{
+			if (!IsValidPlacedNode()) return;
+
+			if (containerCoroutine != null)
+			{
+				StopCoroutine(containerCoroutine);
+			}
+			containerCoroutine = StartCoroutine(FindTargetContainerCoroutine());
+		}
+
+		/// <summary>
+		/// Optimized container finding using physics overlap detection
+		/// Only considers containers that physically overlap with the node
+		/// </summary>
+		private IEnumerator FindTargetContainerCoroutine()
+		{
+			// Wait for placement to settle
+			yield return new WaitForSeconds(0.2f);
+
+			targetContainer = null;
+
+			// Get the bounds of this node
+			Bounds nodeBounds = GetNodeBounds();
+
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Logger.LogWarning($"[ItemConduit] {name} searching for containers...");
-				Logger.LogInfo($"[ItemConduit] Node position: {transform.position}");
-				Logger.LogInfo($"[ItemConduit] Search radius: {CONTAINER_SEARCH_RADIUS}");
+				Logger.LogInfo($"[ItemConduit] {name} searching for overlapping containers...");
+				Logger.LogInfo($"[ItemConduit] Node bounds center: {nodeBounds.center}, size: {nodeBounds.size}");
 			}
 
-			// Find all colliders within search radius
-			Collider[] colliders = Physics.OverlapSphere(transform.position, CONTAINER_SEARCH_RADIUS);
+			// Use OverlapBox for precise detection of overlapping objects
+			Collider[] overlaps = Physics.OverlapBox(
+				nodeBounds.center,
+				nodeBounds.extents * 1.2f, // Slightly expanded to catch edge cases
+				transform.rotation,
+				LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small")
+			);
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Logger.LogWarning($"[ItemConduit] Found {colliders.Length} colliders in range");
+				Logger.LogInfo($"[ItemConduit] Found {overlaps.Length} overlapping colliders");
 			}
 
-			float nearestDistance = float.MaxValue;
-			Container nearestContainer = null;
+			float closestDistance = float.MaxValue;
+			Container bestContainer = null;
+			List<Container> foundContainers = new List<Container>();
 
-			foreach (Collider col in colliders)
+			foreach (var col in overlaps)
 			{
-				if (col == null || col.gameObject == null) continue;
+				if (col == null || col.transform == transform) continue;
 
-				if (ItemConduitMod.ShowDebugInfo.Value)
-				{
-					Logger.LogWarning($"[ItemConduit] Checking collider: {col.name} on object: {col.gameObject.name}");
-					Logger.LogInfo($"[ItemConduit] Collider position: {col.transform.position}");
-					Logger.LogInfo($"[ItemConduit] Distance: {Vector3.Distance(transform.position, col.transform.position):F2}m");
-					Logger.LogInfo($"[ItemConduit] Container layer: {col.gameObject.layer}");
-					Logger.LogInfo($"[ItemConduit] Container layer name: {LayerMask.LayerToName(col.gameObject.layer)}");
-				}
-
-				// Check for Container component on the collider's GameObject
+				// Try multiple ways to find container
 				Container container = col.GetComponent<Container>();
-
-				// If not found, check parent objects (some containers have nested colliders)
 				if (container == null)
-				{
 					container = col.GetComponentInParent<Container>();
-				}
-
-				// If still not found, check children (some containers have child colliders)
 				if (container == null)
-				{
 					container = col.GetComponentInChildren<Container>();
-				}
 
 				if (container != null)
 				{
-					float distance = Vector3.Distance(transform.position, container.transform.position);
-
-					if (ItemConduitMod.ShowDebugInfo.Value)
+					// Get the container's collider for bounds checking
+					Collider containerCollider = container.GetComponent<Collider>();
+					if (containerCollider == null)
 					{
-						Logger.LogWarning($"[ItemConduit] Found Container: {container.name}");
-						Logger.LogInfo($"[ItemConduit] Container m_name: {container.m_name}");
-						Logger.LogInfo($"[ItemConduit] Container position: {container.transform.position}");
-						Logger.LogInfo($"[ItemConduit] Distance to container: {distance:F2}m");
+						// Try to get collider from children (some containers have colliders on child objects)
+						containerCollider = container.GetComponentInChildren<Collider>();
+					}
 
-						// Check if container has inventory
-						Inventory inv = container.GetInventory();
-						if (inv != null)
+					if (containerCollider != null)
+					{
+						Bounds containerBounds = containerCollider.bounds;
+
+						// Check for actual intersection between node and container
+						if (nodeBounds.Intersects(containerBounds))
 						{
-							Logger.LogInfo($"[ItemConduit] Container has inventory: {inv.GetWidth()}x{inv.GetHeight()} slots");
-							Logger.LogInfo($"[ItemConduit] Container items: {inv.GetAllItems().Count}");
+							float distance = Vector3.Distance(transform.position, container.transform.position);
+
+							if (ItemConduitMod.ShowDebugInfo.Value)
+							{
+								Logger.LogWarning($"[ItemConduit] Found overlapping container: {container.name} ({container.m_name}) at distance {distance:F2}m");
+
+								Inventory inv = container.GetInventory();
+								if (inv != null)
+								{
+									Logger.LogInfo($"[ItemConduit]   Inventory: {inv.GetWidth()}x{inv.GetHeight()} slots, {inv.GetAllItems().Count} items");
+								}
+							}
+
+							foundContainers.Add(container);
+
+							if (distance < closestDistance)
+							{
+								closestDistance = distance;
+								bestContainer = container;
+							}
 						}
 						else
 						{
-							Logger.LogWarning($"[ItemConduit] Container has NO inventory!");
-						}
-					}
-
-					if (distance < nearestDistance)
-					{
-						nearestDistance = distance;
-						nearestContainer = container;
-					}
-				}
-				else
-				{
-					if (ItemConduitMod.ShowDebugInfo.Value)
-					{
-						Logger.LogWarning($"[ItemConduit] No Container component found on {col.gameObject.name}");
-
-						// List all components on this object for debugging
-						Component[] components = col.GetComponents<Component>();
-						Logger.LogInfo($"[ItemConduit] Components on {col.gameObject.name}:");
-						foreach (var comp in components)
-						{
-							if (comp != null)
+							if (ItemConduitMod.ShowDebugInfo.Value)
 							{
-								Logger.LogInfo($"[ItemConduit]   - {comp.GetType().Name}");
+								Logger.LogInfo($"[ItemConduit] Container {container.name} found but bounds don't intersect");
 							}
 						}
 					}
 				}
 			}
 
-			targetContainer = nearestContainer;
+			// Also check if the node is placed directly on a container using raycast
+			if (bestContainer == null)
+			{
+				RaycastHit hit;
+				// Cast ray downward from node center
+				if (Physics.Raycast(transform.position, Vector3.down, out hit, 2f, LayerMask.GetMask("piece", "piece_nonsolid", "Default_small")))
+				{
+					Container container = hit.collider.GetComponent<Container>();
+					if (container == null)
+						container = hit.collider.GetComponentInParent<Container>();
+
+					if (container != null && container.GetInventory() != null)
+					{
+						bestContainer = container;
+
+						if (ItemConduitMod.ShowDebugInfo.Value)
+						{
+							Logger.LogWarning($"[ItemConduit] Found container below node: {container.name} ({container.m_name})");
+						}
+					}
+				}
+			}
+
+			targetContainer = bestContainer;
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
 				if (targetContainer != null)
 				{
-					Logger.LogWarning($"[ItemConduit] *** {name} FOUND container: {targetContainer.name} at distance {nearestDistance:F2}m ***");
+					Logger.LogWarning($"[ItemConduit] *** {name} connected to container: {targetContainer.name} ({targetContainer.m_name}) ***");
 				}
 				else
 				{
-					Logger.LogWarning($"[ItemConduit] *** {name} found NO containers within {CONTAINER_SEARCH_RADIUS}m ***");
-
-					// Additional debugging - check if there are any containers in the scene at all
-					DebugAllContainers();
+					Logger.LogWarning($"[ItemConduit] *** {name} found NO overlapping containers ***");
+					if (foundContainers.Count > 0)
+					{
+						Logger.LogInfo($"[ItemConduit] Note: Found {foundContainers.Count} containers nearby but bounds didn't intersect properly");
+					}
 				}
 			}
 		}
 
 		/// <summary>
-		/// Debug method to list all containers in the scene
+		/// Get the bounds of this node for overlap detection
 		/// </summary>
-		private void DebugAllContainers()
+		private Bounds GetNodeBounds()
 		{
-			Container[] allContainers = FindObjectsOfType<Container>();
-			Logger.LogWarning($"[ItemConduit] === All containers in scene ({allContainers.Length}) ===");
+			// Get all colliders on this node
+			Collider[] colliders = GetComponentsInChildren<Collider>();
 
-			foreach (var container in allContainers)
+			if (colliders.Length == 0)
 			{
-				if (container != null)
-				{
-					float distance = Vector3.Distance(transform.position, container.transform.position);
-					Logger.LogInfo($"[ItemConduit] Container: {container.name} ({container.m_name}) at {distance:F2}m");
-					Logger.LogInfo($"[ItemConduit]   Position: {container.transform.position}");
-					Logger.LogInfo($"[ItemConduit]   Has Inventory: {container.GetInventory() != null}");
-					Logger.LogInfo($"[ItemConduit]   Layer: {container.gameObject.layer} ({LayerMask.LayerToName(container.gameObject.layer)})");
-				}
-			}
-		}
-
-		/// <summary>
-		/// Alternative method using raycast detection for more precise container finding
-		/// </summary>
-		private Container FindContainerWithRaycast()
-		{
-			if (ItemConduitMod.ShowDebugInfo.Value)
-			{
-				Logger.LogInfo($"[ItemConduit] {name} trying raycast detection...");
+				// Fallback to calculated bounds based on node position and size
+				return new Bounds(transform.position, new Vector3(0.5f, 0.5f, NodeLength));
 			}
 
-			// Cast rays in multiple directions to find containers
-			Vector3[] directions = {
-				Vector3.forward,
-				Vector3.back,
-				Vector3.left,
-				Vector3.right,
-				Vector3.up,
-				Vector3.down
-			};
-
-			float maxDistance = CONTAINER_SEARCH_RADIUS;
-
-			foreach (Vector3 direction in directions)
+			// Find the main collider (non-trigger)
+			Collider mainCollider = null;
+			foreach (var col in colliders)
 			{
-				Vector3 worldDirection = transform.TransformDirection(direction);
-
-				if (Physics.Raycast(transform.position, worldDirection, out RaycastHit hit, maxDistance))
+				if (!col.isTrigger)
 				{
-					if (ItemConduitMod.ShowDebugInfo.Value)
-					{
-						Logger.LogWarning($"[ItemConduit] Raycast hit: {hit.collider.name} at {hit.distance:F2}m in direction {direction}");
-					}
-
-					Container container = hit.collider.GetComponent<Container>();
-					if (container == null)
-					{
-						container = hit.collider.GetComponentInParent<Container>();
-					}
-					if (container == null)
-					{
-						container = hit.collider.GetComponentInChildren<Container>();
-					}
-
-					if (container != null)
-					{
-						if (ItemConduitMod.ShowDebugInfo.Value)
-						{
-							Logger.LogWarning($"[ItemConduit] *** Raycast found container: {container.name} ***");
-						}
-						return container;
-					}
+					mainCollider = col;
+					break;
 				}
 			}
 
-			return null;
+			if (mainCollider != null)
+			{
+				return mainCollider.bounds;
+			}
+
+			// If all colliders are triggers, use the first one but expand it slightly
+			Bounds bounds = colliders[0].bounds;
+			bounds.Expand(0.1f);
+			return bounds;
 		}
 
 		/// <summary>
-		/// Enhanced GetTargetContainer method with fallback detection
+		/// Get the target container (with re-detection if needed)
 		/// </summary>
 		public Container GetTargetContainer()
 		{
-			// First try the normal detection
-			if (targetContainer == null)
+			// If we don't have a container, try to find one
+			if (targetContainer == null && IsValidPlacedNode())
 			{
-				FindTargetContainer();
-			}
-
-			// If still no container found, try raycast detection
-			if (targetContainer == null)
-			{
-				targetContainer = FindContainerWithRaycast();
-			}
-
-			// If still no container, try increasing search radius temporarily
-			if (targetContainer == null && ItemConduitMod.ShowDebugInfo.Value)
-			{
-				Logger.LogWarning($"[ItemConduit] {name} trying expanded search...");
-
-				// Temporarily increase search radius
-				const float expandedRadius = 10f; // Increase to 10 meters
-
-				Collider[] expandedColliders = Physics.OverlapSphere(transform.position, expandedRadius);
-				Logger.LogWarning($"[ItemConduit] Expanded search found {expandedColliders.Length} colliders");
-
-				foreach (Collider col in expandedColliders)
-				{
-					if (col == null) continue;
-
-					Container container = col.GetComponent<Container>();
-					if (container == null)
-						container = col.GetComponentInParent<Container>();
-					if (container == null)
-						container = col.GetComponentInChildren<Container>();
-
-					if (container != null)
-					{
-						float distance = Vector3.Distance(transform.position, container.transform.position);
-						Logger.LogWarning($"[ItemConduit] Found container '{container.name}' at {distance:F2}m (outside normal range)");
-					}
-				}
+				StartContainerDetection();
 			}
 
 			return targetContainer;
+		}
+
+		/// <summary>
+		/// Force re-detection of container (useful after containers are moved)
+		/// </summary>
+		public void RefreshContainerConnection()
+		{
+			if (IsValidPlacedNode())
+			{
+				StartContainerDetection();
+			}
 		}
 
 		#endregion
@@ -380,7 +369,7 @@ namespace ItemConduit.Nodes
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Logger.LogWarning($"[ItemConduit] Extract node {name} channel set to: {ChannelId}");
+				Logger.LogInfo($"[ItemConduit] Extract node {name} channel set to: {ChannelId}");
 			}
 		}
 
@@ -404,7 +393,7 @@ namespace ItemConduit.Nodes
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
 				string mode = isWhitelist ? "whitelist" : "blacklist";
-				Logger.LogWarning($"[ItemConduit] Extract node {name} filter set to {mode} with {filter.Count} items");
+				Logger.LogInfo($"[ItemConduit] Extract node {name} filter set to {mode} with {filter.Count} items");
 			}
 		}
 
@@ -446,6 +435,9 @@ namespace ItemConduit.Nodes
 			// Only local player can configure
 			if (user != Player.m_localPlayer) return false;
 
+			// Don't allow interaction with ghost pieces
+			if (!IsValidPlacedNode()) return false;
+
 			// Create GUI if it doesn't exist
 			if (gui == null)
 			{
@@ -464,6 +456,8 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		public override string GetHoverText()
 		{
+			if (!IsValidPlacedNode()) return "";
+
 			string baseText = base.GetHoverText();
 
 			// Add channel info

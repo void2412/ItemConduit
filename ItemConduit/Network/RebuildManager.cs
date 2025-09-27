@@ -10,8 +10,8 @@ using Logger = Jotunn.Logger;
 namespace ItemConduit.Network
 {
 	/// <summary>
-	/// Optimized rebuild manager with proper coroutine handling
-	/// Spreads rebuild work across multiple frames to prevent FPS drops
+	/// Optimized rebuild manager with batched updates and frame spreading
+	/// Prevents FPS drops by distributing work across multiple frames
 	/// </summary>
 	public class RebuildManager : MonoBehaviour
 	{
@@ -58,11 +58,17 @@ namespace ItemConduit.Network
 		/// <summary>Statistics tracking</summary>
 		private RebuildStatistics statistics;
 
-		/// <summary>Maximum nodes to process per frame</summary>
-		private const int NODES_PER_FRAME = 5;
+		/// <summary>Maximum nodes to process per frame in connection detection</summary>
+		private const int CONNECTIONS_PER_FRAME = 3;
+
+		/// <summary>Maximum nodes to process per frame in network creation</summary>
+		private const int NETWORKS_PER_FRAME = 5;
 
 		/// <summary>Maximum time in milliseconds per frame for rebuild operations</summary>
-		private const float MAX_MS_PER_FRAME = 5f;
+		private const float MAX_MS_PER_FRAME = 8f;
+
+		/// <summary>Delay between connection batches</summary>
+		private const float CONNECTION_BATCH_DELAY = 0.05f;
 
 		#endregion
 
@@ -112,6 +118,16 @@ namespace ItemConduit.Network
 			if (node == null) return;
 			if (!ZNet.instance.IsServer()) return;
 
+			// Don't process ghost pieces
+			if (!node.IsValidPlacedNode())
+			{
+				if (ItemConduitMod.ShowDebugInfo.Value)
+				{
+					Logger.LogInfo($"[ItemConduit] Ignoring rebuild request for invalid/ghost node: {node.name}");
+				}
+				return;
+			}
+
 			// Add to rebuild queue
 			nodesNeedingRebuild.Add(node);
 			lastRebuildRequestTime = Time.time;
@@ -141,12 +157,12 @@ namespace ItemConduit.Network
 		{
 			if (!ZNet.instance.IsServer()) return;
 
-			// Get all nodes from NetworkManager
+			// Get all valid nodes from NetworkManager
 			var allNodes = NetworkManager.Instance.GetAllNodes();
 
 			foreach (var node in allNodes)
 			{
-				if (node != null)
+				if (node != null && node.IsValidPlacedNode())
 				{
 					nodesNeedingRebuild.Add(node);
 				}
@@ -179,11 +195,11 @@ namespace ItemConduit.Network
 		}
 
 		/// <summary>
-		/// Get current rebuild statistics
+		/// Get current statistics as string
 		/// </summary>
-		public RebuildStatistics GetStatistics()
+		public string GetStatistics()
 		{
-			return statistics;
+			return statistics.ToString();
 		}
 
 		/// <summary>
@@ -192,14 +208,6 @@ namespace ItemConduit.Network
 		public bool IsRebuildInProgress()
 		{
 			return isRebuildInProgress;
-		}
-
-		/// <summary>
-		/// Set the rebuild delay
-		/// </summary>
-		public void SetRebuildDelay(float delay)
-		{
-			rebuildDelay = Mathf.Clamp(delay, 0.1f, 5f);
 		}
 
 		#endregion
@@ -221,13 +229,13 @@ namespace ItemConduit.Network
 			}
 
 			// Start new rebuild coroutine
-			rebuildCoroutine = StartCoroutine(RebuildCoroutine(delay));
+			rebuildCoroutine = StartCoroutine(OptimizedRebuildCoroutine(delay));
 		}
 
 		/// <summary>
-		/// Main rebuild coroutine - optimized to spread work across frames
+		/// Optimized rebuild coroutine that spreads work across frames
 		/// </summary>
-		private IEnumerator RebuildCoroutine(float delay)
+		private IEnumerator OptimizedRebuildCoroutine(float delay)
 		{
 			// Wait for the specified delay to batch multiple changes
 			yield return new WaitForSeconds(delay);
@@ -244,54 +252,46 @@ namespace ItemConduit.Network
 			isRebuildInProgress = true;
 			float startTime = Time.realtimeSinceStartup;
 
-			// Collect affected data
-			var affectedData = CollectAffectedNodesAndNetworks();
+			// Remove any null or ghost nodes
+			nodesNeedingRebuild.RemoveWhere(n => n == null || !n.IsValidPlacedNode());
 
-			if (affectedData.nodesToRebuild.Count == 0)
+			// Collect affected nodes (physics-based, more efficient)
+			var affectedNodes = CollectAffectedNodesOptimized();
+
+			if (affectedNodes.Count == 0)
 			{
-				Logger.LogInfo("[ItemConduit] No nodes to rebuild");
+				Logger.LogInfo("[ItemConduit] No valid nodes to rebuild");
 				isRebuildInProgress = false;
 				yield break;
 			}
 
 			Logger.LogInfo("[ItemConduit] ========================================");
-			Logger.LogInfo($"[ItemConduit] Starting network rebuild");
-			Logger.LogInfo($"[ItemConduit] Affected networks: {affectedData.affectedNetworkIds.Count}");
-			Logger.LogInfo($"[ItemConduit] Nodes to rebuild: {affectedData.nodesToRebuild.Count}");
+			Logger.LogInfo($"[ItemConduit] Starting optimized network rebuild");
+			Logger.LogInfo($"[ItemConduit] Nodes to rebuild: {affectedNodes.Count}");
 			Logger.LogInfo("[ItemConduit] ========================================");
 
-			// Step 1: Deactivate affected nodes
-			yield return StartCoroutine(DeactivateNodesCoroutine(affectedData.nodesToRebuild));
+			// Step 1: Clear old network associations
+			yield return StartCoroutine(ClearNetworkAssociations(affectedNodes));
 
-			// Step 2: Clear old network data
-			ClearNetworkData(affectedData.affectedNetworkIds);
-			yield return null; // Give a frame for cleanup
+			// Step 2: Batch update connections using physics
+			yield return StartCoroutine(BatchedConnectionUpdate(affectedNodes));
 
-			// Step 3: Rebuild connections
-			yield return StartCoroutine(RebuildConnectionsCoroutine(affectedData.nodesToRebuild));
-
-			// Step 4: Create new networks
-			int newNetworks = 0;
-			yield return StartCoroutine(CreateNetworksCoroutine(affectedData.nodesToRebuild, (count) => {
-				newNetworks = count;
+			// Step 3: Build networks from connected components
+			int networksCreated = 0;
+			yield return StartCoroutine(BuildNetworksOptimized(affectedNodes, (count) => {
+				networksCreated = count;
 			}));
 
-			// Step 5: Reactivate nodes
-			yield return StartCoroutine(ReactivateNodesCoroutine(affectedData.nodesToRebuild));
+			// Step 4: Activate valid networks
+			yield return StartCoroutine(ActivateNetworks(affectedNodes));
 
 			// Update statistics
 			float rebuildTime = Time.realtimeSinceStartup - startTime;
-			statistics.RecordRebuild(
-				affectedData.nodesToRebuild.Count,
-				affectedData.affectedNetworkIds.Count,
-				newNetworks,
-				rebuildTime
-			);
+			statistics.RecordRebuild(affectedNodes.Count, networksCreated, rebuildTime);
 
 			Logger.LogInfo("[ItemConduit] ========================================");
 			Logger.LogInfo($"[ItemConduit] Rebuild complete in {rebuildTime:F2}s");
-			Logger.LogInfo($"[ItemConduit] Networks created: {newNetworks}");
-			Logger.LogInfo($"[ItemConduit] Total rebuilds: {statistics.TotalRebuilds}");
+			Logger.LogInfo($"[ItemConduit] Networks created: {networksCreated}");
 			Logger.LogInfo("[ItemConduit] ========================================");
 
 			// Clean up
@@ -302,101 +302,75 @@ namespace ItemConduit.Network
 		}
 
 		/// <summary>
-		/// Collect all nodes and networks that need to be rebuilt
+		/// Collect affected nodes using physics for efficiency
 		/// </summary>
-		private (HashSet<BaseNode> nodesToRebuild, HashSet<string> affectedNetworkIds) CollectAffectedNodesAndNetworks()
+		private HashSet<BaseNode> CollectAffectedNodesOptimized()
 		{
-			HashSet<BaseNode> nodesToRebuild = new HashSet<BaseNode>();
-			HashSet<string> affectedNetworkIds = new HashSet<string>();
+			HashSet<BaseNode> affectedNodes = new HashSet<BaseNode>();
 
-			// Remove any null nodes
-			nodesNeedingRebuild.RemoveWhere(n => n == null);
-
-			// Process each node that needs rebuild
 			foreach (var node in nodesNeedingRebuild)
 			{
+				if (node == null || !node.IsValidPlacedNode()) continue;
+
 				// Add the node itself
-				nodesToRebuild.Add(node);
+				affectedNodes.Add(node);
 
-				// Get the network this node belongs to
-				string networkId = NetworkManager.Instance.GetNodeNetworkId(node);
-				if (!string.IsNullOrEmpty(networkId))
+				// Get connected nodes from the node's connection list
+				foreach (var connected in node.GetConnectedNodes())
 				{
-					affectedNetworkIds.Add(networkId);
-
-					// Add all nodes from this network
-					var networkNodes = NetworkManager.Instance.GetNetworkNodes(networkId);
-					foreach (var netNode in networkNodes)
+					if (connected != null && connected.IsValidPlacedNode())
 					{
-						if (netNode != null)
-						{
-							nodesToRebuild.Add(netNode);
-						}
+						affectedNodes.Add(connected);
 					}
 				}
 
-				// Find nearby nodes using physics (more efficient than FindObjectsOfType)
-				var nearbyNodes = FindNearbyNodesPhysics(node, 10f);
-				foreach (var nearbyNode in nearbyNodes)
-				{
-					nodesToRebuild.Add(nearbyNode);
+				// Also find nearby nodes using physics (more efficient than FindObjectsOfType)
+				float searchRadius = node.NodeLength + ItemConduitMod.ConnectionRange.Value + 2f;
+				Collider[] nearbyColliders = Physics.OverlapSphere(
+					node.transform.position,
+					searchRadius,
+					LayerMask.GetMask("piece", "piece_nonsolid")
+				);
 
-					// Add their networks too
-					string nearbyNetworkId = NetworkManager.Instance.GetNodeNetworkId(nearbyNode);
-					if (!string.IsNullOrEmpty(nearbyNetworkId))
+				foreach (var col in nearbyColliders)
+				{
+					BaseNode nearbyNode = col.GetComponentInParent<BaseNode>();
+					if (nearbyNode != null && nearbyNode.IsValidPlacedNode())
 					{
-						affectedNetworkIds.Add(nearbyNetworkId);
+						affectedNodes.Add(nearbyNode);
 					}
 				}
 			}
 
-			// Track which nodes are being processed
-			nodesBeingProcessed = new HashSet<BaseNode>(nodesToRebuild);
-
-			return (nodesToRebuild, affectedNetworkIds);
+			nodesBeingProcessed = new HashSet<BaseNode>(affectedNodes);
+			return affectedNodes;
 		}
 
 		/// <summary>
-		/// Find nodes near a given position using physics
+		/// Clear network associations for affected nodes
 		/// </summary>
-		private List<BaseNode> FindNearbyNodesPhysics(BaseNode centerNode, float radius)
-		{
-			List<BaseNode> nearbyNodes = new List<BaseNode>();
-
-			Collider[] colliders = Physics.OverlapSphere(centerNode.transform.position, radius);
-			foreach (var collider in colliders)
-			{
-				BaseNode node = collider.GetComponent<BaseNode>();
-				if (node == null)
-				{
-					node = collider.GetComponentInParent<BaseNode>();
-				}
-
-				if (node != null && node != centerNode)
-				{
-					nearbyNodes.Add(node);
-				}
-			}
-
-			return nearbyNodes;
-		}
-
-		/// <summary>
-		/// Deactivate nodes using coroutine
-		/// </summary>
-		private IEnumerator DeactivateNodesCoroutine(HashSet<BaseNode> nodes)
+		private IEnumerator ClearNetworkAssociations(HashSet<BaseNode> nodes)
 		{
 			int processed = 0;
 			foreach (var node in nodes)
 			{
 				if (node != null)
 				{
-					node.SetActive(false);
+					// Get old network ID for cleanup
+					string oldNetworkId = node.NetworkId;
+					if (!string.IsNullOrEmpty(oldNetworkId))
+					{
+						NetworkManager.Instance.RemoveNetwork(oldNetworkId);
+					}
+
+					// Clear node's network association
 					node.SetNetworkId(null);
+					node.SetActive(false);
+
 					processed++;
 
-					// Yield every few nodes
-					if (processed % NODES_PER_FRAME == 0)
+					// Yield every few nodes to prevent frame drops
+					if (processed % NETWORKS_PER_FRAME == 0)
 					{
 						yield return null;
 					}
@@ -405,108 +379,120 @@ namespace ItemConduit.Network
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Logger.LogInfo($"[ItemConduit] Deactivated {processed} nodes");
+				Logger.LogInfo($"[ItemConduit] Cleared network associations for {processed} nodes");
 			}
 		}
 
 		/// <summary>
-		/// Clear network data for affected networks
+		/// Batch update connections using optimized physics detection
 		/// </summary>
-		private void ClearNetworkData(HashSet<string> networkIds)
+		private IEnumerator BatchedConnectionUpdate(HashSet<BaseNode> nodes)
 		{
-			foreach (string networkId in networkIds)
-			{
-				NetworkManager.Instance.RemoveNetwork(networkId);
-			}
+			List<BaseNode> nodeList = nodes.ToList();
+			int totalNodes = nodeList.Count;
+			int batchSize = Mathf.Min(CONNECTIONS_PER_FRAME, totalNodes);
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Logger.LogInfo($"[ItemConduit] Cleared {networkIds.Count} networks");
+				Logger.LogInfo($"[ItemConduit] Starting batched connection update for {totalNodes} nodes");
 			}
-		}
 
-		/// <summary>
-		/// Rebuild connections using coroutine
-		/// </summary>
-		private IEnumerator RebuildConnectionsCoroutine(HashSet<BaseNode> nodes)
-		{
-			float frameStartTime = Time.realtimeSinceStartup;
-			int processed = 0;
-
-			foreach (var node in nodes)
+			for (int i = 0; i < totalNodes; i += batchSize)
 			{
-				if (node != null)
+				float frameStart = Time.realtimeSinceStartup;
+				int endIndex = Mathf.Min(i + batchSize, totalNodes);
+
+				// Process batch
+				for (int j = i; j < endIndex; j++)
 				{
-					// Start connection detection for this node
-					node.FindConnections();
-					processed++;
-
-					// Check if we've spent too much time this frame
-					float elapsedMs = (Time.realtimeSinceStartup - frameStartTime) * 1000f;
-					if (elapsedMs > MAX_MS_PER_FRAME || processed % NODES_PER_FRAME == 0)
+					BaseNode node = nodeList[j];
+					if (node != null && node.IsValidPlacedNode())
 					{
-						yield return null;
-						frameStartTime = Time.realtimeSinceStartup;
+						// Start connection detection (uses physics-based approach)
+						node.StartConnectionDetection();
 					}
+				}
+
+				// Wait for physics to update
+				yield return new WaitForFixedUpdate();
+
+				// Small delay between batches to let connections settle
+				yield return new WaitForSeconds(CONNECTION_BATCH_DELAY);
+
+				// Check if we're taking too long this frame
+				float frameTime = (Time.realtimeSinceStartup - frameStart) * 1000f;
+				if (frameTime > MAX_MS_PER_FRAME)
+				{
+					// Give an extra frame if we're running slow
+					yield return null;
+				}
+
+				if (ItemConduitMod.ShowDebugInfo.Value && (i % 10 == 0 || endIndex >= totalNodes))
+				{
+					Logger.LogInfo($"[ItemConduit] Connection update progress: {endIndex}/{totalNodes}");
 				}
 			}
 
-			// Wait for all connection detections to complete
-			yield return new WaitForSeconds(0.5f);
+			// Wait a bit for all connections to finalize
+			yield return new WaitForSeconds(0.2f);
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Logger.LogInfo($"[ItemConduit] Rebuilt connections for {processed} nodes");
+				Logger.LogInfo($"[ItemConduit] Batched connection update complete");
 			}
 		}
 
 		/// <summary>
-		/// Create networks using coroutine
+		/// Build networks from connected components efficiently
 		/// </summary>
-		private IEnumerator CreateNetworksCoroutine(HashSet<BaseNode> nodes, System.Action<int> onComplete)
+		private IEnumerator BuildNetworksOptimized(HashSet<BaseNode> nodes, System.Action<int> onComplete)
 		{
 			HashSet<BaseNode> visited = new HashSet<BaseNode>();
-			int networksCreated = 0;
-			float frameStartTime = Time.realtimeSinceStartup;
+			List<ConduitNetwork> newNetworks = new List<ConduitNetwork>();
+			float frameStart = Time.realtimeSinceStartup;
 
 			foreach (var node in nodes)
 			{
-				if (node != null && !visited.Contains(node))
+				if (node == null || !node.IsValidPlacedNode() || visited.Contains(node))
+					continue;
+
+				// Build network using BFS
+				ConduitNetwork network = BuildNetworkFromNode(node, visited);
+
+				if (network != null && network.Nodes.Count > 0)
 				{
-					// Build network from this node
-					var network = BuildNetworkFromNode(node, visited);
+					newNetworks.Add(network);
 
-					if (network != null && network.Nodes.Count > 0)
+					if (ItemConduitMod.ShowDebugInfo.Value)
 					{
-						// Register the network
-						NetworkManager.Instance.RegisterNetwork(network);
-						networksCreated++;
-
-						if (ItemConduitMod.ShowDebugInfo.Value)
-						{
-							Logger.LogInfo($"[ItemConduit] Created network {network.NetworkId.Substring(0, 8)} with {network.Nodes.Count} nodes");
-						}
+						Logger.LogInfo($"[ItemConduit] Created network {network.NetworkId.Substring(0, 8)} with {network.Nodes.Count} nodes");
 					}
+				}
 
-					// Check if we need to yield
-					float elapsedMs = (Time.realtimeSinceStartup - frameStartTime) * 1000f;
-					if (elapsedMs > MAX_MS_PER_FRAME)
-					{
-						yield return null;
-						frameStartTime = Time.realtimeSinceStartup;
-					}
+				// Check if we need to yield
+				float elapsedMs = (Time.realtimeSinceStartup - frameStart) * 1000f;
+				if (elapsedMs > MAX_MS_PER_FRAME)
+				{
+					yield return null;
+					frameStart = Time.realtimeSinceStartup;
 				}
 			}
 
-			onComplete?.Invoke(networksCreated);
+			// Register all new networks
+			foreach (var network in newNetworks)
+			{
+				NetworkManager.Instance.RegisterNetwork(network);
+			}
+
+			onComplete?.Invoke(newNetworks.Count);
 		}
 
 		/// <summary>
-		/// Build a network starting from a specific node
+		/// Build a network using BFS from a starting node
 		/// </summary>
 		private ConduitNetwork BuildNetworkFromNode(BaseNode startNode, HashSet<BaseNode> visited)
 		{
-			if (startNode == null) return null;
+			if (startNode == null || !startNode.IsValidPlacedNode()) return null;
 
 			ConduitNetwork network = new ConduitNetwork();
 			network.NetworkId = Guid.NewGuid().ToString();
@@ -518,7 +504,7 @@ namespace ItemConduit.Network
 			while (queue.Count > 0)
 			{
 				BaseNode currentNode = queue.Dequeue();
-				if (currentNode == null) continue;
+				if (currentNode == null || !currentNode.IsValidPlacedNode()) continue;
 
 				// Add to network
 				network.AddNode(currentNode);
@@ -527,7 +513,9 @@ namespace ItemConduit.Network
 				// Add connected nodes to queue
 				foreach (var connectedNode in currentNode.GetConnectedNodes())
 				{
-					if (connectedNode != null && !visited.Contains(connectedNode))
+					if (connectedNode != null &&
+						connectedNode.IsValidPlacedNode() &&
+						!visited.Contains(connectedNode))
 					{
 						visited.Add(connectedNode);
 						queue.Enqueue(connectedNode);
@@ -539,20 +527,26 @@ namespace ItemConduit.Network
 		}
 
 		/// <summary>
-		/// Reactivate nodes using coroutine
+		/// Activate networks with valid configurations
 		/// </summary>
-		private IEnumerator ReactivateNodesCoroutine(HashSet<BaseNode> nodes)
+		private IEnumerator ActivateNetworks(HashSet<BaseNode> nodes)
 		{
 			int processed = 0;
 			foreach (var node in nodes)
 			{
-				if (node != null)
+				if (node != null && node.IsValidPlacedNode())
 				{
-					node.SetActive(true);
+					// Check if the node's network is valid
+					string networkId = node.NetworkId;
+					if (!string.IsNullOrEmpty(networkId))
+					{
+						node.SetActive(true);
+					}
+
 					processed++;
 
-					// Yield every few nodes
-					if (processed % NODES_PER_FRAME == 0)
+					// Yield periodically
+					if (processed % NETWORKS_PER_FRAME == 0)
 					{
 						yield return null;
 					}
@@ -561,20 +555,8 @@ namespace ItemConduit.Network
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Logger.LogInfo($"[ItemConduit] Reactivated {processed} nodes");
+				Logger.LogInfo($"[ItemConduit] Activated {processed} nodes");
 			}
-		}
-
-		#endregion
-
-		#region Cleanup
-
-		/// <summary>
-		/// Clean up on destruction
-		/// </summary>
-		private void OnDestroy()
-		{
-			CancelPendingRebuilds();
 		}
 
 		#endregion
@@ -588,32 +570,45 @@ namespace ItemConduit.Network
 		{
 			public int TotalRebuilds { get; private set; }
 			public int TotalNodesRebuilt { get; private set; }
-			public int TotalNetworksAffected { get; private set; }
+			public int TotalNetworksCreated { get; private set; }
 			public float TotalRebuildTime { get; private set; }
 			public float AverageRebuildTime { get; private set; }
-			public int ErrorCount { get; private set; }
 			public DateTime LastRebuildTime { get; private set; }
+			public float FastestRebuild { get; private set; } = float.MaxValue;
+			public float SlowestRebuild { get; private set; } = 0f;
 
-			public void RecordRebuild(int nodes, int networks, int newNetworks, float time)
+			public void RecordRebuild(int nodes, int networks, float time)
 			{
 				TotalRebuilds++;
 				TotalNodesRebuilt += nodes;
-				TotalNetworksAffected += networks;
+				TotalNetworksCreated += networks;
 				TotalRebuildTime += time;
 				AverageRebuildTime = TotalRebuildTime / TotalRebuilds;
 				LastRebuildTime = DateTime.Now;
-			}
 
-			public void RecordError()
-			{
-				ErrorCount++;
+				if (time < FastestRebuild)
+					FastestRebuild = time;
+				if (time > SlowestRebuild)
+					SlowestRebuild = time;
 			}
 
 			public override string ToString()
 			{
-				return $"Rebuilds: {TotalRebuilds}, Nodes: {TotalNodesRebuilt}, Networks: {TotalNetworksAffected}, " +
-					   $"Avg Time: {AverageRebuildTime:F2}s, Errors: {ErrorCount}";
+				return $"Rebuilds: {TotalRebuilds}, Nodes: {TotalNodesRebuilt}, Networks: {TotalNetworksCreated}\n" +
+					   $"Avg Time: {AverageRebuildTime:F2}s, Fastest: {FastestRebuild:F2}s, Slowest: {SlowestRebuild:F2}s";
 			}
+		}
+
+		#endregion
+
+		#region Cleanup
+
+		/// <summary>
+		/// Clean up on destruction
+		/// </summary>
+		private void OnDestroy()
+		{
+			CancelPendingRebuilds();
 		}
 
 		#endregion

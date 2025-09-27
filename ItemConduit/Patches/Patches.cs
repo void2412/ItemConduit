@@ -8,69 +8,146 @@ using Logger = Jotunn.Logger;
 namespace ItemConduit.Patches
 {
 	/// <summary>
-	/// Simplified Harmony patches for ItemConduit
-	/// Removed references to non-existent wrapper classes
+	/// Optimized Harmony patches for ItemConduit
+	/// Prevents ghost/preview pieces from triggering rebuilds
 	/// </summary>
 	public static class HarmonyPatches
 	{
 		/// <summary>
 		/// Patch for when a player places a piece
-		/// Triggers network rebuild when conduit nodes are placed
+		/// Only triggers rebuild for successfully placed pieces (not ghosts)
 		/// </summary>
 		[HarmonyPatch(typeof(Player), "PlacePiece")]
 		public static class Player_PlacePiece_Patch
 		{
 			/// <summary>
-			/// After a piece is placed
+			/// After a piece is placed, check if it's a valid conduit node
+			/// Note: PlacePiece is void, so we check validity by examining the piece state
 			/// </summary>
 			private static void Postfix(Player __instance, Piece piece)
 			{
-				if (__instance == null) return;
+				if (__instance == null || piece == null) return;
 				if (ZNet.instance == null) return;
+
 				// Only process on server
 				if (!ZNet.instance.IsServer()) return;
 
-				// Check if the placed piece is a conduit node
-				if (piece != null && piece.gameObject != null)
+				// Check if the placed piece has a node component
+				BaseNode node = piece.GetComponent<BaseNode>();
+				if (node != null)
 				{
-					BaseNode node = piece.GetComponent<BaseNode>();
-					if (node != null)
+					// Verify this is a real placed piece by checking ZNetView validity
+					// A successfully placed piece will have a valid ZNetView
+					// Ghost/preview pieces will not
+					ZNetView znet = piece.GetComponent<ZNetView>();
+					if (znet != null && znet.IsValid())
 					{
-						// Network rebuild will be triggered when the node registers itself
+						// Also verify the piece isn't marked for destruction
+						if (!piece.IsPlacedByPlayer())
+						{
+							if (ItemConduitMod.ShowDebugInfo.Value)
+							{
+								Logger.LogInfo($"[ItemConduit] Piece not placed by player: {piece.name}");
+							}
+							return;
+						}
+
+						// Small delay to ensure the node is fully initialized
+						__instance.StartCoroutine(DelayedRebuildRequest(node, 0.5f));
+
 						if (ItemConduitMod.ShowDebugInfo.Value)
 						{
-							Logger.LogInfo($"[ItemConduit] Conduit node placed: {piece.name}");
+							Logger.LogInfo($"[ItemConduit] Successfully placed conduit node: {piece.name}");
 						}
+					}
+					else
+					{
+						if (ItemConduitMod.ShowDebugInfo.Value)
+						{
+							Logger.LogInfo($"[ItemConduit] Ignoring invalid piece (likely ghost): {piece.name}");
+						}
+					}
+				}
+			}
+
+			/// <summary>
+			/// Coroutine to delay rebuild request
+			/// </summary>
+			private static System.Collections.IEnumerator DelayedRebuildRequest(BaseNode node, float delay)
+			{
+				yield return new WaitForSeconds(delay);
+
+				// Verify node is still valid and placed
+				if (node != null && node.IsValidPlacedNode())
+				{
+					RebuildManager.Instance.RequestRebuildForNode(node, true);
+				}
+			}
+		}
+
+		/// <summary>
+		/// Patch for when a piece is removed/destroyed
+		/// Handles cleanup and network rebuild
+		/// </summary>
+		[HarmonyPatch(typeof(Piece), "DropResources")]
+		public static class Piece_DropResources_Patch
+		{
+			/// <summary>
+			/// Before a piece drops resources (is being destroyed)
+			/// </summary>
+			private static void Prefix(Piece __instance)
+			{
+				if (__instance == null) return;
+				if (ZNet.instance == null || !ZNet.instance.IsServer()) return;
+
+				// Check if this is a conduit node
+				BaseNode node = __instance.GetComponent<BaseNode>();
+				if (node != null && node.IsValidPlacedNode())
+				{
+					// Get connected nodes before destruction
+					var connectedNodes = node.GetConnectedNodes();
+
+					// Request rebuild for connected nodes after this one is destroyed
+					foreach (var connectedNode in connectedNodes)
+					{
+						if (connectedNode != null && connectedNode.IsValidPlacedNode())
+						{
+							RebuildManager.Instance.RequestRebuildForNode(connectedNode);
+						}
+					}
+
+					if (ItemConduitMod.ShowDebugInfo.Value)
+					{
+						Logger.LogInfo($"[ItemConduit] Conduit node being destroyed: {__instance.name}");
 					}
 				}
 			}
 		}
 
 		/// <summary>
-		/// Patch for when a piece is destroyed
-		/// Triggers network rebuild when conduit nodes are removed
+		/// Patch to prevent ghost pieces from being processed
 		/// </summary>
-		[HarmonyPatch(typeof(Piece), "OnDestroy")]
-		public static class Piece_OnDestroy_Patch
+		[HarmonyPatch(typeof(Player), "UpdatePlacementGhost")]
+		public static class Player_UpdatePlacementGhost_Patch
 		{
 			/// <summary>
-			/// Before a piece is destroyed
+			/// Mark placement ghost pieces so they can be ignored
 			/// </summary>
-			private static void Prefix(Piece __instance)
+			private static void Postfix(Player __instance)
 			{
-				if (__instance == null) return;
-				if (ZNet.instance == null) return;
-				// Only process on server
-				if (!ZNet.instance.IsServer()) return;
-
-				// Check if the destroyed piece is a conduit node
-				BaseNode node = __instance.GetComponent<BaseNode>();
-				if (node != null)
+				if (__instance.m_placementGhost != null)
 				{
-					// Network rebuild will be triggered when the node unregisters itself
-					if (ItemConduitMod.ShowDebugInfo.Value)
+					// Check if the ghost has a node component
+					BaseNode node = __instance.m_placementGhost.GetComponent<BaseNode>();
+					if (node != null)
 					{
-						Logger.LogInfo($"[ItemConduit] Conduit node destroyed: {__instance.name}");
+						// The ghost detection is already handled in BaseNode.CheckIfGhost()
+						// This is here as a safeguard
+						if (ItemConduitMod.ShowDebugInfo.Value)
+						{
+							// Don't spam log for ghosts
+							// Logger.LogInfo($"[ItemConduit] Ghost piece detected in placement");
+						}
 					}
 				}
 			}
@@ -93,10 +170,31 @@ namespace ItemConduit.Patches
 					// Initialize network manager on server startup
 					NetworkManager.Instance.Initialize();
 
-					// Request initial network rebuild after a delay
-					NetworkManager.Instance.RequestNetworkRebuild();
-
+					// Don't request initial rebuild - let nodes register themselves
 					Logger.LogInfo("[ItemConduit] Network manager initialized on server start");
+				}
+			}
+		}
+
+		/// <summary>
+		/// Patch for world loading
+		/// Ensures proper initialization after world load
+		/// </summary>
+		[HarmonyPatch(typeof(ZNetScene), "Awake")]
+		public static class ZNetScene_Awake_Patch
+		{
+			/// <summary>
+			/// After ZNetScene is created
+			/// </summary>
+			private static void Postfix(ZNetScene __instance)
+			{
+				if (ZNet.instance != null && ZNet.instance.IsServer())
+				{
+					// Ensure managers are initialized
+					var networkManager = NetworkManager.Instance;
+					var rebuildManager = RebuildManager.Instance;
+
+					Logger.LogInfo("[ItemConduit] Managers initialized in ZNetScene");
 				}
 			}
 		}
@@ -115,8 +213,9 @@ namespace ItemConduit.Patches
 			{
 				// Clean shutdown of network manager
 				NetworkManager.Instance?.Shutdown();
+				RebuildManager.Instance?.CancelPendingRebuilds();
 
-				Logger.LogWarning("[ItemConduit] Network manager shutdown");
+				Logger.LogInfo("[ItemConduit] Network manager shutdown");
 			}
 		}
 
@@ -209,11 +308,12 @@ namespace ItemConduit.Patches
 					// Server should sync network state to new client
 					if (ItemConduitMod.ShowDebugInfo.Value)
 					{
-						Logger.LogWarning($"[ItemConduit] New client connected, syncing network state to peer {peer.m_uid}");
+						Logger.LogInfo($"[ItemConduit] New client connected, will sync network state to peer {peer.m_uid}");
 					}
 
-					// TODO: Implement network state synchronization
-					// This would send all network IDs and node states to the new client
+					// The node states will be synced automatically via ZDO system
+					// But we can trigger a refresh to ensure everything is up to date
+					RebuildManager.Instance.RequestFullRebuild();
 				}
 			}
 		}
@@ -240,10 +340,18 @@ namespace ItemConduit.Patches
 			{
 				// Check if this container is connected to a conduit node
 				bool hasConduitNode = false;
-				Collider[] colliders = Physics.OverlapSphere(__instance.transform.position, 3f);
+
+				// Use physics overlap for efficiency
+				Collider[] colliders = Physics.OverlapSphere(
+					__instance.transform.position,
+					2f,
+					LayerMask.GetMask("piece", "piece_nonsolid")
+				);
+
 				foreach (var col in colliders)
 				{
-					if (col.GetComponent<BaseNode>() != null)
+					if (col.GetComponent<ExtractNode>() != null ||
+						col.GetComponent<InsertNode>() != null)
 					{
 						hasConduitNode = true;
 						break;
@@ -262,6 +370,31 @@ namespace ItemConduit.Patches
 				}
 
 				return true; // Allow save
+			}
+		}
+
+		/// <summary>
+		/// Patch to prevent placement effects from triggering during ghost preview
+		/// </summary>
+		[HarmonyPatch(typeof(Piece), "SetCreator")]
+		public static class Piece_SetCreator_Patch
+		{
+			/// <summary>
+			/// Only set creator for actually placed pieces
+			/// </summary>
+			private static bool Prefix(Piece __instance)
+			{
+				// Check if this is a node
+				BaseNode node = __instance.GetComponent<BaseNode>();
+				if (node != null)
+				{
+					// Check if it's a valid placed piece
+					if (!node.IsValidPlacedNode())
+					{
+						return false; // Skip setting creator for ghosts
+					}
+				}
+				return true;
 			}
 		}
 
