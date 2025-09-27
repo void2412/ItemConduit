@@ -1,6 +1,7 @@
 using UnityEngine;
 using ItemConduit.Core;
 using ItemConduit.GUI;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Nodes
 {
@@ -74,9 +75,9 @@ namespace ItemConduit.Nodes
 		{
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] {name} searching for containers...");
-				Debug.Log($"[ItemConduit] Node position: {transform.position}");
-				Debug.Log($"[ItemConduit] Search radius: {CONTAINER_SEARCH_RADIUS}");
+				Logger.LogWarning($"[ItemConduit] {name} searching for containers...");
+				Logger.LogInfo($"[ItemConduit] Node position: {transform.position}");
+				Logger.LogInfo($"[ItemConduit] Search radius: {CONTAINER_SEARCH_RADIUS}");
 			}
 
 			// Find all colliders within search radius
@@ -84,7 +85,7 @@ namespace ItemConduit.Nodes
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Found {colliders.Length} colliders in range");
+				Logger.LogWarning($"[ItemConduit] Found {colliders.Length} colliders in range");
 			}
 
 			float nearestDistance = float.MaxValue;
@@ -96,11 +97,11 @@ namespace ItemConduit.Nodes
 
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
-					Debug.Log($"[ItemConduit] Checking collider: {col.name} on object: {col.gameObject.name}");
-					Debug.Log($"[ItemConduit] Collider position: {col.transform.position}");
-					Debug.Log($"[ItemConduit] Distance: {Vector3.Distance(transform.position, col.transform.position):F2}m");
-					Debug.Log($"[ItemConduit] Container layer: {col.gameObject.layer}");
-					Debug.Log($"[ItemConduit] Container layer name: {LayerMask.LayerToName(col.gameObject.layer)}");
+					Logger.LogInfo($"[ItemConduit] Checking collider: {col.name} on object: {col.gameObject.name}");
+					Logger.LogInfo($"[ItemConduit] Collider position: {col.transform.position}");
+					Logger.LogInfo($"[ItemConduit] Distance: {Vector3.Distance(transform.position, col.transform.position):F2}m");
+					Logger.LogInfo($"[ItemConduit] Container layer: {col.gameObject.layer}");
+					Logger.LogInfo($"[ItemConduit] Container layer name: {LayerMask.LayerToName(col.gameObject.layer)}");
 				}
 
 				// Check for Container component on the collider's GameObject
@@ -124,22 +125,22 @@ namespace ItemConduit.Nodes
 
 					if (ItemConduitMod.ShowDebugInfo.Value)
 					{
-						Debug.Log($"[ItemConduit] Found Container: {container.name}");
-						Debug.Log($"[ItemConduit] Container m_name: {container.m_name}");
-						Debug.Log($"[ItemConduit] Container position: {container.transform.position}");
-						Debug.Log($"[ItemConduit] Distance to container: {distance:F2}m");
+						Logger.LogWarning($"[ItemConduit] Found Container: {container.name}");
+						Logger.LogInfo($"[ItemConduit] Container m_name: {container.m_name}");
+						Logger.LogInfo($"[ItemConduit] Container position: {container.transform.position}");
+						Logger.LogInfo($"[ItemConduit] Distance to container: {distance:F2}m");
 
 						// Check if container has inventory
 						Inventory inv = container.GetInventory();
 						if (inv != null)
 						{
-							Debug.Log($"[ItemConduit] Container has inventory: {inv.GetWidth()}x{inv.GetHeight()} slots");
-							Debug.Log($"[ItemConduit] Container items: {inv.GetAllItems().Count}");
-							Debug.Log($"[ItemConduit] Container empty slots: {inv.GetEmptySlots()}");
+							Logger.LogInfo($"[ItemConduit] Container has inventory: {inv.GetWidth()}x{inv.GetHeight()} slots");
+							Logger.LogInfo($"[ItemConduit] Container items: {inv.GetAllItems().Count}");
+							Logger.LogInfo($"[ItemConduit] Container empty slots: {inv.GetEmptySlots()}");
 						}
 						else
 						{
-							Debug.Log($"[ItemConduit] Container has NO inventory!");
+							Logger.LogWarning($"[ItemConduit] Container has NO inventory!");
 						}
 					}
 
@@ -153,16 +154,16 @@ namespace ItemConduit.Nodes
 				{
 					if (ItemConduitMod.ShowDebugInfo.Value)
 					{
-						Debug.Log($"[ItemConduit] No Container component found on {col.gameObject.name}");
+						Logger.LogWarning($"[ItemConduit] No Container component found on {col.gameObject.name}");
 
 						// List all components on this object for debugging
 						Component[] components = col.GetComponents<Component>();
-						Debug.Log($"[ItemConduit] Components on {col.gameObject.name}:");
+						Logger.LogInfo($"[ItemConduit] Components on {col.gameObject.name}:");
 						foreach (var comp in components)
 						{
 							if (comp != null)
 							{
-								Debug.Log($"[ItemConduit]   - {comp.GetType().Name}");
+								Logger.LogInfo($"[ItemConduit]   - {comp.GetType().Name}");
 							}
 						}
 					}
@@ -175,11 +176,11 @@ namespace ItemConduit.Nodes
 			{
 				if (targetContainer != null)
 				{
-					Debug.Log($"[ItemConduit] *** {name} FOUND container: {targetContainer.name} at distance {nearestDistance:F2}m ***");
+					Logger.LogWarning($"[ItemConduit] *** {name} FOUND container: {targetContainer.name} at distance {nearestDistance:F2}m ***");
 				}
 				else
 				{
-					Debug.Log($"[ItemConduit] *** {name} found NO containers within {CONTAINER_SEARCH_RADIUS}m ***");
+					Logger.LogWarning($"[ItemConduit] *** {name} found NO containers within {CONTAINER_SEARCH_RADIUS}m ***");
 
 					// Additional debugging - check if there are any containers in the scene at all
 					DebugAllContainers();
@@ -193,17 +194,17 @@ namespace ItemConduit.Nodes
 		private void DebugAllContainers()
 		{
 			Container[] allContainers = FindObjectsOfType<Container>();
-			Debug.Log($"[ItemConduit] === All containers in scene ({allContainers.Length}) ===");
+			Logger.LogWarning($"[ItemConduit] === All containers in scene ({allContainers.Length}) ===");
 
 			foreach (var container in allContainers)
 			{
 				if (container != null)
 				{
 					float distance = Vector3.Distance(transform.position, container.transform.position);
-					Debug.Log($"[ItemConduit] Container: {container.name} ({container.m_name}) at {distance:F2}m");
-					Debug.Log($"[ItemConduit]   Position: {container.transform.position}");
-					Debug.Log($"[ItemConduit]   Has Inventory: {container.GetInventory() != null}");
-					Debug.Log($"[ItemConduit]   Layer: {container.gameObject.layer} ({LayerMask.LayerToName(container.gameObject.layer)})");
+					Logger.LogInfo($"[ItemConduit] Container: {container.name} ({container.m_name}) at {distance:F2}m");
+					Logger.LogInfo($"[ItemConduit]   Position: {container.transform.position}");
+					Logger.LogInfo($"[ItemConduit]   Has Inventory: {container.GetInventory() != null}");
+					Logger.LogInfo($"[ItemConduit]   Layer: {container.gameObject.layer} ({LayerMask.LayerToName(container.gameObject.layer)})");
 				}
 			}
 		}
@@ -215,7 +216,7 @@ namespace ItemConduit.Nodes
 		{
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] {name} trying raycast detection...");
+				Logger.LogInfo($"[ItemConduit] {name} trying raycast detection...");
 			}
 
 			// Cast rays in multiple directions to find containers
@@ -238,7 +239,7 @@ namespace ItemConduit.Nodes
 				{
 					if (ItemConduitMod.ShowDebugInfo.Value)
 					{
-						Debug.Log($"[ItemConduit] Raycast hit: {hit.collider.name} at {hit.distance:F2}m in direction {direction}");
+						Logger.LogWarning($"[ItemConduit] Raycast hit: {hit.collider.name} at {hit.distance:F2}m in direction {direction}");
 					}
 
 					Container container = hit.collider.GetComponent<Container>();
@@ -255,7 +256,7 @@ namespace ItemConduit.Nodes
 					{
 						if (ItemConduitMod.ShowDebugInfo.Value)
 						{
-							Debug.Log($"[ItemConduit] *** Raycast found container: {container.name} ***");
+							Logger.LogWarning($"[ItemConduit] *** Raycast found container: {container.name} ***");
 						}
 						return container;
 					}
@@ -285,13 +286,13 @@ namespace ItemConduit.Nodes
 			// If still no container, try increasing search radius temporarily
 			if (targetContainer == null && ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] {name} trying expanded search...");
+				Logger.LogWarning($"[ItemConduit] {name} trying expanded search...");
 
 				// Temporarily increase search radius
 				const float expandedRadius = 10f; // Increase to 10 meters
 
 				Collider[] expandedColliders = Physics.OverlapSphere(transform.position, expandedRadius);
-				Debug.Log($"[ItemConduit] Expanded search found {expandedColliders.Length} colliders");
+				Logger.LogWarning($"[ItemConduit] Expanded search found {expandedColliders.Length} colliders");
 
 				foreach (Collider col in expandedColliders)
 				{
@@ -306,7 +307,7 @@ namespace ItemConduit.Nodes
 					if (container != null)
 					{
 						float distance = Vector3.Distance(transform.position, container.transform.position);
-						Debug.Log($"[ItemConduit] Found container '{container.name}' at {distance:F2}m (outside normal range)");
+						Logger.LogWarning($"[ItemConduit] Found container '{container.name}' at {distance:F2}m (outside normal range)");
 					}
 				}
 			}
@@ -360,7 +361,7 @@ namespace ItemConduit.Nodes
 
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
-					Debug.Log($"[ItemConduit] Insert node {name} inserted {item.m_shared.m_name} x{item.m_stack}");
+					Logger.LogInfo($"[ItemConduit] Insert node {name} inserted {item.m_shared.m_name} x{item.m_stack}");
 				}
 			}
 
@@ -402,7 +403,7 @@ namespace ItemConduit.Nodes
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Insert node {name} channel set to: {ChannelId}");
+				Logger.LogWarning($"[ItemConduit] Insert node {name} channel set to: {ChannelId}");
 			}
 		}
 
@@ -422,7 +423,7 @@ namespace ItemConduit.Nodes
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Insert node {name} priority set to: {Priority}");
+				Logger.LogWarning($"[ItemConduit] Insert node {name} priority set to: {Priority}");
 			}
 		}
 

@@ -3,6 +3,7 @@ using UnityEngine;
 using ItemConduit.Nodes;
 using ItemConduit.Network;
 using ItemConduit.Core;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Patches
 {
@@ -38,7 +39,7 @@ namespace ItemConduit.Patches
 						// Network rebuild will be triggered when the node registers itself
 						if (ItemConduitMod.ShowDebugInfo.Value)
 						{
-							Debug.Log($"[ItemConduit] Conduit node placed: {piece.name}");
+							Logger.LogInfo($"[ItemConduit] Conduit node placed: {piece.name}");
 						}
 					}
 				}
@@ -69,7 +70,7 @@ namespace ItemConduit.Patches
 					// Network rebuild will be triggered when the node unregisters itself
 					if (ItemConduitMod.ShowDebugInfo.Value)
 					{
-						Debug.Log($"[ItemConduit] Conduit node destroyed: {__instance.name}");
+						Logger.LogInfo($"[ItemConduit] Conduit node destroyed: {__instance.name}");
 					}
 				}
 			}
@@ -95,7 +96,7 @@ namespace ItemConduit.Patches
 					// Request initial network rebuild after a delay
 					NetworkManager.Instance.RequestNetworkRebuild();
 
-					Debug.Log("[ItemConduit] Network manager initialized on server start");
+					Logger.LogInfo("[ItemConduit] Network manager initialized on server start");
 				}
 			}
 		}
@@ -115,7 +116,7 @@ namespace ItemConduit.Patches
 				// Clean shutdown of network manager
 				NetworkManager.Instance?.Shutdown();
 
-				Debug.Log("[ItemConduit] Network manager shutdown");
+				Logger.LogWarning("[ItemConduit] Network manager shutdown");
 			}
 		}
 
@@ -208,7 +209,7 @@ namespace ItemConduit.Patches
 					// Server should sync network state to new client
 					if (ItemConduitMod.ShowDebugInfo.Value)
 					{
-						Debug.Log($"[ItemConduit] New client connected, syncing network state to peer {peer.m_uid}");
+						Logger.LogWarning($"[ItemConduit] New client connected, syncing network state to peer {peer.m_uid}");
 					}
 
 					// TODO: Implement network state synchronization

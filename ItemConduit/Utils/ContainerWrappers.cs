@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 using ItemConduit.Core;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Utils
 {
@@ -256,21 +257,21 @@ namespace ItemConduit.Utils
 				{
 					int items = inv.GetAllItems().Count;
 					int empty = inv.GetEmptySlots();
-					Debug.Log($"[ItemConduit] Container '{name}': {items} items, {empty} empty slots");
+					Logger.LogInfo($"[ItemConduit] Container '{name}': {items} items, {empty} empty slots");
 				}
 				else
 				{
-					Debug.Log($"[ItemConduit] Container '{name}': No inventory");
+					Logger.LogWarning($"[ItemConduit] Container '{name}': No inventory");
 				}
 			}
 			else if (IsSpecialContainer(obj))
 			{
 				string type = GetSpecialContainerType(obj);
-				Debug.Log($"[ItemConduit] Special Container '{name}': Type = {type} (not directly accessible)");
+				Logger.LogWarning($"[ItemConduit] Special Container '{name}': Type = {type} (not directly accessible)");
 			}
 			else
 			{
-				Debug.Log($"[ItemConduit] Object '{name}': Not a container");
+				Logger.LogWarning($"[ItemConduit] Object '{name}': Not a container");
 			}
 		}
 	}

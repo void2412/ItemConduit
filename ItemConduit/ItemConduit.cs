@@ -11,7 +11,7 @@ using HarmonyLib;
 using ItemConduit.Nodes;
 using ItemConduit.Network;
 using ItemConduit.GUI;
-
+using Logger = Jotunn.Logger;
 namespace ItemConduit.Core
 {
 	/// <summary>
@@ -286,7 +286,7 @@ namespace ItemConduit.Core
 				nodeComponent.NodeLength = length;
 				nodeComponent.NodeType = nodeType;
 
-				Debug.Log($"[ItemConduit] Set node {prefabName} length to {length}m (verification: {nodeComponent.NodeLength}m)");
+				Logger.LogInfo($"[ItemConduit] Set node {prefabName} length to {length}m (verification: {nodeComponent.NodeLength}m)");
 
 				// Log existing snappoints from the cloned prefab
 				int snapCount = 0;
@@ -295,10 +295,10 @@ namespace ItemConduit.Core
 					if (child.tag == "snappoint")
 					{
 						snapCount++;
-						Debug.Log($"[ItemConduit] Found existing snappoint: {child.name} at local pos {child.localPosition}");
+						Logger.LogInfo($"[ItemConduit] Found existing snappoint: {child.name} at local pos {child.localPosition}");
 					}
 				}
-				Debug.Log($"[ItemConduit] {prefabName} has {snapCount} existing snappoints from {prefabClone}");
+				Logger.LogInfo($"[ItemConduit] {prefabName} has {snapCount} existing snappoints from {prefabClone}");
 			}
 
 			// Configure piece component for building system
@@ -354,7 +354,7 @@ namespace ItemConduit.Core
 					{
 						registeredNode.NodeLength = length;
 						registeredNode.NodeType = nodeType;
-						Debug.Log($"[ItemConduit] Post-registration: Set {prefabName} length to {length}m, type to {nodeType}");
+						Logger.LogInfo($"[ItemConduit] Post-registration: Set {prefabName} length to {length}m, type to {nodeType}");
 					}
 				}
 			};

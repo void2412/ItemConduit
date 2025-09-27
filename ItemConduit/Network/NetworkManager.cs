@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEngine;
 using ItemConduit.Core;
 using ItemConduit.Nodes;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Network
 {
@@ -74,7 +75,7 @@ namespace ItemConduit.Network
 			// Initialize rebuild manager
 			rebuildManager = RebuildManager.Instance;
 
-			Debug.Log("[ItemConduit] NetworkManager fields initialized");
+			Logger.LogInfo("[ItemConduit] NetworkManager fields initialized");
 		}
 
 		/// <summary>
@@ -96,11 +97,11 @@ namespace ItemConduit.Network
 			if (ZNet.instance != null && ZNet.instance.IsServer())
 			{
 				transferCoroutine = StartCoroutine(TransferLoop());
-				Debug.Log("[ItemConduit] NetworkManager transfer loop started");
+				Logger.LogInfo("[ItemConduit] NetworkManager transfer loop started");
 			}
 			else
 			{
-				Debug.Log("[ItemConduit] NetworkManager initialized (client mode - no transfers)");
+				Logger.LogInfo("[ItemConduit] NetworkManager initialized (client mode - no transfers)");
 			}
 		}
 
@@ -148,7 +149,7 @@ namespace ItemConduit.Network
 			if (nodeNetworkMap != null)
 				nodeNetworkMap.Clear();
 
-			Debug.Log("[ItemConduit] NetworkManager shutdown complete");
+			Logger.LogInfo("[ItemConduit] NetworkManager shutdown complete");
 		}
 
 		#endregion
@@ -171,7 +172,7 @@ namespace ItemConduit.Network
 			{
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
-					Debug.Log($"[ItemConduit] Registered node: {node.name} (Total: {allNodes.Count})");
+					Logger.LogInfo($"[ItemConduit] Registered node: {node.name} (Total: {allNodes.Count})");
 				}
 
 				// Request rebuild through RebuildManager
@@ -198,7 +199,7 @@ namespace ItemConduit.Network
 
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
-					Debug.Log($"[ItemConduit] Unregistered node: {node.name} (Remaining: {allNodes.Count})");
+					Logger.LogInfo($"[ItemConduit] Unregistered node: {node.name} (Remaining: {allNodes.Count})");
 				}
 
 				// Request rebuild for connected nodes
@@ -237,7 +238,7 @@ namespace ItemConduit.Network
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Registered network {network.NetworkId.Substring(0, 8)} with {network.Nodes.Count} nodes");
+				Logger.LogInfo($"[ItemConduit] Registered network {network.NetworkId.Substring(0, 8)} with {network.Nodes.Count} nodes");
 			}
 		}
 
@@ -265,7 +266,7 @@ namespace ItemConduit.Network
 
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
-					Debug.Log($"[ItemConduit] Removed network {networkId.Substring(0, 8)}");
+					Logger.LogInfo($"[ItemConduit] Removed network {networkId.Substring(0, 8)}");
 				}
 			}
 		}
@@ -367,7 +368,7 @@ namespace ItemConduit.Network
 		/// </summary>
 		private IEnumerator TransferLoop()
 		{
-			Debug.Log("[ItemConduit] Transfer loop started");
+			Logger.LogInfo("[ItemConduit] Transfer loop started");
 
 			while (true)
 			{
@@ -401,7 +402,7 @@ namespace ItemConduit.Network
 				}
 				catch (Exception ex)
 				{
-					Debug.LogError($"[ItemConduit] Error in transfer loop: {ex.Message}");
+					Logger.LogError($"[ItemConduit] Error in transfer loop: {ex.Message}");
 				}
 			}
 		}
@@ -472,7 +473,7 @@ namespace ItemConduit.Network
 								{
 									if (ItemConduitMod.ShowDebugInfo.Value)
 									{
-										Debug.Log($"[ItemConduit] Transferred 1x {item.m_shared.m_name} from {extractNode.name} to {insertNode.name}");
+										Logger.LogInfo($"[ItemConduit] Transferred 1x {item.m_shared.m_name} from {extractNode.name} to {insertNode.name}");
 									}
 									break; // Item transferred, move to next item
 								}
@@ -491,7 +492,7 @@ namespace ItemConduit.Network
 			}
 			catch (Exception ex)
 			{
-				Debug.LogError($"[ItemConduit] Error processing network transfers: {ex.Message}");
+				Logger.LogError($"[ItemConduit] Error processing network transfers: {ex.Message}");
 			}
 		}
 
@@ -504,20 +505,20 @@ namespace ItemConduit.Network
 		/// </summary>
 		public void LogNetworkState()
 		{
-			Debug.Log("[ItemConduit] === Current Network State ===");
-			Debug.Log($"Total Networks: {networks.Count}");
-			Debug.Log($"Total Nodes: {allNodes.Count}");
+			Logger.LogInfo("[ItemConduit] === Current Network State ===");
+			Logger.LogInfo($"Total Networks: {networks.Count}");
+			Logger.LogInfo($"Total Nodes: {allNodes.Count}");
 
 			foreach (var kvp in networks)
 			{
 				var network = kvp.Value;
-				Debug.Log($"\nNetwork {kvp.Key.Substring(0, 8)}:");
-				Debug.Log($"  Nodes: {network.Nodes.Count}");
-				Debug.Log($"  Extract: {network.ExtractNodes.Count}");
-				Debug.Log($"  Insert: {network.InsertNodes.Count}");
-				Debug.Log($"  Conduit: {network.ConduitNodes.Count}");
-				Debug.Log($"  Active: {network.IsActive}");
-				Debug.Log($"  Valid: {network.IsValid()}");
+				Logger.LogInfo($"\nNetwork {kvp.Key.Substring(0, 8)}:");
+				Logger.LogInfo($"  Nodes: {network.Nodes.Count}");
+				Logger.LogInfo($"  Extract: {network.ExtractNodes.Count}");
+				Logger.LogInfo($"  Insert: {network.InsertNodes.Count}");
+				Logger.LogInfo($"  Conduit: {network.ConduitNodes.Count}");
+				Logger.LogInfo($"  Active: {network.IsActive}");
+				Logger.LogInfo($"  Valid: {network.IsValid()}");
 			}
 		}
 

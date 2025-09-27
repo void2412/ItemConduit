@@ -5,6 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Nodes
 {
@@ -100,7 +101,7 @@ namespace ItemConduit.Nodes
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Node {name} awakened (Type: {NodeType}, Length: {nodeLength}m)");
+				Logger.LogInfo($"[ItemConduit] Node {name} awakened (Type: {NodeType}, Length: {nodeLength}m)");
 			}
 		}
 
@@ -129,7 +130,7 @@ namespace ItemConduit.Nodes
 
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
-					Debug.Log($"[ItemConduit] Node {name} registered with NetworkManager");
+					Logger.LogInfo($"[ItemConduit] Node {name} registered with NetworkManager");
 				}
 			}
 
@@ -270,7 +271,7 @@ namespace ItemConduit.Nodes
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Starting connection detection for {name}");
+				Logger.LogWarning($"[ItemConduit] Starting connection detection for {name}");
 			}
 
 			// Small delay to let physics settle
@@ -327,7 +328,7 @@ namespace ItemConduit.Nodes
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] {name} connection detection complete: {connectedNodes.Count} connections");
+				Logger.LogInfo($"[ItemConduit] {name} connection detection complete: {connectedNodes.Count} connections");
 			}
 
 			isUpdatingConnections = false;
@@ -359,7 +360,7 @@ namespace ItemConduit.Nodes
 					{
 						if (ItemConduitMod.ShowDebugInfo.Value)
 						{
-							Debug.Log($"[ItemConduit] Connection detected: {name} <-> {otherNode.name} (dist: {distance:F3}m)");
+							Logger.LogInfo($"[ItemConduit] Connection detected: {name} <-> {otherNode.name} (dist: {distance:F3}m)");
 						}
 						return true;
 					}
@@ -374,7 +375,7 @@ namespace ItemConduit.Nodes
 			{
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
-					Debug.Log($"[ItemConduit] Collision connection: {name} <-> {otherNode.name}");
+					Logger.LogInfo($"[ItemConduit] Collision connection: {name} <-> {otherNode.name}");
 				}
 				return true;
 			}

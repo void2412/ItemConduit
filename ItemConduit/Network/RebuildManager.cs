@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEngine;
 using ItemConduit.Core;
 using ItemConduit.Nodes;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Network
 {
@@ -78,7 +79,7 @@ namespace ItemConduit.Network
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log("[ItemConduit] RebuildManager initialized");
+				Logger.LogInfo("[ItemConduit] RebuildManager initialized");
 			}
 		}
 
@@ -117,7 +118,7 @@ namespace ItemConduit.Network
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Rebuild requested for node: {node.name} (Priority: {priority})");
+				Logger.LogInfo($"[ItemConduit] Rebuild requested for node: {node.name} (Priority: {priority})");
 			}
 
 			// Start rebuild process
@@ -153,7 +154,7 @@ namespace ItemConduit.Network
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Full rebuild requested for {nodesNeedingRebuild.Count} nodes");
+				Logger.LogInfo($"[ItemConduit] Full rebuild requested for {nodesNeedingRebuild.Count} nodes");
 			}
 
 			StartRebuild(rebuildDelay);
@@ -174,7 +175,7 @@ namespace ItemConduit.Network
 			nodesBeingProcessed.Clear();
 			isRebuildInProgress = false;
 
-			Debug.Log("[ItemConduit] Pending rebuilds cancelled");
+			Logger.LogInfo("[ItemConduit] Pending rebuilds cancelled");
 		}
 
 		/// <summary>
@@ -248,16 +249,16 @@ namespace ItemConduit.Network
 
 			if (affectedData.nodesToRebuild.Count == 0)
 			{
-				Debug.Log("[ItemConduit] No nodes to rebuild");
+				Logger.LogInfo("[ItemConduit] No nodes to rebuild");
 				isRebuildInProgress = false;
 				yield break;
 			}
 
-			Debug.Log("[ItemConduit] ========================================");
-			Debug.Log($"[ItemConduit] Starting network rebuild");
-			Debug.Log($"[ItemConduit] Affected networks: {affectedData.affectedNetworkIds.Count}");
-			Debug.Log($"[ItemConduit] Nodes to rebuild: {affectedData.nodesToRebuild.Count}");
-			Debug.Log("[ItemConduit] ========================================");
+			Logger.LogInfo("[ItemConduit] ========================================");
+			Logger.LogInfo($"[ItemConduit] Starting network rebuild");
+			Logger.LogInfo($"[ItemConduit] Affected networks: {affectedData.affectedNetworkIds.Count}");
+			Logger.LogInfo($"[ItemConduit] Nodes to rebuild: {affectedData.nodesToRebuild.Count}");
+			Logger.LogInfo("[ItemConduit] ========================================");
 
 			// Step 1: Deactivate affected nodes
 			yield return StartCoroutine(DeactivateNodesCoroutine(affectedData.nodesToRebuild));
@@ -287,11 +288,11 @@ namespace ItemConduit.Network
 				rebuildTime
 			);
 
-			Debug.Log("[ItemConduit] ========================================");
-			Debug.Log($"[ItemConduit] Rebuild complete in {rebuildTime:F2}s");
-			Debug.Log($"[ItemConduit] Networks created: {newNetworks}");
-			Debug.Log($"[ItemConduit] Total rebuilds: {statistics.TotalRebuilds}");
-			Debug.Log("[ItemConduit] ========================================");
+			Logger.LogInfo("[ItemConduit] ========================================");
+			Logger.LogInfo($"[ItemConduit] Rebuild complete in {rebuildTime:F2}s");
+			Logger.LogInfo($"[ItemConduit] Networks created: {newNetworks}");
+			Logger.LogInfo($"[ItemConduit] Total rebuilds: {statistics.TotalRebuilds}");
+			Logger.LogInfo("[ItemConduit] ========================================");
 
 			// Clean up
 			nodesNeedingRebuild.Clear();
@@ -404,7 +405,7 @@ namespace ItemConduit.Network
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Deactivated {processed} nodes");
+				Logger.LogInfo($"[ItemConduit] Deactivated {processed} nodes");
 			}
 		}
 
@@ -420,7 +421,7 @@ namespace ItemConduit.Network
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Cleared {networkIds.Count} networks");
+				Logger.LogInfo($"[ItemConduit] Cleared {networkIds.Count} networks");
 			}
 		}
 
@@ -455,7 +456,7 @@ namespace ItemConduit.Network
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Rebuilt connections for {processed} nodes");
+				Logger.LogInfo($"[ItemConduit] Rebuilt connections for {processed} nodes");
 			}
 		}
 
@@ -483,7 +484,7 @@ namespace ItemConduit.Network
 
 						if (ItemConduitMod.ShowDebugInfo.Value)
 						{
-							Debug.Log($"[ItemConduit] Created network {network.NetworkId.Substring(0, 8)} with {network.Nodes.Count} nodes");
+							Logger.LogInfo($"[ItemConduit] Created network {network.NetworkId.Substring(0, 8)} with {network.Nodes.Count} nodes");
 						}
 					}
 
@@ -560,7 +561,7 @@ namespace ItemConduit.Network
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Reactivated {processed} nodes");
+				Logger.LogInfo($"[ItemConduit] Reactivated {processed} nodes");
 			}
 		}
 
