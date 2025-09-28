@@ -463,78 +463,96 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		private IEnumerator ProcessNodeConnections(Collider[] overlaps)
 		{
-			var oldConnections = new List<BaseNode>(connectedNodes);
-			connectedNodes.Clear();
+			// Store current connections for comparison
+			var existingConnections = new HashSet<BaseNode>(connectedNodes);
+			var detectedConnections = new HashSet<BaseNode>();
 
-			///<example>
-			/// Method 1: Check snappoint overlaps (unchanged)
-			///var snapPoints = GetSnapPoints();
-			///foreach (var snapPoint in snapPoints)
-			///{
-			///	Collider[] snapOverlaps = Physics.OverlapSphere(
-			///		snapPoint.position,
-			///		0.15f,
-			///		LayerMask.GetMask("piece", "piece_nonsolid")
-			///	);
-			///
-			///	foreach (var col in snapOverlaps)
-			///	{
-			///		if (col == null || col.transform == transform) continue;
-			///
-			///		BaseNode otherNode = col.GetComponentInParent<BaseNode>();
-			///		if (otherNode != null && otherNode != this && !otherNode.isGhostPiece)
-			///		{
-			///			var otherSnaps = otherNode.GetSnapPoints();
-			///			foreach (var otherSnap in otherSnaps)
-			///			{
-			///				float dist = Vector3.Distance(snapPoint.position, otherSnap.position);
-			///				if (dist < 0.2f)
-			///				{
-			///					if (!connectedNodes.Contains(otherNode))
-			///					{
-			///						EstablishConnection(otherNode);
-			///						if (ItemConduitMod.ShowDebugInfo.Value)
-			///						{
-			///							Logger.LogInfo($"[ItemConduit] Snap connection: {name} <-> {otherNode.name} (dist: {dist:F3}m)");
-			///						}
-			///					}
-			///					break;
-			///				}
-			///			}
-			///		}
-			///	}
-			///	yield return null;
-			///}
-			///</example>
-
-			// Method 2: Check oriented bounds overlap if no snap connections
-			if (connectedNodes.Count == 0)
+			// First, validate existing connections are still valid
+			foreach (var existingNode in existingConnections)
 			{
-				foreach (var col in overlaps)
+				if (existingNode != null &&
+					!existingNode.isGhostPiece &&
+					existingNode.IsValidPlacedNode())
 				{
-					if (col == null || col.transform == transform) continue;
+					// Check if we're still in range and can connect
+					float distance = Vector3.Distance(transform.position, existingNode.transform.position);
+					float maxRange = (nodeLength + existingNode.NodeLength) / 2f + ItemConduitMod.ConnectionRange.Value;
 
-					BaseNode otherNode = col.GetComponentInParent<BaseNode>();
-					if (otherNode != null && otherNode != this && !otherNode.isGhostPiece && !connectedNodes.Contains(otherNode))
+					if (distance <= maxRange && CanConnectTo(existingNode))
 					{
-						if (CanConnectTo(otherNode) && CheckOrientedBoundsOverlap(otherNode))
+						// Keep this connection
+						detectedConnections.Add(existingNode);
+
+						if (ItemConduitMod.ShowDebugInfo.Value)
 						{
-							EstablishConnection(otherNode);
-							if (ItemConduitMod.ShowDebugInfo.Value)
-							{
-								Logger.LogInfo($"[ItemConduit] OBB connection: {name} <-> {otherNode.name}");
-							}
+							Logger.LogInfo($"[ItemConduit] Preserving connection: {name} <-> {existingNode.name}");
+						}
+					}
+					else
+					{
+						// Connection no longer valid, will be removed
+						if (ItemConduitMod.ShowDebugInfo.Value)
+						{
+							Logger.LogInfo($"[ItemConduit] Removing invalid connection: {name} -X- {existingNode.name} (distance: {distance:F2}m)");
 						}
 					}
 				}
 			}
 
-			// Notify old connections
-			foreach (var oldNode in oldConnections)
+			// Now check for new connections from the physics overlaps
+			foreach (var col in overlaps)
 			{
-				if (oldNode != null && !connectedNodes.Contains(oldNode))
+				if (col == null || col.transform == transform) continue;
+
+				BaseNode otherNode = col.GetComponentInParent<BaseNode>();
+				if (otherNode != null &&
+					otherNode != this &&
+					!otherNode.isGhostPiece &&
+					!detectedConnections.Contains(otherNode))
+				{
+					if (CanConnectTo(otherNode) && CheckOrientedBoundsOverlap(otherNode))
+					{
+						detectedConnections.Add(otherNode);
+
+						if (ItemConduitMod.ShowDebugInfo.Value)
+						{
+							bool isNew = !existingConnections.Contains(otherNode);
+							Logger.LogInfo($"[ItemConduit] {(isNew ? "New" : "Confirmed")} OBB connection: {name} <-> {otherNode.name}");
+						}
+					}
+				}
+			}
+
+			// Update connections list
+			connectedNodes = detectedConnections.ToList();
+
+			// Handle connection changes
+			foreach (var node in detectedConnections)
+			{
+				// Add this node to the other node's connections if not already there
+				if (!node.connectedNodes.Contains(this))
+				{
+					node.AddConnection(this);
+
+					// Visual feedback for new connections only
+					if (!existingConnections.Contains(node) && ItemConduitMod.EnableVisualEffects.Value)
+					{
+						CreateConnectionEffect(transform.position, node.transform.position);
+					}
+				}
+			}
+
+			// Notify nodes that are no longer connected
+			foreach (var oldNode in existingConnections)
+			{
+				if (oldNode != null && !detectedConnections.Contains(oldNode))
 				{
 					oldNode.RemoveConnection(this);
+
+					if (ItemConduitMod.ShowDebugInfo.Value)
+					{
+						Logger.LogInfo($"[ItemConduit] Connection removed: {name} -X- {oldNode.name}");
+					}
 				}
 			}
 
