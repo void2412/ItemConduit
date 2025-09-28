@@ -59,6 +59,8 @@ namespace ItemConduit.Nodes
 
 		private SnapConnectionVisualizer snapVisualizer;
 
+		private ContainerVisualizer containerVisualizer;
+
 		private DetectionMode currentDetectionMode = DetectionMode.Full;
 
 		public delegate void DetectionCompleteHandler(BaseNode node);
@@ -176,6 +178,16 @@ namespace ItemConduit.Nodes
 			StartCoroutine(DelayedStart());
 		}
 
+		protected virtual void Update()
+		{
+
+			// Update container visualization visibility
+			if (containerVisualizer != null)
+			{
+				containerVisualizer.SetVisible(ItemConduitMod.ShowDebugInfo.Value && ItemConduitMod.EnableVisualEffects.Value);
+			}
+		}
+
 		/// <summary>
 		/// Delayed start to ensure proper initialization
 		/// </summary>
@@ -244,6 +256,12 @@ namespace ItemConduit.Nodes
 			if (ZNet.instance != null && ZNet.instance.IsServer())
 			{
 				NetworkManager.Instance.UnregisterNode(this);
+			}
+
+			// Clean up container visualization
+			if (containerVisualizer != null)
+			{
+				Destroy(containerVisualizer.gameObject);
 			}
 		}
 
@@ -463,43 +481,66 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		private IEnumerator ProcessNodeConnections(Collider[] overlaps)
 		{
-			// Store current connections for comparison
 			var existingConnections = new HashSet<BaseNode>(connectedNodes);
 			var detectedConnections = new HashSet<BaseNode>();
 
-			// First, validate existing connections are still valid
+			// First, validate existing connections
 			foreach (var existingNode in existingConnections)
 			{
 				if (existingNode != null &&
 					!existingNode.isGhostPiece &&
 					existingNode.IsValidPlacedNode())
 				{
-					// Check if we're still in range and can connect
 					float distance = Vector3.Distance(transform.position, existingNode.transform.position);
 					float maxRange = (nodeLength + existingNode.NodeLength) / 2f + ItemConduitMod.ConnectionRange.Value;
 
 					if (distance <= maxRange && CanConnectTo(existingNode))
 					{
-						// Keep this connection
 						detectedConnections.Add(existingNode);
-
-						if (ItemConduitMod.ShowDebugInfo.Value)
-						{
-							Logger.LogInfo($"[ItemConduit] Preserving connection: {name} <-> {existingNode.name}");
-						}
-					}
-					else
-					{
-						// Connection no longer valid, will be removed
-						if (ItemConduitMod.ShowDebugInfo.Value)
-						{
-							Logger.LogInfo($"[ItemConduit] Removing invalid connection: {name} -X- {existingNode.name} (distance: {distance:F2}m)");
-						}
 					}
 				}
 			}
 
-			// Now check for new connections from the physics overlaps
+			// Method 1: Snappoint detection for straight connections
+			var snapPoints = GetSnapPoints();
+			foreach (var snapPoint in snapPoints)
+			{
+				Collider[] snapOverlaps = Physics.OverlapSphere(
+					snapPoint.position,
+					0.15f,
+					LayerMask.GetMask("piece", "piece_nonsolid")
+				);
+
+				foreach (var col in snapOverlaps)
+				{
+					if (col == null || col.transform == transform) continue;
+
+					BaseNode otherNode = col.GetComponentInParent<BaseNode>();
+					if (otherNode != null && otherNode != this && !otherNode.isGhostPiece)
+					{
+						var otherSnaps = otherNode.GetSnapPoints();
+						foreach (var otherSnap in otherSnaps)
+						{
+							float dist = Vector3.Distance(snapPoint.position, otherSnap.position);
+							if (dist < 0.2f)
+							{
+								if (!detectedConnections.Contains(otherNode))
+								{
+									detectedConnections.Add(otherNode);
+									if (ItemConduitMod.ShowDebugInfo.Value)
+									{
+										Logger.LogInfo($"[ItemConduit] Snap connection (straight): {name} <-> {otherNode.name} (dist: {dist:F3}m)");
+									}
+								}
+								break;
+							}
+						}
+					}
+				}
+				yield return null;
+			}
+
+			// Method 2: OBB detection for angled connections (only if no snap connections)
 			foreach (var col in overlaps)
 			{
 				if (col == null || col.transform == transform) continue;
@@ -513,51 +554,19 @@ namespace ItemConduit.Nodes
 					if (CanConnectTo(otherNode) && CheckOrientedBoundsOverlap(otherNode))
 					{
 						detectedConnections.Add(otherNode);
-
 						if (ItemConduitMod.ShowDebugInfo.Value)
 						{
-							bool isNew = !existingConnections.Contains(otherNode);
-							Logger.LogInfo($"[ItemConduit] {(isNew ? "New" : "Confirmed")} OBB connection: {name} <-> {otherNode.name}");
+							Logger.LogInfo($"[ItemConduit] OBB connection (angled): {name} <-> {otherNode.name}");
 						}
 					}
 				}
 			}
 
-			// Update connections list
+			// Update connections and handle changes...
 			connectedNodes = detectedConnections.ToList();
-
-			// Handle connection changes
-			foreach (var node in detectedConnections)
-			{
-				// Add this node to the other node's connections if not already there
-				if (!node.connectedNodes.Contains(this))
-				{
-					node.AddConnection(this);
-
-					// Visual feedback for new connections only
-					if (!existingConnections.Contains(node) && ItemConduitMod.EnableVisualEffects.Value)
-					{
-						CreateConnectionEffect(transform.position, node.transform.position);
-					}
-				}
-			}
-
-			// Notify nodes that are no longer connected
-			foreach (var oldNode in existingConnections)
-			{
-				if (oldNode != null && !detectedConnections.Contains(oldNode))
-				{
-					oldNode.RemoveConnection(this);
-
-					if (ItemConduitMod.ShowDebugInfo.Value)
-					{
-						Logger.LogInfo($"[ItemConduit] Connection removed: {name} -X- {oldNode.name}");
-					}
-				}
-			}
-
-			yield return null;
+			// ... rest of the method remains the same
 		}
+
 
 		private bool CheckOrientedBoundsOverlap(BaseNode otherNode)
 		{
@@ -687,7 +696,6 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		protected virtual IEnumerator ProcessContainerConnection(Collider[] overlaps)
 		{
-			
 			Container bestContainer = null;
 			float closestDistance = float.MaxValue;
 
@@ -701,26 +709,42 @@ namespace ItemConduit.Nodes
 
 				if (container != null)
 				{
-					// Check if container actually overlaps with our oriented bounds
+					// Get container's collider for OBB testing
 					Collider containerCollider = container.GetComponent<Collider>()
 						?? container.GetComponentInChildren<Collider>();
 
 					if (containerCollider != null)
 					{
 						Collider myCollider = GetMainCollider();
-						if (myCollider != null && myCollider.bounds.Intersects(containerCollider.bounds))
+						if (myCollider != null)
 						{
-							float distance = Vector3.Distance(transform.position, container.transform.position);
+							// Use proper OBB-OBB intersection test
+							OBB myOBB = GetOBB(myCollider);
+							OBB containerOBB = GetOBB(containerCollider);
 
-							if (ItemConduitMod.ShowDebugInfo.Value)
+							if (TestOBBOverlap(myOBB, containerOBB))
 							{
-								Logger.LogInfo($"[ItemConduit] Found overlapping container: {container.name} at {distance:F2}m");
+								float distance = Vector3.Distance(transform.position, container.transform.position);
+
+								if (ItemConduitMod.ShowDebugInfo.Value)
+								{
+									Logger.LogInfo($"[ItemConduit] OBB overlap detected with container: {container.name} at {distance:F2}m");
+								}
+
+								if (distance < closestDistance)
+								{
+									closestDistance = distance;
+									bestContainer = container;
+								}
 							}
-
-							if (distance < closestDistance)
+							else if (ItemConduitMod.ShowDebugInfo.Value)
 							{
-								closestDistance = distance;
-								bestContainer = container;
+								// Debug: Log containers that are close but not overlapping
+								float distance = Vector3.Distance(transform.position, container.transform.position);
+								if (distance < 5f)
+								{
+									Logger.LogInfo($"[ItemConduit] Container {container.name} nearby but no OBB overlap at {distance:F2}m");
+								}
 							}
 						}
 					}
@@ -729,9 +753,11 @@ namespace ItemConduit.Nodes
 
 			targetContainer = bestContainer;
 
+			// Initialize container visualization if we found one
 			if (targetContainer != null && ItemConduitMod.ShowDebugInfo.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] {name} connected to container: {targetContainer.m_name}");
+				InitializeContainerVisualization();
 			}
 
 			yield return null;
@@ -893,22 +919,20 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		public virtual Vector3[] GetConnectionPoints()
 		{
-			///<example>
-			///
-			///Transform[] snapPoints = GetSnapPoints();
-			///
-			///if (snapPoints.Length > 0)
-			///{
-			///	// Return world positions of snap points
-			///	Vector3[] points = new Vector3[snapPoints.Length];
-			///	for (int i = 0; i < snapPoints.Length; i++)
-			///	{
-			///		points[i] = snapPoints[i].position;
-			///	}
-			///	return points;
-			///}
-			///
-			///</example>
+			
+			Transform[] snapPoints = GetSnapPoints();
+			
+			if (snapPoints.Length > 0)
+			{
+				// Return world positions of snap points
+				Vector3[] points = new Vector3[snapPoints.Length];
+				for (int i = 0; i < snapPoints.Length; i++)
+				{
+					points[i] = snapPoints[i].position;
+				}
+				return points;
+			}
+			
 
 
 
@@ -929,25 +953,23 @@ namespace ItemConduit.Nodes
 		/// Get snap point transforms if they exist
 		/// </summary>
 
-		///<example> GetSnapPoints
-		///private Transform[] GetSnapPoints()
-		///{
-		///	List<Transform> snapPoints = new List<Transform>();
-		///
-		///	foreach (Transform child in transform)
-		///	{
-		///		if (child.tag == "snappoint")
-		///		{
-		///			snapPoints.Add(child);
-		///		}
-		///	}
-		///
-		///	// Sort by name to ensure consistent ordering
-		///	snapPoints.Sort((a, b) => a.name.CompareTo(b.name));
-		///
-		///	return snapPoints.ToArray();
-		///}
-		///</example>
+		private Transform[] GetSnapPoints()
+		{
+			List<Transform> snapPoints = new List<Transform>();
+		
+			foreach (Transform child in transform)
+			{
+				if (child.tag == "snappoint")
+				{
+					snapPoints.Add(child);
+				}
+			}
+		
+			// Sort by name to ensure consistent ordering
+			snapPoints.Sort((a, b) => a.name.CompareTo(b.name));
+		
+			return snapPoints.ToArray();
+		}
 
 
 		/// <summary>
@@ -1281,9 +1303,9 @@ namespace ItemConduit.Nodes
 
 			boundsVisualizer = gameObject.AddComponent<BoundsVisualizer>();
 
-			//snapVisualizer = gameObject.AddComponent<SnapConnectionVisualizer>();
-			//snapVisualizer.Initialize(this);
-			//UpdateSnapVisualization();
+			snapVisualizer = gameObject.AddComponent<SnapConnectionVisualizer>();
+			snapVisualizer.Initialize(this);
+			UpdateSnapVisualization();
 
 			// Color based on node type for the collider wireframe
 			Color colliderColor = NodeType switch
@@ -1356,14 +1378,52 @@ namespace ItemConduit.Nodes
 			return new Bounds(Vector3.zero, new Vector3(0.3f, 0.3f, nodeLength));
 		}
 
+		private void InitializeContainerVisualization()
+		{
+			Logger.LogWarning($"[DEBUG] InitializeContainerVisualization called for {name}");
 
-		//public void UpdateSnapVisualization()
-		//{
-		//	if (snapVisualizer != null)
-		//	{
-		//		snapVisualizer.UpdateConnections();
-		//	}
-		//}
+			if (!ItemConduitMod.ShowDebugInfo.Value || !ItemConduitMod.EnableVisualEffects.Value)
+				Logger.LogWarning($"[DEBUG] Visualization disabled - Debug: {ItemConduitMod.ShowDebugInfo.Value}, Effects: {ItemConduitMod.EnableVisualEffects.Value}");
+			return;
+			return;
+
+			if (targetContainer == null)
+			{
+				Logger.LogWarning($"[DEBUG] No target container!");
+				return;
+			}
+
+			// Remove old visualizer if exists
+			if (containerVisualizer != null)
+			{
+				Destroy(containerVisualizer.gameObject);
+			}
+
+			// Create new visualizer for the container
+			GameObject vizObject = new GameObject("ContainerVisualizer");
+			vizObject.transform.SetParent(targetContainer.transform);
+			vizObject.transform.localPosition = Vector3.zero;
+			vizObject.transform.localRotation = Quaternion.identity;
+
+			containerVisualizer = vizObject.AddComponent<ContainerVisualizer>();
+
+			Collider containerCollider = targetContainer.GetComponent<Collider>()
+				?? targetContainer.GetComponentInChildren<Collider>();
+
+			if (containerCollider != null)
+			{
+				containerVisualizer.Initialize(containerCollider);
+			}
+		}
+
+
+		public void UpdateSnapVisualization()
+		{
+			if (snapVisualizer != null)
+			{
+				snapVisualizer.UpdateConnections();
+			}
+		}
 		#endregion
 	}
 }

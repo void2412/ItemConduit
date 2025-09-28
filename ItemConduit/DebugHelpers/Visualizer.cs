@@ -156,7 +156,6 @@ namespace ItemConduit.Debug
 				Destroy(colliderWireframe);
 		}
 	}
-
 	public class SnapConnectionVisualizer : MonoBehaviour
 	{
 		private List<GameObject> snapMarkers = new List<GameObject>();
@@ -316,6 +315,171 @@ namespace ItemConduit.Debug
 			{
 				if (line != null) Destroy(line.gameObject);
 			}
+		}
+	}
+
+	public class ContainerVisualizer : MonoBehaviour
+	{
+		private List<LineRenderer> wireframeLines = new List<LineRenderer>();
+		private GameObject wireframeParent;
+		private Collider containerCollider;
+
+		// High contrast magenta color
+		private static readonly Color CONTAINER_COLOR = new Color(1f, 0f, 1f, 1f); // Full magenta
+		private static readonly Color CONTAINER_COLOR_GLOW = new Color(1f, 0f, 1f, 0.8f); // Slightly transparent for glow effect
+		private const float LINE_WIDTH = 0.035f; // Slightly thicker for visibility
+
+		public void Initialize(Collider collider)
+		{
+			containerCollider = collider;
+			CreateWireframe();
+		}
+
+		private void CreateWireframe()
+		{
+			wireframeParent = new GameObject("ContainerWireframe");
+			wireframeParent.transform.SetParent(transform);
+			wireframeParent.transform.localPosition = Vector3.zero;
+			wireframeParent.transform.localRotation = Quaternion.identity;
+
+			// Create 12 edges for box wireframe
+			for (int i = 0; i < 12; i++)
+			{
+				GameObject edge = new GameObject($"ContainerEdge_{i}");
+				edge.transform.SetParent(wireframeParent.transform);
+
+				LineRenderer lr = edge.AddComponent<LineRenderer>();
+
+				// Use unlit shader for better visibility
+				lr.material = new Material(Shader.Find("Unlit/Color"));
+				lr.material.color = CONTAINER_COLOR;
+				lr.material.EnableKeyword("_EMISSION");
+				lr.material.SetColor("_EmissionColor", CONTAINER_COLOR_GLOW);
+
+				lr.startColor = CONTAINER_COLOR;
+				lr.endColor = CONTAINER_COLOR;
+				lr.startWidth = LINE_WIDTH;
+				lr.endWidth = LINE_WIDTH;
+				lr.useWorldSpace = true;
+				lr.positionCount = 2;
+
+				// Add slight shadow/outline for contrast
+				lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+				lr.receiveShadows = false;
+
+				wireframeLines.Add(lr);
+			}
+
+			UpdateWireframe();
+		}
+
+		private void UpdateWireframe()
+		{
+			if (containerCollider == null || wireframeLines.Count < 12) return;
+
+			Vector3[] corners = GetOBBCorners(containerCollider);
+
+			// Bottom face edges
+			wireframeLines[0].SetPositions(new Vector3[] { corners[0], corners[1] });
+			wireframeLines[1].SetPositions(new Vector3[] { corners[1], corners[2] });
+			wireframeLines[2].SetPositions(new Vector3[] { corners[2], corners[3] });
+			wireframeLines[3].SetPositions(new Vector3[] { corners[3], corners[0] });
+
+			// Top face edges
+			wireframeLines[4].SetPositions(new Vector3[] { corners[4], corners[5] });
+			wireframeLines[5].SetPositions(new Vector3[] { corners[5], corners[6] });
+			wireframeLines[6].SetPositions(new Vector3[] { corners[6], corners[7] });
+			wireframeLines[7].SetPositions(new Vector3[] { corners[7], corners[4] });
+
+			// Vertical edges
+			wireframeLines[8].SetPositions(new Vector3[] { corners[0], corners[4] });
+			wireframeLines[9].SetPositions(new Vector3[] { corners[1], corners[5] });
+			wireframeLines[10].SetPositions(new Vector3[] { corners[2], corners[6] });
+			wireframeLines[11].SetPositions(new Vector3[] { corners[3], corners[7] });
+
+			// Add corner highlights for better visibility
+			AddCornerHighlights(corners);
+		}
+
+		private void AddCornerHighlights(Vector3[] corners)
+		{
+			// Optional: Add small spheres at corners for better visibility
+			foreach (var corner in corners)
+			{
+				GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				sphere.name = "CornerHighlight";
+				sphere.transform.position = corner;
+				sphere.transform.localScale = Vector3.one * 0.08f;
+				sphere.transform.SetParent(wireframeParent.transform);
+
+				Destroy(sphere.GetComponent<Collider>());
+
+				MeshRenderer renderer = sphere.GetComponent<MeshRenderer>();
+				renderer.material = new Material(Shader.Find("Unlit/Color"));
+				renderer.material.color = CONTAINER_COLOR;
+				renderer.material.EnableKeyword("_EMISSION");
+				renderer.material.SetColor("_EmissionColor", CONTAINER_COLOR * 1.5f);
+			}
+		}
+
+		private Vector3[] GetOBBCorners(Collider collider)
+		{
+			Bounds localBounds;
+			Vector3[] worldCorners = new Vector3[8];
+
+			if (collider is BoxCollider boxCollider)
+			{
+				Vector3 center = boxCollider.center;
+				Vector3 size = boxCollider.size;
+				localBounds = new Bounds(center, size);
+			}
+			else if (collider is MeshCollider meshCollider && meshCollider.sharedMesh != null)
+			{
+				localBounds = meshCollider.sharedMesh.bounds;
+			}
+			else
+			{
+				// Fallback to world bounds converted to local
+				Bounds worldBounds = collider.bounds;
+				Vector3 localCenter = collider.transform.InverseTransformPoint(worldBounds.center);
+				Vector3 localSize = collider.transform.InverseTransformVector(worldBounds.size);
+				localBounds = new Bounds(localCenter, localSize);
+			}
+
+			Vector3 min = localBounds.min;
+			Vector3 max = localBounds.max;
+
+			Vector3[] localCorners = new Vector3[]
+			{
+			new Vector3(min.x, min.y, min.z),
+			new Vector3(max.x, min.y, min.z),
+			new Vector3(max.x, min.y, max.z),
+			new Vector3(min.x, min.y, max.z),
+			new Vector3(min.x, max.y, min.z),
+			new Vector3(max.x, max.y, min.z),
+			new Vector3(max.x, max.y, max.z),
+			new Vector3(min.x, max.y, max.z)
+			};
+
+			// Transform to world space
+			for (int i = 0; i < 8; i++)
+			{
+				worldCorners[i] = collider.transform.TransformPoint(localCorners[i]);
+			}
+
+			return worldCorners;
+		}
+
+		public void SetVisible(bool visible)
+		{
+			if (wireframeParent != null)
+				wireframeParent.SetActive(visible);
+		}
+
+		private void OnDestroy()
+		{
+			if (wireframeParent != null)
+				Destroy(wireframeParent);
 		}
 	}
 }

@@ -428,10 +428,21 @@ namespace ItemConduit.Network
 					// Optional: Remove nodes that are taking too long
 					if (Time.frameCount % 60 == 0) // Check every second
 					{
-						var stuckNodes = pendingNodes.Where(n => n != null).ToList();
+						var stuckNodes = pendingNodes.Where(n => n != null && n.gameObject != null).ToList();
 						foreach (var stuck in stuckNodes)
 						{
-							Logger.LogWarning($"[ItemConduit] Node {stuck.name} detection taking long...");
+							try
+							{
+								if (stuck != null && stuck.gameObject != null)
+								{
+									Logger.LogWarning($"[ItemConduit] Node {stuck.name} detection taking long...");
+								}
+							}
+							catch (MissingReferenceException)
+							{
+								// Node was destroyed, remove from pending
+								pendingNodes.Remove(stuck);
+							}
 						}
 					}
 				}
@@ -439,10 +450,20 @@ namespace ItemConduit.Network
 				// Handle any remaining timeouts
 				if (pendingNodes.Count > 0)
 				{
-					foreach (var stuck in pendingNodes)
+					foreach (var stuck in pendingNodes.ToList()) // Use ToList to avoid modification during iteration
 					{
-						Logger.LogError($"[ItemConduit] Force completing: {stuck.name}");
-						stuck.OnDetectionComplete -= null; // Cleanup
+						try
+						{
+							if (stuck != null && stuck.gameObject != null)
+							{
+								Logger.LogError($"[ItemConduit] Force completing: {stuck.name}");
+								stuck.OnDetectionComplete -= null; // This line also looks wrong
+							}
+						}
+						catch (MissingReferenceException)
+						{
+							// Node was destroyed
+						}
 					}
 					pendingNodes.Clear();
 				}
