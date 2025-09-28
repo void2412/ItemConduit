@@ -1,6 +1,7 @@
 using UnityEngine;
 using ItemConduit.Nodes;
 using ItemConduit.Core;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.GUI
 {
@@ -299,7 +300,7 @@ namespace ItemConduit.GUI
 			// Log if debug mode
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Debug.Log($"[ItemConduit] Applied settings to insert node: Channel={channel}, Priority={priority}");
+				Logger.LogInfo($"[ItemConduit] Applied settings to insert node: Channel={channel}, Priority={priority}");
 			}
 
 			// Close GUI

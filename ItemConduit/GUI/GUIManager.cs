@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using ItemConduit.Core;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.GUI
 {
@@ -58,7 +59,7 @@ namespace ItemConduit.GUI
 			{
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
-					Debug.Log($"[ItemConduit] Registered GUI: {gui.GetType().Name}");
+					Logger.LogInfo($"[ItemConduit] Registered GUI: {gui.GetType().Name}");
 				}
 
 				// Update cursor state when first GUI is opened
@@ -82,7 +83,7 @@ namespace ItemConduit.GUI
 			{
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
-					Debug.Log($"[ItemConduit] Unregistered GUI: {gui.GetType().Name}");
+					Logger.LogInfo($"[ItemConduit] Unregistered GUI: {gui.GetType().Name}");
 				}
 
 				hasActiveGUI = activeGUIs.Count > 0;
@@ -172,7 +173,7 @@ namespace ItemConduit.GUI
 					}
 					catch (System.Exception ex)
 					{
-						Debug.LogError($"[ItemConduit] Error drawing GUI: {ex.Message}");
+						Logger.LogError($"[ItemConduit] Error drawing GUI: {ex.Message}");
 					}
 				}
 			}

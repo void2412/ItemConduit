@@ -1,8 +1,9 @@
 using HarmonyLib;
-using UnityEngine;
-using ItemConduit.Nodes;
-using ItemConduit.Network;
 using ItemConduit.Core;
+using ItemConduit.Debug;
+using ItemConduit.Network;
+using ItemConduit.Nodes;
+using UnityEngine;
 using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Patches
@@ -216,6 +217,41 @@ namespace ItemConduit.Patches
 				RebuildManager.Instance?.CancelPendingRebuilds();
 
 				Logger.LogInfo("[ItemConduit] Network manager shutdown");
+			}
+		}
+
+		
+		[HarmonyPatch(typeof(Terminal), "InitTerminal")]
+		public static class Terminal_InitTerminal_Patch
+		{
+			private static void Postfix()
+			{
+				Terminal.ConsoleCommand debugCmd = new Terminal.ConsoleCommand(
+					"conduit_debug",
+					"Toggle conduit debug visualization",
+					delegate (Terminal.ConsoleEventArgs args)
+					{
+						ItemConduitMod.ShowDebugInfo.Value = !ItemConduitMod.ShowDebugInfo.Value;
+						UpdateAllNodeVisualizations();
+						args.Context.AddString($"Debug visualization: {(ItemConduitMod.ShowDebugInfo.Value ? "ON" : "OFF")}");
+					}
+				);
+			}
+
+			private static void UpdateAllNodeVisualizations()
+			{
+				var allNodes = UnityEngine.Object.FindObjectsOfType<BaseNode>();
+				foreach (var node in allNodes)
+				{
+					if (node.TryGetComponent<BoundsVisualizer>(out var viz))
+					{
+						viz.SetVisible(ItemConduitMod.ShowDebugInfo.Value);
+					}
+					else if (ItemConduitMod.ShowDebugInfo.Value)
+					{
+						node.SendMessage("InitializeBoundsVisualization", SendMessageOptions.DontRequireReceiver);
+					}
+				}
 			}
 		}
 

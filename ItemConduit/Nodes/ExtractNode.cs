@@ -71,10 +71,10 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Override to store container reference when found
 		/// </summary>
-		protected override IEnumerator ProcessContainerConnection(Collider[] overlaps, Bounds nodeBounds)
+		protected override IEnumerator ProcessContainerConnection(Collider[] overlaps)
 		{
 			// Use base class helper to find best container
-			targetContainer = FindBestOverlappingContainer(overlaps, nodeBounds);
+			targetContainer = FindBestOverlappingContainer(overlaps);
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{

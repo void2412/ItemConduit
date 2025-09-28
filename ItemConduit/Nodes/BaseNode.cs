@@ -1,4 +1,5 @@
 ﻿using ItemConduit.Core;
+using ItemConduit.Debug;
 using ItemConduit.Network;
 using System;
 using System.Collections;
@@ -51,6 +52,8 @@ namespace ItemConduit.Nodes
 
 		/// <summary>Flag to indicate if this is a ghost/preview piece</summary>
 		private bool isGhostPiece = false;
+
+		private BoundsVisualizer boundsVisualizer;
 
 		#endregion
 
@@ -191,6 +194,8 @@ namespace ItemConduit.Nodes
 				}
 			}
 
+			InitializeBoundsVisualization();
+
 			// Start unified detection after a short delay
 			yield return new WaitForSeconds(0.5f);
 			StartUnifiedDetection();
@@ -258,42 +263,71 @@ namespace ItemConduit.Nodes
 			if (isUpdatingDetection) yield break;
 			isUpdatingDetection = true;
 
-
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
 				Logger.LogWarning($"[DEBUG] UnifiedDetectionCoroutine STARTED for {name}");
-				Logger.LogInfo($"[ItemConduit] Starting unified detection for {name} (Type: {NodeType})");
 			}
 
-			// Small delay to let physics settle after placement
+			// Small delay to let physics settle
 			yield return new WaitForSeconds(0.1f);
 
-			// Get bounds once for both detections
-			Bounds nodeBounds = GetNodeBounds();
+			// Get the main collider to use its oriented bounds
+			Collider mainCollider = GetMainCollider();
+			if (mainCollider == null)
+			{
+				Logger.LogWarning($"[ItemConduit] No collider found for {name}");
+				isUpdatingDetection = false;
+				yield break;
+			}
 
-			// Perform single physics overlap query for efficiency
+			// Get local bounds and transform info from the collider
+			Vector3 center;
+			Vector3 halfExtents;
+			Quaternion rotation;
+
+			if (mainCollider is BoxCollider boxCollider)
+			{
+				// For box colliders, use their actual dimensions
+				center = transform.TransformPoint(boxCollider.center);
+				halfExtents = Vector3.Scale(boxCollider.size * 0.5f, transform.lossyScale);
+				rotation = transform.rotation;
+			}
+			else
+			{
+				// For other colliders, approximate with local bounds
+				Bounds localBounds = GetColliderLocalBounds(mainCollider);
+				center = transform.TransformPoint(localBounds.center);
+				halfExtents = Vector3.Scale(localBounds.extents, transform.lossyScale);
+				rotation = transform.rotation;
+			}
+
+			// Expand slightly for connection tolerance
+			halfExtents *= 1.1f; // 10% expansion for connection tolerance
+
+			// Perform ORIENTED overlap check (this properly handles rotation!)
 			Collider[] overlaps = Physics.OverlapBox(
-				nodeBounds.center,
-				nodeBounds.extents * 1.2f, // Slightly expanded
-				transform.rotation,
+				center,
+				halfExtents,
+				rotation,  // This rotation is now properly applied!
 				LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small")
 			);
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Logger.LogInfo($"[ItemConduit] Found {overlaps.Length} overlapping colliders");
+				Logger.LogInfo($"[ItemConduit] Found {overlaps.Length} overlapping colliders using OBB");
+				Logger.LogInfo($"[ItemConduit] Center: {center}, HalfExtents: {halfExtents}, Rotation: {rotation.eulerAngles}");
 			}
 
-			// Process node connections (all node types)
-			yield return StartCoroutine(ProcessNodeConnections(overlaps, nodeBounds));
+			// Process node connections
+			yield return StartCoroutine(ProcessNodeConnections(overlaps));
 
 			// Process container connections (only Extract/Insert nodes)
 			if (CanConnectToContainers)
 			{
-				yield return StartCoroutine(ProcessContainerConnection(overlaps, nodeBounds));
+				yield return StartCoroutine(ProcessContainerConnection(overlaps));
 			}
 
-			// Update visual state based on connections
+			// Update visual state
 			bool hasConnections = connectedNodes.Count > 0 || (CanConnectToContainers && targetContainer != null);
 			UpdateVisualState(hasConnections);
 
@@ -304,28 +338,69 @@ namespace ItemConduit.Nodes
 			}
 
 			isUpdatingDetection = false;
+		}
 
-			Logger.LogWarning($"[DEBUG] UnifiedDetectionCoroutine ENDED for {name}");
+		private Collider GetMainCollider()
+		{
+			// First try to get non-trigger collider
+			Collider[] colliders = GetComponentsInChildren<Collider>();
+
+			foreach (var col in colliders)
+			{
+				if (!col.isTrigger)
+				{
+					return col;
+				}
+			}
+
+			// If all are triggers, return first one
+			if (colliders.Length > 0)
+				return colliders[0];
+
+			return null;
+		}
+
+		private Bounds GetColliderLocalBounds(Collider collider)
+		{
+			if (collider is BoxCollider boxCollider)
+			{
+				return new Bounds(boxCollider.center, boxCollider.size);
+			}
+			else if (collider is MeshCollider meshCollider && meshCollider.sharedMesh != null)
+			{
+				return meshCollider.sharedMesh.bounds;
+			}
+			else if (collider is CapsuleCollider capsuleCollider)
+			{
+				float radius = capsuleCollider.radius;
+				float height = capsuleCollider.height;
+				return new Bounds(capsuleCollider.center, new Vector3(radius * 2, height, radius * 2));
+			}
+			else
+			{
+				// Fallback
+				Bounds worldBounds = collider.bounds;
+				Vector3 localCenter = transform.InverseTransformPoint(worldBounds.center);
+				Vector3 localSize = transform.InverseTransformVector(worldBounds.size);
+				return new Bounds(localCenter, localSize);
+			}
 		}
 
 		/// <summary>
 		/// Process node-to-node connections
 		/// </summary>
-		private IEnumerator ProcessNodeConnections(Collider[] overlaps, Bounds nodeBounds)
+		private IEnumerator ProcessNodeConnections(Collider[] overlaps)
 		{
-			// Store old connections for cleanup
 			var oldConnections = new List<BaseNode>(connectedNodes);
 			connectedNodes.Clear();
 
-			// Method 1: Check snappoint overlaps
+			// Method 1: Check snappoint overlaps (unchanged)
 			var snapPoints = GetSnapPoints();
-
 			foreach (var snapPoint in snapPoints)
 			{
-				// Use a small overlap sphere at each snappoint
 				Collider[] snapOverlaps = Physics.OverlapSphere(
 					snapPoint.position,
-					0.15f, // Very small radius for precise snap detection
+					0.15f,
 					LayerMask.GetMask("piece", "piece_nonsolid")
 				);
 
@@ -336,12 +411,11 @@ namespace ItemConduit.Nodes
 					BaseNode otherNode = col.GetComponentInParent<BaseNode>();
 					if (otherNode != null && otherNode != this && !otherNode.isGhostPiece)
 					{
-						// Check if their snappoints are aligned
 						var otherSnaps = otherNode.GetSnapPoints();
 						foreach (var otherSnap in otherSnaps)
 						{
 							float dist = Vector3.Distance(snapPoint.position, otherSnap.position);
-							if (dist < 0.2f) // Tight threshold for snapped connections
+							if (dist < 0.2f)
 							{
 								if (!connectedNodes.Contains(otherNode))
 								{
@@ -356,12 +430,10 @@ namespace ItemConduit.Nodes
 						}
 					}
 				}
-
-				// Yield every few snappoints to prevent frame drops
 				yield return null;
 			}
 
-			// Method 2: Check physical overlaps if no snap connections found
+			// Method 2: Check oriented bounds overlap if no snap connections
 			if (connectedNodes.Count == 0)
 			{
 				foreach (var col in overlaps)
@@ -371,23 +443,19 @@ namespace ItemConduit.Nodes
 					BaseNode otherNode = col.GetComponentInParent<BaseNode>();
 					if (otherNode != null && otherNode != this && !otherNode.isGhostPiece && !connectedNodes.Contains(otherNode))
 					{
-						if (CanConnectTo(otherNode))
+						if (CanConnectTo(otherNode) && CheckOrientedBoundsOverlap(otherNode))
 						{
-							Bounds otherBounds = otherNode.GetNodeBounds();
-							if (nodeBounds.Intersects(otherBounds))
+							EstablishConnection(otherNode);
+							if (ItemConduitMod.ShowDebugInfo.Value)
 							{
-								EstablishConnection(otherNode);
-								if (ItemConduitMod.ShowDebugInfo.Value)
-								{
-									Logger.LogInfo($"[ItemConduit] Bounds connection: {name} <-> {otherNode.name}");
-								}
+								Logger.LogInfo($"[ItemConduit] OBB connection: {name} <-> {otherNode.name}");
 							}
 						}
 					}
 				}
 			}
 
-			// Notify old connections that are no longer connected
+			// Notify old connections
 			foreach (var oldNode in oldConnections)
 			{
 				if (oldNode != null && !connectedNodes.Contains(oldNode))
@@ -399,17 +467,72 @@ namespace ItemConduit.Nodes
 			yield return null;
 		}
 
+		private bool CheckOrientedBoundsOverlap(BaseNode otherNode)
+		{
+			// Simple distance check as approximation
+			// For true OBB-OBB intersection, you'd need a more complex algorithm
+
+			Collider myCollider = GetMainCollider();
+			Collider otherCollider = otherNode.GetMainCollider();
+
+			if (myCollider != null && otherCollider != null)
+			{
+				// Use Unity's built-in bounds check which handles rotation
+				return myCollider.bounds.Intersects(otherCollider.bounds);
+			}
+
+			return false;
+		}
+
 		/// <summary>
 		/// Process container connections (virtual for override in subclasses)
 		/// </summary>
-		protected virtual IEnumerator ProcessContainerConnection(Collider[] overlaps, Bounds nodeBounds)
+		protected virtual IEnumerator ProcessContainerConnection(Collider[] overlaps)
 		{
-			// Base implementation - find container but don't store it
-			Container bestContainer = FindBestOverlappingContainer(overlaps, nodeBounds);
+			Container bestContainer = null;
+			float closestDistance = float.MaxValue;
 
-			if (bestContainer != null && ItemConduitMod.ShowDebugInfo.Value)
+			foreach (var col in overlaps)
 			{
-				Logger.LogInfo($"[ItemConduit] {name} found container '{bestContainer.m_name}' but not connecting (node type: {NodeType})");
+				if (col == null || col.transform == transform) continue;
+
+				Container container = col.GetComponent<Container>()
+					?? col.GetComponentInParent<Container>()
+					?? col.GetComponentInChildren<Container>();
+
+				if (container != null)
+				{
+					// Check if container actually overlaps with our oriented bounds
+					Collider containerCollider = container.GetComponent<Collider>()
+						?? container.GetComponentInChildren<Collider>();
+
+					if (containerCollider != null)
+					{
+						Collider myCollider = GetMainCollider();
+						if (myCollider != null && myCollider.bounds.Intersects(containerCollider.bounds))
+						{
+							float distance = Vector3.Distance(transform.position, container.transform.position);
+
+							if (ItemConduitMod.ShowDebugInfo.Value)
+							{
+								Logger.LogInfo($"[ItemConduit] Found overlapping container: {container.name} at {distance:F2}m");
+							}
+
+							if (distance < closestDistance)
+							{
+								closestDistance = distance;
+								bestContainer = container;
+							}
+						}
+					}
+				}
+			}
+
+			targetContainer = bestContainer;
+
+			if (targetContainer != null && ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] {name} connected to container: {targetContainer.m_name}");
 			}
 
 			yield return null;
@@ -418,10 +541,14 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Find the best overlapping container from collision results
 		/// </summary>
-		protected Container FindBestOverlappingContainer(Collider[] overlaps, Bounds nodeBounds)
+		protected Container FindBestOverlappingContainer(Collider[] overlaps)
 		{
 			float closestDistance = float.MaxValue;
 			Container bestContainer = null;
+
+			// Get our own collider for bounds checking
+			Collider myCollider = GetMainCollider();
+			if (myCollider == null) return null;
 
 			foreach (var col in overlaps)
 			{
@@ -434,16 +561,14 @@ namespace ItemConduit.Nodes
 
 				if (container != null)
 				{
-					// Get the container's collider for bounds checking
+					// Get the container's collider
 					Collider containerCollider = container.GetComponent<Collider>()
 						?? container.GetComponentInChildren<Collider>();
 
 					if (containerCollider != null)
 					{
-						Bounds containerBounds = containerCollider.bounds;
-
-						// Check for actual intersection
-						if (nodeBounds.Intersects(containerBounds))
+						// Check for actual intersection using oriented bounds
+						if (myCollider.bounds.Intersects(containerCollider.bounds))
 						{
 							float distance = Vector3.Distance(transform.position, container.transform.position);
 
@@ -492,7 +617,7 @@ namespace ItemConduit.Nodes
 
 			return bestContainer;
 		}
-
+		
 		#endregion
 
 		#region Connection Management
@@ -939,6 +1064,85 @@ namespace ItemConduit.Nodes
 			Gizmos.DrawWireCube(bounds.center, bounds.size);
 		}
 
+		protected virtual void InitializeBoundsVisualization()
+		{
+			if (!ItemConduitMod.ShowDebugInfo.Value || !ItemConduitMod.EnableVisualEffects.Value)
+				return;
+
+			if (isGhostPiece) return;
+
+			boundsVisualizer = gameObject.AddComponent<BoundsVisualizer>();
+
+			// Color based on node type for the collider wireframe
+			Color colliderColor = NodeType switch
+			{
+				NodeType.Extract => new Color(0, 1, 0, 1f),      // Green
+				NodeType.Insert => new Color(0, 0.5f, 1f, 1f),   // Blue  
+				NodeType.Conduit => new Color(1f, 1f, 1f, 1f),   // White
+				_ => new Color(1, 1, 0, 1f)                      // Yellow
+			};
+
+			boundsVisualizer.Initialize(colliderColor);
+			UpdateBoundsVisualization();
+		}
+
+		protected void UpdateBoundsVisualization()
+		{
+			if (boundsVisualizer == null) return;
+
+			// Update collider visualization only
+			Collider mainCollider = GetMainCollider();
+			if (mainCollider != null)
+			{
+				boundsVisualizer.UpdateCollider(mainCollider);
+			}
+		}
+
+		protected Bounds GetLocalNodeBounds()
+		{
+			Collider[] colliders = GetComponentsInChildren<Collider>();
+
+			if (colliders.Length == 0)
+			{
+				// Fallback to calculated bounds based on node length
+				return new Bounds(Vector3.zero, new Vector3(0.3f, 0.3f, nodeLength));
+			}
+
+			// Find first non-trigger collider
+			Collider mainCollider = null;
+			foreach (var col in colliders)
+			{
+				if (!col.isTrigger)
+				{
+					mainCollider = col;
+					break;
+				}
+			}
+
+			if (mainCollider != null)
+			{
+				// Get local bounds
+				if (mainCollider is BoxCollider box)
+				{
+					return new Bounds(box.center, box.size);
+				}
+				else if (mainCollider is MeshCollider mesh && mesh.sharedMesh != null)
+				{
+					return mesh.sharedMesh.bounds;
+				}
+				else
+				{
+					// Convert world bounds to local
+					Bounds worldBounds = mainCollider.bounds;
+					Vector3 localCenter = transform.InverseTransformPoint(worldBounds.center);
+					Vector3 localSize = transform.InverseTransformVector(worldBounds.size);
+					return new Bounds(localCenter, localSize);
+				}
+			}
+
+			// Fallback
+			return new Bounds(Vector3.zero, new Vector3(0.3f, 0.3f, nodeLength));
+		}
 		#endregion
 	}
 }
