@@ -11,7 +11,7 @@ namespace ItemConduit.Nodes
 {
 	/// <summary>
 	/// Base class for all conduit nodes
-	/// Optimized with physics-based connection detection
+	/// Handles both connection detection and container detection
 	/// </summary>
 	public abstract class BaseNode : MonoBehaviour, Interactable, Hoverable
 	{
@@ -43,21 +43,31 @@ namespace ItemConduit.Nodes
 		/// <summary>Piece component for building system integration</summary>
 		protected Piece piece;
 
-		/// <summary>Flag to prevent multiple connection updates</summary>
-		private bool isUpdatingConnections = false;
+		/// <summary>Flag to prevent multiple detection updates</summary>
+		private bool isUpdatingDetection = false;
 
-		/// <summary>Coroutine reference for connection finding</summary>
-		private Coroutine connectionCoroutine;
+		/// <summary>Coroutine reference for unified detection</summary>
+		private Coroutine detectionCoroutine;
 
 		/// <summary>Flag to indicate if this is a ghost/preview piece</summary>
 		private bool isGhostPiece = false;
 
 		#endregion
 
+		#region Container Management
+
+		/// <summary>Reference to connected container (null for Conduit nodes)</summary>
+		protected Container targetContainer;
+
+		/// <summary>Whether this node type can connect to containers</summary>
+		protected virtual bool CanConnectToContainers => false;
+
+		#endregion
+
 		#region Unity Lifecycle
 
 		/// <summary>
-		/// Initialize component references and setup connection detection
+		/// Initialize component references and setup
 		/// </summary>
 		protected virtual void Awake()
 		{
@@ -173,7 +183,7 @@ namespace ItemConduit.Nodes
 			if (ZNet.instance != null && ZNet.instance.IsServer())
 			{
 				// Register with network manager
-				ItemConduit.Network.NetworkManager.Instance.RegisterNode(this);
+				NetworkManager.Instance.RegisterNode(this);
 
 				if (ItemConduitMod.ShowDebugInfo.Value)
 				{
@@ -181,9 +191,9 @@ namespace ItemConduit.Nodes
 				}
 			}
 
-			// Start connection detection after a short delay
+			// Start unified detection after a short delay
 			yield return new WaitForSeconds(0.5f);
-			StartConnectionDetection();
+			StartUnifiedDetection();
 		}
 
 		/// <summary>
@@ -195,10 +205,10 @@ namespace ItemConduit.Nodes
 			if (isGhostPiece) return;
 
 			// Stop any running coroutines
-			if (connectionCoroutine != null)
+			if (detectionCoroutine != null)
 			{
-				StopCoroutine(connectionCoroutine);
-				connectionCoroutine = null;
+				StopCoroutine(detectionCoroutine);
+				detectionCoroutine = null;
 			}
 
 			// Remove this node from all connected nodes
@@ -210,65 +220,110 @@ namespace ItemConduit.Nodes
 				}
 			}
 
+			// Clear container reference
+			targetContainer = null;
+
 			// Unregister from network manager
 			if (ZNet.instance != null && ZNet.instance.IsServer())
 			{
-				ItemConduit.Network.NetworkManager.Instance.UnregisterNode(this);
+				NetworkManager.Instance.UnregisterNode(this);
 			}
 		}
 
 		#endregion
 
-		#region Optimized Physics-Based Connection Detection
+		#region Unified Detection System
 
 		/// <summary>
-		/// Start the connection detection process
+		/// Start unified detection for both connections and containers
 		/// </summary>
-		public void StartConnectionDetection()
+		public void StartUnifiedDetection()
 		{
 			if (isGhostPiece) return;
 
-			if (connectionCoroutine != null)
+			if (detectionCoroutine != null)
 			{
-				StopCoroutine(connectionCoroutine);
+				StopCoroutine(detectionCoroutine);
 			}
-			connectionCoroutine = StartCoroutine(FindConnectionsCoroutine());
+			detectionCoroutine = StartCoroutine(UnifiedDetectionCoroutine());
 		}
 
 		/// <summary>
-		/// Optimized coroutine-based connection finding using physics
+		/// Unified coroutine for detecting both connections and containers
 		/// </summary>
-		private IEnumerator FindConnectionsCoroutine()
+		private IEnumerator UnifiedDetectionCoroutine()
 		{
-			if (isUpdatingConnections) yield break;
-
-			isUpdatingConnections = true;
+			if (isUpdatingDetection) yield break;
+			isUpdatingDetection = true;
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Logger.LogInfo($"[ItemConduit] Starting optimized connection detection for {name}");
+				Logger.LogInfo($"[ItemConduit] Starting unified detection for {name} (Type: {NodeType})");
 			}
 
 			// Small delay to let physics settle after placement
 			yield return new WaitForSeconds(0.1f);
 
+			// Get bounds once for both detections
+			Bounds nodeBounds = GetNodeBounds();
+
+			// Perform single physics overlap query for efficiency
+			Collider[] overlaps = Physics.OverlapBox(
+				nodeBounds.center,
+				nodeBounds.extents * 1.2f, // Slightly expanded
+				transform.rotation,
+				LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small")
+			);
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] Found {overlaps.Length} overlapping colliders");
+			}
+
+			// Process node connections (all node types)
+			yield return StartCoroutine(ProcessNodeConnections(overlaps, nodeBounds));
+
+			// Process container connections (only Extract/Insert nodes)
+			if (CanConnectToContainers)
+			{
+				yield return StartCoroutine(ProcessContainerConnection(overlaps, nodeBounds));
+			}
+
+			// Update visual state based on connections
+			bool hasConnections = connectedNodes.Count > 0 || (CanConnectToContainers && targetContainer != null);
+			UpdateVisualState(hasConnections);
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] {name} detection complete: {connectedNodes.Count} nodes, " +
+							 $"container: {(targetContainer != null ? targetContainer.m_name : "none")}");
+			}
+
+			isUpdatingDetection = false;
+		}
+
+		/// <summary>
+		/// Process node-to-node connections
+		/// </summary>
+		private IEnumerator ProcessNodeConnections(Collider[] overlaps, Bounds nodeBounds)
+		{
 			// Store old connections for cleanup
 			var oldConnections = new List<BaseNode>(connectedNodes);
 			connectedNodes.Clear();
 
-			// Method 1: Check snappoint overlaps using physics
+			// Method 1: Check snappoint overlaps
 			var snapPoints = GetSnapPoints();
 
 			foreach (var snapPoint in snapPoints)
 			{
 				// Use a small overlap sphere at each snappoint
-				Collider[] overlaps = Physics.OverlapSphere(
+				Collider[] snapOverlaps = Physics.OverlapSphere(
 					snapPoint.position,
 					0.15f, // Very small radius for precise snap detection
 					LayerMask.GetMask("piece", "piece_nonsolid")
 				);
 
-				foreach (var col in overlaps)
+				foreach (var col in snapOverlaps)
 				{
 					if (col == null || col.transform == transform) continue;
 
@@ -300,18 +355,10 @@ namespace ItemConduit.Nodes
 				yield return null;
 			}
 
-			// Method 2: Check physical overlaps using bounds for nodes without snappoints
+			// Method 2: Check physical overlaps if no snap connections found
 			if (connectedNodes.Count == 0)
 			{
-				Bounds myBounds = GetNodeBounds();
-				Collider[] nearbyColliders = Physics.OverlapBox(
-					myBounds.center,
-					myBounds.extents * 1.1f, // Slightly expanded to catch touching nodes
-					transform.rotation,
-					LayerMask.GetMask("piece", "piece_nonsolid")
-				);
-
-				foreach (var col in nearbyColliders)
+				foreach (var col in overlaps)
 				{
 					if (col == null || col.transform == transform) continue;
 
@@ -321,7 +368,7 @@ namespace ItemConduit.Nodes
 						if (CanConnectTo(otherNode))
 						{
 							Bounds otherBounds = otherNode.GetNodeBounds();
-							if (myBounds.Intersects(otherBounds))
+							if (nodeBounds.Intersects(otherBounds))
 							{
 								EstablishConnection(otherNode);
 								if (ItemConduitMod.ShowDebugInfo.Value)
@@ -343,21 +390,127 @@ namespace ItemConduit.Nodes
 				}
 			}
 
-			// Update visual state
-			UpdateVisualState(connectedNodes.Count > 0);
+			yield return null;
+		}
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+		/// <summary>
+		/// Process container connections (virtual for override in subclasses)
+		/// </summary>
+		protected virtual IEnumerator ProcessContainerConnection(Collider[] overlaps, Bounds nodeBounds)
+		{
+			// Base implementation - find container but don't store it
+			Container bestContainer = FindBestOverlappingContainer(overlaps, nodeBounds);
+
+			if (bestContainer != null && ItemConduitMod.ShowDebugInfo.Value)
 			{
-				Logger.LogInfo($"[ItemConduit] {name} connection detection complete: {connectedNodes.Count} connections");
+				Logger.LogInfo($"[ItemConduit] {name} found container '{bestContainer.m_name}' but not connecting (node type: {NodeType})");
 			}
 
-			isUpdatingConnections = false;
+			yield return null;
+		}
+
+		/// <summary>
+		/// Find the best overlapping container from collision results
+		/// </summary>
+		protected Container FindBestOverlappingContainer(Collider[] overlaps, Bounds nodeBounds)
+		{
+			float closestDistance = float.MaxValue;
+			Container bestContainer = null;
+
+			foreach (var col in overlaps)
+			{
+				if (col == null || col.transform == transform) continue;
+
+				// Try multiple ways to find container
+				Container container = col.GetComponent<Container>()
+					?? col.GetComponentInParent<Container>()
+					?? col.GetComponentInChildren<Container>();
+
+				if (container != null)
+				{
+					// Get the container's collider for bounds checking
+					Collider containerCollider = container.GetComponent<Collider>()
+						?? container.GetComponentInChildren<Collider>();
+
+					if (containerCollider != null)
+					{
+						Bounds containerBounds = containerCollider.bounds;
+
+						// Check for actual intersection
+						if (nodeBounds.Intersects(containerBounds))
+						{
+							float distance = Vector3.Distance(transform.position, container.transform.position);
+
+							if (ItemConduitMod.ShowDebugInfo.Value)
+							{
+								Logger.LogInfo($"[ItemConduit] Found overlapping container: {container.name} ({container.m_name}) at distance {distance:F2}m");
+
+								Inventory inv = container.GetInventory();
+								if (inv != null)
+								{
+									Logger.LogInfo($"[ItemConduit]   Inventory: {inv.GetWidth()}x{inv.GetHeight()} slots, {inv.GetAllItems().Count} items");
+								}
+							}
+
+							if (distance < closestDistance)
+							{
+								closestDistance = distance;
+								bestContainer = container;
+							}
+						}
+					}
+				}
+			}
+
+			// Also check raycast downward if no container found
+			if (bestContainer == null)
+			{
+				RaycastHit hit;
+				if (Physics.Raycast(transform.position, Vector3.down, out hit, 2f,
+					LayerMask.GetMask("piece", "piece_nonsolid", "Default_small")))
+				{
+					Container container = hit.collider.GetComponent<Container>()
+						?? hit.collider.GetComponentInParent<Container>();
+
+					if (container != null && container.GetInventory() != null)
+					{
+						bestContainer = container;
+
+						if (ItemConduitMod.ShowDebugInfo.Value)
+						{
+							Logger.LogInfo($"[ItemConduit] Found container below node: {container.name} ({container.m_name})");
+						}
+					}
+				}
+			}
+
+			return bestContainer;
+		}
+
+		#endregion
+
+		#region Connection Management
+
+		/// <summary>
+		/// Legacy FindConnections method - now uses unified detection
+		/// </summary>
+		public virtual void FindConnections()
+		{
+			StartUnifiedDetection();
+		}
+
+		/// <summary>
+		/// Start connection detection (redirects to unified detection)
+		/// </summary>
+		public void StartConnectionDetection()
+		{
+			StartUnifiedDetection();
 		}
 
 		/// <summary>
 		/// Get the bounds of this node for collision detection
 		/// </summary>
-		private Bounds GetNodeBounds()
+		protected Bounds GetNodeBounds()
 		{
 			// Get all colliders on this node
 			Collider[] colliders = GetComponentsInChildren<Collider>();
@@ -403,18 +556,6 @@ namespace ItemConduit.Nodes
 			{
 				CreateConnectionEffect(transform.position, otherNode.transform.position);
 			}
-		}
-
-		#endregion
-
-		#region Connection Management
-
-		/// <summary>
-		/// Legacy FindConnections method - now uses coroutine
-		/// </summary>
-		public virtual void FindConnections()
-		{
-			StartConnectionDetection();
 		}
 
 		/// <summary>
@@ -533,6 +674,30 @@ namespace ItemConduit.Nodes
 		public bool IsValidPlacedNode()
 		{
 			return !isGhostPiece && zNetView != null && zNetView.IsValid();
+		}
+
+		#endregion
+
+		#region Container Management
+
+		/// <summary>
+		/// Get the target container (virtual for override)
+		/// </summary>
+		public virtual Container GetTargetContainer()
+		{
+			// Base implementation returns null (Conduit nodes don't have containers)
+			return null;
+		}
+
+		/// <summary>
+		/// Force refresh all detections
+		/// </summary>
+		public void RefreshDetection()
+		{
+			if (IsValidPlacedNode())
+			{
+				StartUnifiedDetection();
+			}
 		}
 
 		#endregion
@@ -753,6 +918,13 @@ namespace ItemConduit.Nodes
 						Gizmos.DrawLine(transform.position, node.transform.position);
 					}
 				}
+			}
+
+			// Draw container connection for Extract/Insert nodes
+			if (targetContainer != null && CanConnectToContainers)
+			{
+				Gizmos.color = new Color(0f, 1f, 1f, 0.5f); // Cyan for container connections
+				Gizmos.DrawLine(transform.position, targetContainer.transform.position);
 			}
 
 			// Draw node bounds

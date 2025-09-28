@@ -7,8 +7,8 @@ using Logger = Jotunn.Logger;
 namespace ItemConduit.Nodes
 {
 	/// <summary>
-	/// Insert node implementation with optimized container detection
-	/// Receives items from the network and inserts them into attached containers
+	/// Insert node implementation - pushes items into containers
+	/// Container detection is handled by base class
 	/// </summary>
 	public class InsertNode : BaseNode
 	{
@@ -24,17 +24,20 @@ namespace ItemConduit.Nodes
 
 		#region Private Fields
 
-		/// <summary>Reference to the container this node inserts into</summary>
-		private Container targetContainer;
-
 		/// <summary>GUI component for configuration</summary>
 		private InsertNodeGUI gui;
 
-		/// <summary>Coroutine for container finding</summary>
-		private Coroutine containerCoroutine;
-
 		/// <summary>Time since last insertion</summary>
 		private float lastInsertionTime;
+
+		#endregion
+
+		#region Overrides
+
+		/// <summary>
+		/// Insert nodes can connect to containers
+		/// </summary>
+		protected override bool CanConnectToContainers => true;
 
 		#endregion
 
@@ -56,251 +59,52 @@ namespace ItemConduit.Nodes
 			}
 		}
 
-		/// <summary>
-		/// Find target container on start
-		/// </summary>
-		protected override void Start()
-		{
-			base.Start();
-
-			// Only start container detection for valid placed nodes
-			if (IsValidPlacedNode())
-			{
-				StartContainerDetection();
-			}
-		}
-
-		/// <summary>
-		/// Cleanup
-		/// </summary>
-		protected override void OnDestroy()
-		{
-			if (containerCoroutine != null)
-			{
-				StopCoroutine(containerCoroutine);
-				containerCoroutine = null;
-			}
-
-			base.OnDestroy();
-		}
-
 		#endregion
 
-		#region Optimized Container Management
+		#region Container Detection Override
 
 		/// <summary>
-		/// Start container detection process
+		/// Override to store container reference when found
 		/// </summary>
-		public void StartContainerDetection()
+		protected override IEnumerator ProcessContainerConnection(Collider[] overlaps, Bounds nodeBounds)
 		{
-			if (!IsValidPlacedNode()) return;
-
-			if (containerCoroutine != null)
-			{
-				StopCoroutine(containerCoroutine);
-			}
-			containerCoroutine = StartCoroutine(FindTargetContainerCoroutine());
-		}
-
-		/// <summary>
-		/// Optimized container finding using physics overlap detection
-		/// Only considers containers that physically overlap with the node
-		/// </summary>
-		private IEnumerator FindTargetContainerCoroutine()
-		{
-			// Wait for placement to settle
-			yield return new WaitForSeconds(0.2f);
-
-			targetContainer = null;
-
-			// Get the bounds of this node
-			Bounds nodeBounds = GetNodeBounds();
-
-			if (ItemConduitMod.ShowDebugInfo.Value)
-			{
-				Logger.LogInfo($"[ItemConduit] {name} searching for overlapping containers...");
-				Logger.LogInfo($"[ItemConduit] Node bounds center: {nodeBounds.center}, size: {nodeBounds.size}");
-			}
-
-			// Use OverlapBox for precise detection of overlapping objects
-			Collider[] overlaps = Physics.OverlapBox(
-				nodeBounds.center,
-				nodeBounds.extents * 1.2f, // Slightly expanded to catch edge cases
-				transform.rotation,
-				LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small")
-			);
-
-			if (ItemConduitMod.ShowDebugInfo.Value)
-			{
-				Logger.LogInfo($"[ItemConduit] Found {overlaps.Length} overlapping colliders");
-			}
-
-			float closestDistance = float.MaxValue;
-			Container bestContainer = null;
-			int foundContainerCount = 0;
-
-			foreach (var col in overlaps)
-			{
-				if (col == null || col.transform == transform) continue;
-
-				// Try multiple ways to find container
-				Container container = col.GetComponent<Container>();
-				if (container == null)
-					container = col.GetComponentInParent<Container>();
-				if (container == null)
-					container = col.GetComponentInChildren<Container>();
-
-				if (container != null)
-				{
-					// Get the container's collider for bounds checking
-					Collider containerCollider = container.GetComponent<Collider>();
-					if (containerCollider == null)
-					{
-						// Try to get collider from children
-						containerCollider = container.GetComponentInChildren<Collider>();
-					}
-
-					if (containerCollider != null)
-					{
-						Bounds containerBounds = containerCollider.bounds;
-
-						// Check for actual intersection between node and container
-						if (nodeBounds.Intersects(containerBounds))
-						{
-							float distance = Vector3.Distance(transform.position, container.transform.position);
-							foundContainerCount++;
-
-							if (ItemConduitMod.ShowDebugInfo.Value)
-							{
-								Logger.LogWarning($"[ItemConduit] Found overlapping container: {container.name} ({container.m_name}) at distance {distance:F2}m");
-
-								Inventory inv = container.GetInventory();
-								if (inv != null)
-								{
-									Logger.LogInfo($"[ItemConduit]   Inventory: {inv.GetWidth()}x{inv.GetHeight()} slots");
-									Logger.LogInfo($"[ItemConduit]   Empty slots: {inv.GetEmptySlots()}");
-									Logger.LogInfo($"[ItemConduit]   Items: {inv.GetAllItems().Count}");
-								}
-							}
-
-							if (distance < closestDistance)
-							{
-								closestDistance = distance;
-								bestContainer = container;
-							}
-						}
-						else
-						{
-							if (ItemConduitMod.ShowDebugInfo.Value)
-							{
-								Logger.LogInfo($"[ItemConduit] Container {container.name} found but bounds don't intersect");
-							}
-						}
-					}
-				}
-			}
-
-			// Also check if the node is placed directly on a container using raycast
-			if (bestContainer == null)
-			{
-				RaycastHit hit;
-				// Cast ray downward from node center
-				if (Physics.Raycast(transform.position, Vector3.down, out hit, 2f, LayerMask.GetMask("piece", "piece_nonsolid", "Default_small")))
-				{
-					Container container = hit.collider.GetComponent<Container>();
-					if (container == null)
-						container = hit.collider.GetComponentInParent<Container>();
-
-					if (container != null && container.GetInventory() != null)
-					{
-						bestContainer = container;
-
-						if (ItemConduitMod.ShowDebugInfo.Value)
-						{
-							Logger.LogWarning($"[ItemConduit] Found container below node: {container.name} ({container.m_name})");
-						}
-					}
-				}
-			}
-
-			targetContainer = bestContainer;
+			// Use base class helper to find best container
+			targetContainer = FindBestOverlappingContainer(overlaps, nodeBounds);
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
 				if (targetContainer != null)
 				{
-					Logger.LogWarning($"[ItemConduit] *** {name} connected to container: {targetContainer.name} ({targetContainer.m_name}) ***");
+					Logger.LogWarning($"[ItemConduit] Insert node {name} connected to container: {targetContainer.m_name}");
+
+					Inventory inv = targetContainer.GetInventory();
+					if (inv != null)
+					{
+						Logger.LogInfo($"[ItemConduit]   Inventory: {inv.GetWidth()}x{inv.GetHeight()} slots");
+						Logger.LogInfo($"[ItemConduit]   Empty slots: {inv.GetEmptySlots()}");
+						Logger.LogInfo($"[ItemConduit]   Items: {inv.GetAllItems().Count}");
+					}
 				}
 				else
 				{
-					Logger.LogWarning($"[ItemConduit] *** {name} found NO overlapping containers ***");
-					if (foundContainerCount > 0)
-					{
-						Logger.LogInfo($"[ItemConduit] Note: Found {foundContainerCount} containers nearby but bounds didn't intersect properly");
-					}
-				}
-			}
-		}
-
-		/// <summary>
-		/// Get the bounds of this node for overlap detection
-		/// </summary>
-		private Bounds GetNodeBounds()
-		{
-			// Get all colliders on this node
-			Collider[] colliders = GetComponentsInChildren<Collider>();
-
-			if (colliders.Length == 0)
-			{
-				// Fallback to calculated bounds
-				return new Bounds(transform.position, new Vector3(0.5f, 0.5f, NodeLength));
-			}
-
-			// Find the main collider (non-trigger)
-			Collider mainCollider = null;
-			foreach (var col in colliders)
-			{
-				if (!col.isTrigger)
-				{
-					mainCollider = col;
-					break;
+					Logger.LogWarning($"[ItemConduit] Insert node {name} found NO container");
 				}
 			}
 
-			if (mainCollider != null)
-			{
-				return mainCollider.bounds;
-			}
-
-			// If all colliders are triggers, use the first one but expand it slightly
-			Bounds bounds = colliders[0].bounds;
-			bounds.Expand(0.1f);
-			return bounds;
+			yield return null;
 		}
 
 		/// <summary>
-		/// Get the target container (with re-detection if needed)
+		/// Override to return stored container reference
 		/// </summary>
-		public Container GetTargetContainer()
+		public override Container GetTargetContainer()
 		{
 			// If we don't have a container, try to find one
 			if (targetContainer == null && IsValidPlacedNode())
 			{
-				StartContainerDetection();
+				StartUnifiedDetection();
 			}
-
 			return targetContainer;
-		}
-
-		/// <summary>
-		/// Force re-detection of container
-		/// </summary>
-		public void RefreshContainerConnection()
-		{
-			if (IsValidPlacedNode())
-			{
-				StartContainerDetection();
-			}
 		}
 
 		#endregion
@@ -344,8 +148,7 @@ namespace ItemConduit.Nodes
 				// Visual feedback
 				if (ItemConduitMod.EnableVisualEffects.Value)
 				{
-					// Flash effect on successful insertion
-					StartCoroutine(FlashEffect());
+					StartCoroutine(InsertFlashEffect());
 				}
 
 				if (ItemConduitMod.ShowDebugInfo.Value)
@@ -355,21 +158,6 @@ namespace ItemConduit.Nodes
 			}
 
 			return success;
-		}
-
-		/// <summary>
-		/// Visual feedback for item insertion
-		/// </summary>
-		private IEnumerator FlashEffect()
-		{
-			MeshRenderer renderer = GetComponentInChildren<MeshRenderer>();
-			if (renderer != null)
-			{
-				Color originalEmission = renderer.material.GetColor("_EmissionColor");
-				renderer.material.SetColor("_EmissionColor", Color.cyan);
-				yield return new WaitForSeconds(0.2f);
-				renderer.material.SetColor("_EmissionColor", originalEmission);
-			}
 		}
 
 		/// <summary>
@@ -385,6 +173,15 @@ namespace ItemConduit.Nodes
 			if (inventory == null) return 0;
 
 			return inventory.GetEmptySlots();
+		}
+
+		/// <summary>
+		/// Check if container is full
+		/// </summary>
+		/// <returns>True if container has no empty slots</returns>
+		public bool IsContainerFull()
+		{
+			return GetAvailableSpace() == 0;
 		}
 
 		#endregion
@@ -409,6 +206,12 @@ namespace ItemConduit.Nodes
 			{
 				Logger.LogInfo($"[ItemConduit] Insert node {name} channel set to: {ChannelId}");
 			}
+
+			// Request network rebuild to update routing
+			if (IsValidPlacedNode())
+			{
+				Network.RebuildManager.Instance.RequestRebuildForNode(this);
+			}
 		}
 
 		/// <summary>
@@ -428,6 +231,12 @@ namespace ItemConduit.Nodes
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Insert node {name} priority set to: {Priority}");
+			}
+
+			// Request network rebuild to update transfer ordering
+			if (IsValidPlacedNode())
+			{
+				Network.RebuildManager.Instance.RequestRebuildForNode(this);
 			}
 		}
 
@@ -492,7 +301,7 @@ namespace ItemConduit.Nodes
 			string channelInfo = $"[Channel: <color=cyan>{ChannelId}</color>]";
 
 			// Add priority info
-			string priorityColor = Priority > 0 ? "yellow" : "white";
+			string priorityColor = Priority > 0 ? "yellow" : Priority < 0 ? "gray" : "white";
 			string priorityInfo = $"[Priority: <color={priorityColor}>{Priority}</color>]";
 
 			// Add container status
@@ -539,19 +348,45 @@ namespace ItemConduit.Nodes
 
 			if (!ItemConduitMod.EnableVisualEffects.Value) return;
 
-			// Apply blue tint when active
+			// Add blue pulse effect when inserting
+			if (active && Time.time - lastInsertionTime < 1f)
+			{
+				MeshRenderer renderer = GetComponentInChildren<MeshRenderer>();
+				if (renderer != null)
+				{
+					// Pulse effect
+					float pulse = Mathf.PingPong(Time.time * 2f, 1f);
+					renderer.material.SetColor("_EmissionColor", Color.blue * (0.3f + pulse * 0.3f));
+				}
+			}
+		}
+
+		/// <summary>
+		/// Visual flash when inserting an item
+		/// </summary>
+		private IEnumerator InsertFlashEffect()
+		{
 			MeshRenderer renderer = GetComponentInChildren<MeshRenderer>();
 			if (renderer != null)
 			{
-				if (active)
-				{
-					renderer.material.EnableKeyword("_EMISSION");
-					renderer.material.SetColor("_EmissionColor", Color.blue * 0.3f);
-				}
-				else
-				{
-					renderer.material.DisableKeyword("_EMISSION");
-				}
+				Color originalEmission = renderer.material.GetColor("_EmissionColor");
+				renderer.material.SetColor("_EmissionColor", Color.cyan);
+				yield return new WaitForSeconds(0.2f);
+				renderer.material.SetColor("_EmissionColor", originalEmission);
+			}
+		}
+
+		/// <summary>
+		/// Called when an item is successfully inserted
+		/// </summary>
+		public void OnItemInserted()
+		{
+			lastInsertionTime = Time.time;
+
+			// Additional visual or audio feedback could be added here
+			if (ItemConduitMod.EnableVisualEffects.Value)
+			{
+				// Could add particle effect or sound
 			}
 		}
 
@@ -590,6 +425,35 @@ namespace ItemConduit.Nodes
 
 				return 0;
 			}
+		}
+
+		#endregion
+
+		#region Debug
+
+		/// <summary>
+		/// Force refresh container connection (useful for debugging)
+		/// </summary>
+		public void RefreshContainerConnection()
+		{
+			RefreshDetection();
+		}
+
+		/// <summary>
+		/// Get debug information about this insert node
+		/// </summary>
+		public string GetDebugInfo()
+		{
+			Container container = GetTargetContainer();
+			string containerInfo = container != null ? $"{container.m_name} ({GetAvailableSpace()} free slots)" : "No container";
+
+			return $"InsertNode: {name}\n" +
+				   $"  Channel: {ChannelId}\n" +
+				   $"  Priority: {Priority}\n" +
+				   $"  Container: {containerInfo}\n" +
+				   $"  Network: {NetworkId ?? "None"}\n" +
+				   $"  Active: {IsActive}\n" +
+				   $"  Connected Nodes: {connectedNodes.Count}";
 		}
 
 		#endregion
