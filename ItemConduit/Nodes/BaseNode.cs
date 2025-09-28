@@ -466,44 +466,46 @@ namespace ItemConduit.Nodes
 			var oldConnections = new List<BaseNode>(connectedNodes);
 			connectedNodes.Clear();
 
-			// Method 1: Check snappoint overlaps (unchanged)
-			var snapPoints = GetSnapPoints();
-			foreach (var snapPoint in snapPoints)
-			{
-				Collider[] snapOverlaps = Physics.OverlapSphere(
-					snapPoint.position,
-					0.15f,
-					LayerMask.GetMask("piece", "piece_nonsolid")
-				);
-
-				foreach (var col in snapOverlaps)
-				{
-					if (col == null || col.transform == transform) continue;
-
-					BaseNode otherNode = col.GetComponentInParent<BaseNode>();
-					if (otherNode != null && otherNode != this && !otherNode.isGhostPiece)
-					{
-						var otherSnaps = otherNode.GetSnapPoints();
-						foreach (var otherSnap in otherSnaps)
-						{
-							float dist = Vector3.Distance(snapPoint.position, otherSnap.position);
-							if (dist < 0.2f)
-							{
-								if (!connectedNodes.Contains(otherNode))
-								{
-									EstablishConnection(otherNode);
-									if (ItemConduitMod.ShowDebugInfo.Value)
-									{
-										Logger.LogInfo($"[ItemConduit] Snap connection: {name} <-> {otherNode.name} (dist: {dist:F3}m)");
-									}
-								}
-								break;
-							}
-						}
-					}
-				}
-				yield return null;
-			}
+			///<example>
+			/// Method 1: Check snappoint overlaps (unchanged)
+			///var snapPoints = GetSnapPoints();
+			///foreach (var snapPoint in snapPoints)
+			///{
+			///	Collider[] snapOverlaps = Physics.OverlapSphere(
+			///		snapPoint.position,
+			///		0.15f,
+			///		LayerMask.GetMask("piece", "piece_nonsolid")
+			///	);
+			///
+			///	foreach (var col in snapOverlaps)
+			///	{
+			///		if (col == null || col.transform == transform) continue;
+			///
+			///		BaseNode otherNode = col.GetComponentInParent<BaseNode>();
+			///		if (otherNode != null && otherNode != this && !otherNode.isGhostPiece)
+			///		{
+			///			var otherSnaps = otherNode.GetSnapPoints();
+			///			foreach (var otherSnap in otherSnaps)
+			///			{
+			///				float dist = Vector3.Distance(snapPoint.position, otherSnap.position);
+			///				if (dist < 0.2f)
+			///				{
+			///					if (!connectedNodes.Contains(otherNode))
+			///					{
+			///						EstablishConnection(otherNode);
+			///						if (ItemConduitMod.ShowDebugInfo.Value)
+			///						{
+			///							Logger.LogInfo($"[ItemConduit] Snap connection: {name} <-> {otherNode.name} (dist: {dist:F3}m)");
+			///						}
+			///					}
+			///					break;
+			///				}
+			///			}
+			///		}
+			///	}
+			///	yield return null;
+			///}
+			///</example>
 
 			// Method 2: Check oriented bounds overlap if no snap connections
 			if (connectedNodes.Count == 0)
@@ -873,19 +875,24 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		public virtual Vector3[] GetConnectionPoints()
 		{
-			// Find snap points
-			Transform[] snapPoints = GetSnapPoints();
+			///<example>
+			///
+			///Transform[] snapPoints = GetSnapPoints();
+			///
+			///if (snapPoints.Length > 0)
+			///{
+			///	// Return world positions of snap points
+			///	Vector3[] points = new Vector3[snapPoints.Length];
+			///	for (int i = 0; i < snapPoints.Length; i++)
+			///	{
+			///		points[i] = snapPoints[i].position;
+			///	}
+			///	return points;
+			///}
+			///
+			///</example>
 
-			if (snapPoints.Length > 0)
-			{
-				// Return world positions of snap points
-				Vector3[] points = new Vector3[snapPoints.Length];
-				for (int i = 0; i < snapPoints.Length; i++)
-				{
-					points[i] = snapPoints[i].position;
-				}
-				return points;
-			}
+
 
 			// Fallback: create connection points based on node length and orientation
 			Vector3[] fallbackPoints = new Vector3[2];
@@ -903,23 +910,27 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Get snap point transforms if they exist
 		/// </summary>
-		private Transform[] GetSnapPoints()
-		{
-			List<Transform> snapPoints = new List<Transform>();
 
-			foreach (Transform child in transform)
-			{
-				if (child.tag == "snappoint")
-				{
-					snapPoints.Add(child);
-				}
-			}
+		///<example> GetSnapPoints
+		///private Transform[] GetSnapPoints()
+		///{
+		///	List<Transform> snapPoints = new List<Transform>();
+		///
+		///	foreach (Transform child in transform)
+		///	{
+		///		if (child.tag == "snappoint")
+		///		{
+		///			snapPoints.Add(child);
+		///		}
+		///	}
+		///
+		///	// Sort by name to ensure consistent ordering
+		///	snapPoints.Sort((a, b) => a.name.CompareTo(b.name));
+		///
+		///	return snapPoints.ToArray();
+		///}
+		///</example>
 
-			// Sort by name to ensure consistent ordering
-			snapPoints.Sort((a, b) => a.name.CompareTo(b.name));
-
-			return snapPoints.ToArray();
-		}
 
 		/// <summary>
 		/// Add a connection to another node (without reciprocating)
@@ -1252,9 +1263,10 @@ namespace ItemConduit.Nodes
 
 			boundsVisualizer = gameObject.AddComponent<BoundsVisualizer>();
 
-			snapVisualizer = gameObject.AddComponent<SnapConnectionVisualizer>();
-			snapVisualizer.Initialize(this);
-			UpdateSnapVisualization();
+			//snapVisualizer = gameObject.AddComponent<SnapConnectionVisualizer>();
+			//snapVisualizer.Initialize(this);
+			//UpdateSnapVisualization();
+
 			// Color based on node type for the collider wireframe
 			Color colliderColor = NodeType switch
 			{
@@ -1327,13 +1339,13 @@ namespace ItemConduit.Nodes
 		}
 
 
-		public void UpdateSnapVisualization()
-		{
-			if (snapVisualizer != null)
-			{
-				snapVisualizer.UpdateConnections();
-			}
-		}
+		//public void UpdateSnapVisualization()
+		//{
+		//	if (snapVisualizer != null)
+		//	{
+		//		snapVisualizer.UpdateConnections();
+		//	}
+		//}
 		#endregion
 	}
 }
