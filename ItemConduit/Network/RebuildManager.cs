@@ -413,6 +413,40 @@ namespace ItemConduit.Network
 					}
 				}
 
+				bool allComplete = false;
+				float timeout = Time.realtimeSinceStartup + 2f; // 2 second timeout
+				while (!allComplete && Time.realtimeSinceStartup < timeout)
+				{
+					allComplete = true;
+					for (int j = i; j < endIndex; j++)
+					{
+						BaseNode node = nodeList[j];
+						if (node != null && !node.IsDetectionComplete)
+						{
+							allComplete = false;
+							break;
+						}
+					}
+					yield return null; // Wait a frame
+				}
+
+				if (Time.realtimeSinceStartup >= timeout)
+				{
+					Logger.LogError($"[ItemConduit] Detection timeout! Some nodes didn't complete");
+					for (int j = i; j < endIndex; j++)
+					{
+						BaseNode node = nodeList[j];
+						if (node != null && !node.IsDetectionComplete)
+						{
+							Logger.LogError($"[ItemConduit]   {node.name} still detecting");
+						}
+					}
+				}
+				else
+				{
+					Logger.LogInfo($"[ItemConduit] All nodes in batch completed detection");
+				}
+
 				// Wait for physics to update
 				yield return new WaitForFixedUpdate();
 

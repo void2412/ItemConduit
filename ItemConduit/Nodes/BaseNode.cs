@@ -35,6 +35,8 @@ namespace ItemConduit.Nodes
 		/// <summary>Whether this node is currently active</summary>
 		public bool IsActive { get; protected set; }
 
+		public bool IsDetectionComplete { get; private set; } = true;
+
 		/// <summary>List of nodes connected to this one</summary>
 		protected List<BaseNode> connectedNodes = new List<BaseNode>();
 
@@ -51,9 +53,14 @@ namespace ItemConduit.Nodes
 		private Coroutine detectionCoroutine;
 
 		/// <summary>Flag to indicate if this is a ghost/preview piece</summary>
-		private bool isGhostPiece = false;
+		public bool isGhostPiece = false;
 
 		private BoundsVisualizer boundsVisualizer;
+
+		private SnapConnectionVisualizer snapVisualizer;
+
+		private DetectionMode currentDetectionMode = DetectionMode.Full;
+
 
 		#endregion
 
@@ -196,9 +203,12 @@ namespace ItemConduit.Nodes
 
 			InitializeBoundsVisualization();
 
-			// Start unified detection after a short delay
-			yield return new WaitForSeconds(0.5f);
-			StartUnifiedDetection();
+			
+			if (CanConnectToContainers)
+			{
+				yield return new WaitForSeconds(0.5f);
+				StartUnifiedDetection(DetectionMode.ContainersOnly);
+			}
 		}
 
 		/// <summary>
@@ -239,14 +249,30 @@ namespace ItemConduit.Nodes
 
 		#region Unified Detection System
 
+		public enum DetectionMode
+		{
+			Full,           // Both connections and containers
+			ConnectionsOnly, // Just node connections (for rebuilds)
+			ContainersOnly  // Just container detection
+		}
+
 		/// <summary>
 		/// Start unified detection for both connections and containers
 		/// </summary>
-		public void StartUnifiedDetection()
+		public void StartUnifiedDetection(DetectionMode mode = DetectionMode.Full)
 		{
 			if (isGhostPiece) return;
 
-			Logger.LogWarning($"[DEBUG] StartUnifiedDetection called for {name}, already updating: {isUpdatingDetection}");
+			var stackTrace = new System.Diagnostics.StackTrace(true);
+			Logger.LogWarning($"[DEBUG] StartUnifiedDetection called from: {stackTrace.GetFrame(1)?.GetMethod()?.Name}");
+
+			Logger.LogWarning($"[DEBUG] StartUnifiedDetection called for {name} with mode: {mode}, already updating: {isUpdatingDetection}");
+
+			// If we're already doing a full detection, don't interrupt
+			if (isUpdatingDetection && currentDetectionMode == DetectionMode.Full)
+				return;
+
+			currentDetectionMode = mode;
 
 			if (detectionCoroutine != null)
 			{
@@ -262,6 +288,7 @@ namespace ItemConduit.Nodes
 		{
 			if (isUpdatingDetection) yield break;
 			isUpdatingDetection = true;
+			IsDetectionComplete = false;
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
@@ -269,7 +296,10 @@ namespace ItemConduit.Nodes
 			}
 
 			// Small delay to let physics settle
+			Logger.LogWarning($"[DEBUG] About to wait 0.1s, Time.timeScale = {Time.timeScale}");
 			yield return new WaitForSeconds(0.1f);
+
+		
 
 			// Get the main collider to use its oriented bounds
 			Collider mainCollider = GetMainCollider();
@@ -301,8 +331,9 @@ namespace ItemConduit.Nodes
 				rotation = transform.rotation;
 			}
 
-			// Expand slightly for connection tolerance
-			halfExtents *= 1.1f; // 10% expansion for connection tolerance
+
+			Logger.LogWarning($"[DEBUG-OVERLAP] About to check overlaps for {name}");
+			Logger.LogWarning($"[DEBUG-OVERLAP] Center: {center}, HalfExtents: {halfExtents}, Rotation: {rotation.eulerAngles}");
 
 			// Perform ORIENTED overlap check (this properly handles rotation!)
 			Collider[] overlaps = Physics.OverlapBox(
@@ -312,19 +343,40 @@ namespace ItemConduit.Nodes
 				LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small")
 			);
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+
+			//if (ItemConduitMod.ShowDebugInfo.Value)
+			//{
+			//	Logger.LogInfo($"[ItemConduit] Found {overlaps.Length} overlapping colliders using OBB");
+			//	Logger.LogInfo($"[ItemConduit] Center: {center}, HalfExtents: {halfExtents}, Rotation: {rotation.eulerAngles}");
+			//	Logger.LogWarning($"[DEBUG-OVERLAP] Physics.OverlapBox returned {overlaps.Length} colliders");
+			//}
+
+			//int layerMask = LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small");
+			//Logger.LogWarning($"[DEBUG-OVERLAP] Layer mask value: {layerMask}");
+			//Logger.LogWarning($"[DEBUG-OVERLAP] Our node is on layer: {gameObject.layer} ({LayerMask.LayerToName(gameObject.layer)})");
+
+			//// Log each found overlap
+			//foreach (var col in overlaps)
+			//{
+			//	if (col != null)
+			//	{
+			//		Logger.LogWarning($"[DEBUG-OVERLAP] Found collider: {col.name} on layer {col.gameObject.layer} ({LayerMask.LayerToName(col.gameObject.layer)})");
+			//	}
+			//}
+
+			if (currentDetectionMode == DetectionMode.Full || currentDetectionMode == DetectionMode.ConnectionsOnly)
 			{
-				Logger.LogInfo($"[ItemConduit] Found {overlaps.Length} overlapping colliders using OBB");
-				Logger.LogInfo($"[ItemConduit] Center: {center}, HalfExtents: {halfExtents}, Rotation: {rotation.eulerAngles}");
+				// Process node connections
+				yield return StartCoroutine(ProcessNodeConnections(overlaps));
 			}
 
-			// Process node connections
-			yield return StartCoroutine(ProcessNodeConnections(overlaps));
-
-			// Process container connections (only Extract/Insert nodes)
-			if (CanConnectToContainers)
+			if (currentDetectionMode == DetectionMode.Full || currentDetectionMode == DetectionMode.ContainersOnly)
 			{
-				yield return StartCoroutine(ProcessContainerConnection(overlaps));
+				// Process container connections (only Extract/Insert nodes)
+				if (CanConnectToContainers)
+				{
+					yield return StartCoroutine(ProcessContainerConnection(overlaps));
+				}
 			}
 
 			// Update visual state
@@ -338,6 +390,7 @@ namespace ItemConduit.Nodes
 			}
 
 			isUpdatingDetection = false;
+			IsDetectionComplete = true;
 		}
 
 		private Collider GetMainCollider()
@@ -840,27 +893,27 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		private void CreateConnectionEffect(Vector3 point1, Vector3 point2)
 		{
-			if (!ItemConduitMod.EnableVisualEffects.Value) return;
+			//if (!ItemConduitMod.EnableVisualEffects.Value) return;
 
-			// Create a temporary particle effect or flash at the connection point
-			Vector3 connectionPoint = (point1 + point2) / 2f;
+			//// Create a temporary particle effect or flash at the connection point
+			//Vector3 connectionPoint = (point1 + point2) / 2f;
 
-			GameObject effect = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-			effect.name = "connection_flash";
-			effect.transform.position = connectionPoint;
-			effect.transform.localScale = Vector3.one * 0.3f;
+			//GameObject effect = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+			//effect.name = "connection_flash";
+			//effect.transform.position = connectionPoint;
+			//effect.transform.localScale = Vector3.one * 0.3f;
 
-			Destroy(effect.GetComponent<Collider>());
+			//Destroy(effect.GetComponent<Collider>());
 
-			var renderer = effect.GetComponent<Renderer>();
-			if (renderer != null)
-			{
-				renderer.material = new Material(Shader.Find("Sprites/Default"));
-				renderer.material.color = Color.yellow;
-			}
+			//var renderer = effect.GetComponent<Renderer>();
+			//if (renderer != null)
+			//{
+			//	renderer.material = new Material(Shader.Find("Sprites/Default"));
+			//	renderer.material.color = Color.yellow;
+			//}
 
-			// Destroy after a short time
-			Destroy(effect, 0.5f);
+			//// Destroy after a short time
+			//Destroy(effect, 0.5f);
 		}
 
 		/// <summary>
@@ -1073,6 +1126,9 @@ namespace ItemConduit.Nodes
 
 			boundsVisualizer = gameObject.AddComponent<BoundsVisualizer>();
 
+			snapVisualizer = gameObject.AddComponent<SnapConnectionVisualizer>();
+			snapVisualizer.Initialize(this);
+			UpdateSnapVisualization();
 			// Color based on node type for the collider wireframe
 			Color colliderColor = NodeType switch
 			{
@@ -1142,6 +1198,15 @@ namespace ItemConduit.Nodes
 
 			// Fallback
 			return new Bounds(Vector3.zero, new Vector3(0.3f, 0.3f, nodeLength));
+		}
+
+
+		public void UpdateSnapVisualization()
+		{
+			if (snapVisualizer != null)
+			{
+				snapVisualizer.UpdateConnections();
+			}
 		}
 		#endregion
 	}

@@ -1,5 +1,6 @@
-﻿using UnityEngine;
+﻿using ItemConduit.Nodes;
 using System.Collections.Generic;
+using UnityEngine;
 
 namespace ItemConduit.Debug
 {
@@ -153,6 +154,168 @@ namespace ItemConduit.Debug
 		{
 			if (colliderWireframe != null)
 				Destroy(colliderWireframe);
+		}
+	}
+
+	public class SnapConnectionVisualizer : MonoBehaviour
+	{
+		private List<GameObject> snapMarkers = new List<GameObject>();
+		private List<LineRenderer> connectionLines = new List<LineRenderer>();
+		private BaseNode node;
+
+		// Same threshold as in UnifiedDetectionCoroutine
+		private const float SNAP_CONNECTION_THRESHOLD = 0.2f;
+		private const float SNAP_DETECTION_RADIUS = 0.15f;
+
+		public void Initialize(BaseNode baseNode)
+		{
+			node = baseNode;
+			CreateSnapMarkers();
+		}
+
+		private void CreateSnapMarkers()
+		{
+			// Find all snappoints on this node
+			foreach (Transform child in transform)
+			{
+				if (child.tag == "snappoint")
+				{
+					// Create a visual marker for each snappoint
+					GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+					marker.name = $"SnapMarker_{child.name}";
+					marker.transform.SetParent(transform);
+					marker.transform.position = child.position;
+					marker.transform.localScale = Vector3.one * 0.1f;
+
+					// Remove collider
+					Destroy(marker.GetComponent<Collider>());
+
+					// Set material
+					MeshRenderer renderer = marker.GetComponent<MeshRenderer>();
+					renderer.material = new Material(Shader.Find("Sprites/Default"));
+					renderer.material.color = new Color(1f, 0.5f, 0f, 0.5f); // Orange, semi-transparent
+
+					snapMarkers.Add(marker);
+				}
+			}
+		}
+
+		public void UpdateConnections()
+		{
+			if (node == null || !node.IsValidPlacedNode()) return;
+
+			// Clear old connection lines
+			foreach (var line in connectionLines)
+			{
+				if (line != null) Destroy(line.gameObject);
+			}
+			connectionLines.Clear();
+
+			// Get our snappoints
+			var ourSnapPoints = GetSnapPoints();
+
+			foreach (var snapPoint in ourSnapPoints)
+			{
+				// Use same detection logic as UnifiedDetectionCoroutine
+				Collider[] snapOverlaps = Physics.OverlapSphere(
+					snapPoint.position,
+					SNAP_DETECTION_RADIUS,
+					LayerMask.GetMask("piece", "piece_nonsolid")
+				);
+
+				foreach (var col in snapOverlaps)
+				{
+					if (col == null || col.transform == transform) continue;
+
+					BaseNode otherNode = col.GetComponentInParent<BaseNode>();
+					if (otherNode != null && otherNode != node && !otherNode.isGhostPiece)
+					{
+						var otherSnaps = GetSnapPoints(otherNode.transform);
+						foreach (var otherSnap in otherSnaps)
+						{
+							float dist = Vector3.Distance(snapPoint.position, otherSnap.position);
+							if (dist < SNAP_CONNECTION_THRESHOLD)
+							{
+								// Create connection line
+								CreateConnectionLine(snapPoint.position, otherSnap.position, dist);
+								break; // Only show one connection per snappoint
+							}
+						}
+					}
+				}
+			}
+		}
+
+		private void CreateConnectionLine(Vector3 start, Vector3 end, float distance)
+		{
+			GameObject lineObj = new GameObject("SnapConnection");
+			lineObj.transform.SetParent(transform);
+
+			LineRenderer line = lineObj.AddComponent<LineRenderer>();
+			line.material = new Material(Shader.Find("Sprites/Default"));
+
+			// Color based on connection quality
+			if (distance < 0.01f)
+			{
+				line.startColor = line.endColor = Color.green; // Perfect snap
+			}
+			else if (distance < 0.1f)
+			{
+				line.startColor = line.endColor = Color.yellow; // Good snap
+			}
+			else
+			{
+				line.startColor = line.endColor = new Color(1f, 0.5f, 0f); // Marginal snap
+			}
+
+			line.startWidth = line.endWidth = 0.03f;
+			line.positionCount = 2;
+			line.SetPosition(0, start);
+			line.SetPosition(1, end);
+
+			connectionLines.Add(line);
+		}
+
+		private Transform[] GetSnapPoints(Transform target = null)
+		{
+			if (target == null) target = transform;
+
+			List<Transform> snapPoints = new List<Transform>();
+			foreach (Transform child in target)
+			{
+				if (child.tag == "snappoint")
+				{
+					snapPoints.Add(child);
+				}
+			}
+			snapPoints.Sort((a, b) => a.name.CompareTo(b.name));
+			return snapPoints.ToArray();
+		}
+
+		public void SetVisible(bool visible)
+		{
+			foreach (var marker in snapMarkers)
+			{
+				if (marker != null) marker.SetActive(visible);
+			}
+
+			foreach (var line in connectionLines)
+			{
+				if (line != null) line.gameObject.SetActive(visible);
+			}
+		}
+
+		private void OnDestroy()
+		{
+			foreach (var marker in snapMarkers)
+			{
+				if (marker != null) Destroy(marker);
+			}
+
+			foreach (var line in connectionLines)
+			{
+				if (line != null) Destroy(line.gameObject);
+			}
 		}
 	}
 }

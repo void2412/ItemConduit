@@ -427,9 +427,6 @@ namespace ItemConduit.Network
 				{
 					if (extractNode == null || !extractNode.IsActive) continue;
 
-					// Ensure container detection before getting the container
-					extractNode.EnsureContainerDetection();
-
 					Container sourceContainer = extractNode.GetTargetContainer();
 					if (sourceContainer == null) continue;
 
@@ -462,8 +459,6 @@ namespace ItemConduit.Network
 						// Try to insert into matching nodes
 						foreach (var insertNode in matchingInserts)
 						{
-							// Ensure container detection for the insert node
-							insertNode.EnsureContainerDetection();
 
 							if (insertNode.CanInsertItem(item))
 							{
