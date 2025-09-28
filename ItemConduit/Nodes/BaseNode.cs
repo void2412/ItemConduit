@@ -61,6 +61,8 @@ namespace ItemConduit.Nodes
 
 		private DetectionMode currentDetectionMode = DetectionMode.Full;
 
+		public delegate void DetectionCompleteHandler(BaseNode node);
+		public event DetectionCompleteHandler OnDetectionComplete;
 
 		#endregion
 
@@ -263,10 +265,32 @@ namespace ItemConduit.Nodes
 		{
 			if (isGhostPiece) return;
 
-			var stackTrace = new System.Diagnostics.StackTrace(true);
-			Logger.LogWarning($"[DEBUG] StartUnifiedDetection called from: {stackTrace.GetFrame(1)?.GetMethod()?.Name}");
+			// If already running, check if we need to upgrade the mode
+			if (isUpdatingDetection)
+			{
+				// If we're doing ContainersOnly but Full is requested, we should upgrade
+				if (currentDetectionMode == DetectionMode.ContainersOnly && mode == DetectionMode.Full)
+				{
+					Logger.LogWarning($"[DEBUG] Stopping ContainersOnly to upgrade to Full detection");
+					if (detectionCoroutine != null)
+					{
+						StopCoroutine(detectionCoroutine);
+						isUpdatingDetection = false;
+						IsDetectionComplete = true;
+					}
+				}
+				else
+				{
+					return; // Already running appropriate detection
+				}
+			}
 
-			Logger.LogWarning($"[DEBUG] StartUnifiedDetection called for {name} with mode: {mode}, already updating: {isUpdatingDetection}");
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{ 
+				var stackTrace = new System.Diagnostics.StackTrace(true);
+				Logger.LogWarning($"[DEBUG] StartUnifiedDetection called from: {stackTrace.GetFrame(1)?.GetMethod()?.Name}");
+				Logger.LogWarning($"[DEBUG] StartUnifiedDetection called for {name} with mode: {mode}, already updating: {isUpdatingDetection}");
+			}
 
 			// If we're already doing a full detection, don't interrupt
 			if (isUpdatingDetection && currentDetectionMode == DetectionMode.Full)
@@ -286,19 +310,24 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		private IEnumerator UnifiedDetectionCoroutine()
 		{
+			float startTime = Time.realtimeSinceStartup;
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Logger.LogWarning($"[TIMING] {name} - Detection started");
+			}
+
 			if (isUpdatingDetection) yield break;
 			isUpdatingDetection = true;
 			IsDetectionComplete = false;
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
-			{
-				Logger.LogWarning($"[DEBUG] UnifiedDetectionCoroutine STARTED for {name}");
-			}
-
 			// Small delay to let physics settle
-			Logger.LogWarning($"[DEBUG] About to wait 0.1s, Time.timeScale = {Time.timeScale}");
 			yield return new WaitForSeconds(0.1f);
 
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Logger.LogWarning($"[TIMING] {name} - After wait: {Time.realtimeSinceStartup - startTime:F3}s");
+			}
 		
 
 			// Get the main collider to use its oriented bounds
@@ -309,6 +338,8 @@ namespace ItemConduit.Nodes
 				isUpdatingDetection = false;
 				yield break;
 			}
+
+			
 
 			// Get local bounds and transform info from the collider
 			Vector3 center;
@@ -332,8 +363,6 @@ namespace ItemConduit.Nodes
 			}
 
 
-			Logger.LogWarning($"[DEBUG-OVERLAP] About to check overlaps for {name}");
-			Logger.LogWarning($"[DEBUG-OVERLAP] Center: {center}, HalfExtents: {halfExtents}, Rotation: {rotation.eulerAngles}");
 
 			// Perform ORIENTED overlap check (this properly handles rotation!)
 			Collider[] overlaps = Physics.OverlapBox(
@@ -343,26 +372,10 @@ namespace ItemConduit.Nodes
 				LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small")
 			);
 
-
-			//if (ItemConduitMod.ShowDebugInfo.Value)
-			//{
-			//	Logger.LogInfo($"[ItemConduit] Found {overlaps.Length} overlapping colliders using OBB");
-			//	Logger.LogInfo($"[ItemConduit] Center: {center}, HalfExtents: {halfExtents}, Rotation: {rotation.eulerAngles}");
-			//	Logger.LogWarning($"[DEBUG-OVERLAP] Physics.OverlapBox returned {overlaps.Length} colliders");
-			//}
-
-			//int layerMask = LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small");
-			//Logger.LogWarning($"[DEBUG-OVERLAP] Layer mask value: {layerMask}");
-			//Logger.LogWarning($"[DEBUG-OVERLAP] Our node is on layer: {gameObject.layer} ({LayerMask.LayerToName(gameObject.layer)})");
-
-			//// Log each found overlap
-			//foreach (var col in overlaps)
-			//{
-			//	if (col != null)
-			//	{
-			//		Logger.LogWarning($"[DEBUG-OVERLAP] Found collider: {col.name} on layer {col.gameObject.layer} ({LayerMask.LayerToName(col.gameObject.layer)})");
-			//	}
-			//}
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Logger.LogWarning($"[TIMING] {name} - After physics: {Time.realtimeSinceStartup - startTime:F3}s, found {overlaps.Length} overlaps");
+			}
 
 			if (currentDetectionMode == DetectionMode.Full || currentDetectionMode == DetectionMode.ConnectionsOnly)
 			{
@@ -391,6 +404,12 @@ namespace ItemConduit.Nodes
 
 			isUpdatingDetection = false;
 			IsDetectionComplete = true;
+			OnDetectionComplete?.Invoke(this);
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Logger.LogWarning($"[TIMING] {name} - Detection complete: {Time.realtimeSinceStartup - startTime:F3}s");
+			}
 		}
 
 		private Collider GetMainCollider()
@@ -522,19 +541,125 @@ namespace ItemConduit.Nodes
 
 		private bool CheckOrientedBoundsOverlap(BaseNode otherNode)
 		{
-			// Simple distance check as approximation
-			// For true OBB-OBB intersection, you'd need a more complex algorithm
-
 			Collider myCollider = GetMainCollider();
 			Collider otherCollider = otherNode.GetMainCollider();
 
-			if (myCollider != null && otherCollider != null)
+			if (myCollider == null || otherCollider == null) return false;
+
+			// Get OBB parameters for both nodes
+			OBB myOBB = GetOBB(myCollider);
+			OBB otherOBB = GetOBB(otherCollider);
+
+			return TestOBBOverlap(myOBB, otherOBB);
+		}
+
+		private struct OBB
+		{
+			public Vector3 center;
+			public Vector3 halfExtents;
+			public Quaternion rotation;
+		}
+
+		private OBB GetOBB(Collider collider)
+		{
+			OBB obb = new OBB();
+
+			if (collider is BoxCollider boxCollider)
 			{
-				// Use Unity's built-in bounds check which handles rotation
-				return myCollider.bounds.Intersects(otherCollider.bounds);
+				obb.center = collider.transform.TransformPoint(boxCollider.center);
+				obb.halfExtents = Vector3.Scale(boxCollider.size * 0.5f, collider.transform.lossyScale);
+				obb.rotation = collider.transform.rotation;
+			}
+			else
+			{
+				// Approximate other collider types with their bounds
+				Bounds localBounds = GetColliderLocalBounds(collider);
+				obb.center = collider.transform.TransformPoint(localBounds.center);
+				obb.halfExtents = Vector3.Scale(localBounds.extents, collider.transform.lossyScale);
+				obb.rotation = collider.transform.rotation;
 			}
 
-			return false;
+			return obb;
+		}
+
+		private bool TestOBBOverlap(OBB a, OBB b)
+		{
+			// Get rotation matrices
+			Matrix4x4 matA = Matrix4x4.Rotate(a.rotation);
+			Matrix4x4 matB = Matrix4x4.Rotate(b.rotation);
+
+			// Get axes for both OBBs (3 axes each)
+			Vector3[] axesA = new Vector3[3];
+			Vector3[] axesB = new Vector3[3];
+
+			axesA[0] = matA.GetColumn(0).normalized;
+			axesA[1] = matA.GetColumn(1).normalized;
+			axesA[2] = matA.GetColumn(2).normalized;
+
+			axesB[0] = matB.GetColumn(0).normalized;
+			axesB[1] = matB.GetColumn(1).normalized;
+			axesB[2] = matB.GetColumn(2).normalized;
+
+			// Test 15 potential separating axes
+			Vector3[] testAxes = new Vector3[15];
+
+			// Face normals of A
+			testAxes[0] = axesA[0];
+			testAxes[1] = axesA[1];
+			testAxes[2] = axesA[2];
+
+			// Face normals of B
+			testAxes[3] = axesB[0];
+			testAxes[4] = axesB[1];
+			testAxes[5] = axesB[2];
+
+			// Cross products of edges
+			int index = 6;
+			for (int i = 0; i < 3; i++)
+			{
+				for (int j = 0; j < 3; j++)
+				{
+					testAxes[index++] = Vector3.Cross(axesA[i], axesB[j]).normalized;
+				}
+			}
+
+			// Test each axis
+			Vector3 distance = b.center - a.center;
+
+			foreach (Vector3 axis in testAxes)
+			{
+				if (axis.sqrMagnitude < 0.0001f) continue; // Skip degenerate axes
+
+				// Project both OBBs onto the axis
+				float projA = ProjectOBB(a, axis);
+				float projB = ProjectOBB(b, axis);
+
+				// Project distance between centers
+				float projDistance = Mathf.Abs(Vector3.Dot(distance, axis));
+
+				// Check for separation
+				if (projDistance > projA + projB)
+				{
+					return false; // Found a separating axis
+				}
+			}
+
+			return true; // No separating axis found, boxes overlap
+		}
+
+		private float ProjectOBB(OBB obb, Vector3 axis)
+		{
+			Matrix4x4 mat = Matrix4x4.Rotate(obb.rotation);
+
+			Vector3 xAxis = mat.GetColumn(0).normalized;
+			Vector3 yAxis = mat.GetColumn(1).normalized;
+			Vector3 zAxis = mat.GetColumn(2).normalized;
+
+			float projX = Mathf.Abs(Vector3.Dot(axis, xAxis)) * obb.halfExtents.x;
+			float projY = Mathf.Abs(Vector3.Dot(axis, yAxis)) * obb.halfExtents.y;
+			float projZ = Mathf.Abs(Vector3.Dot(axis, zAxis)) * obb.halfExtents.z;
+
+			return projX + projY + projZ;
 		}
 
 		/// <summary>
@@ -542,6 +667,7 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		protected virtual IEnumerator ProcessContainerConnection(Collider[] overlaps)
 		{
+			
 			Container bestContainer = null;
 			float closestDistance = float.MaxValue;
 

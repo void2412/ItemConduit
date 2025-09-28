@@ -73,6 +73,7 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		protected override IEnumerator ProcessContainerConnection(Collider[] overlaps)
 		{
+
 			// Use base class helper to find best container
 			targetContainer = FindBestOverlappingContainer(overlaps);
 

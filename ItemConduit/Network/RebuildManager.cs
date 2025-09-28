@@ -390,89 +390,62 @@ namespace ItemConduit.Network
 		{
 			List<BaseNode> nodeList = nodes.ToList();
 			int totalNodes = nodeList.Count;
-			int batchSize = Mathf.Min(CONNECTIONS_PER_FRAME, totalNodes);
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			// Track completion with a HashSet
+			HashSet<BaseNode> pendingNodes = new HashSet<BaseNode>();
+
+			for (int i = 0; i < totalNodes; i += CONNECTIONS_PER_FRAME)
 			{
-				Logger.LogInfo($"[ItemConduit] Starting batched connection update for {totalNodes} nodes");
-			}
+				int endIndex = Mathf.Min(i + CONNECTIONS_PER_FRAME, totalNodes);
 
-			for (int i = 0; i < totalNodes; i += batchSize)
-			{
-				float frameStart = Time.realtimeSinceStartup;
-				int endIndex = Mathf.Min(i + batchSize, totalNodes);
-
-				// Process batch
+				// Subscribe to completion events
 				for (int j = i; j < endIndex; j++)
 				{
 					BaseNode node = nodeList[j];
 					if (node != null && node.IsValidPlacedNode())
 					{
-						// Start connection detection (uses physics-based approach)
+						pendingNodes.Add(node);
+
+						// Subscribe to completion
+						void CompletionHandler(BaseNode completedNode)
+						{
+							pendingNodes.Remove(completedNode);
+							completedNode.OnDetectionComplete -= CompletionHandler;
+						}
+
+						node.OnDetectionComplete += CompletionHandler;
 						node.StartConnectionDetection();
 					}
 				}
 
-				bool allComplete = false;
-				float timeout = Time.realtimeSinceStartup + 2f; // 2 second timeout
-				while (!allComplete && Time.realtimeSinceStartup < timeout)
-				{
-					allComplete = true;
-					for (int j = i; j < endIndex; j++)
-					{
-						BaseNode node = nodeList[j];
-						if (node != null && !node.IsDetectionComplete)
-						{
-							allComplete = false;
-							break;
-						}
-					}
-					yield return null; // Wait a frame
-				}
+				// Wait for completion or timeout
+				float batchTimeout = Time.realtimeSinceStartup + 5f; // Generous timeout
 
-				if (Time.realtimeSinceStartup >= timeout)
+				while (pendingNodes.Count > 0 && Time.realtimeSinceStartup < batchTimeout)
 				{
-					Logger.LogError($"[ItemConduit] Detection timeout! Some nodes didn't complete");
-					for (int j = i; j < endIndex; j++)
+					yield return null; // Keep yielding frames
+
+					// Optional: Remove nodes that are taking too long
+					if (Time.frameCount % 60 == 0) // Check every second
 					{
-						BaseNode node = nodeList[j];
-						if (node != null && !node.IsDetectionComplete)
+						var stuckNodes = pendingNodes.Where(n => n != null).ToList();
+						foreach (var stuck in stuckNodes)
 						{
-							Logger.LogError($"[ItemConduit]   {node.name} still detecting");
+							Logger.LogWarning($"[ItemConduit] Node {stuck.name} detection taking long...");
 						}
 					}
 				}
-				else
+
+				// Handle any remaining timeouts
+				if (pendingNodes.Count > 0)
 				{
-					Logger.LogInfo($"[ItemConduit] All nodes in batch completed detection");
+					foreach (var stuck in pendingNodes)
+					{
+						Logger.LogError($"[ItemConduit] Force completing: {stuck.name}");
+						stuck.OnDetectionComplete -= null; // Cleanup
+					}
+					pendingNodes.Clear();
 				}
-
-				// Wait for physics to update
-				yield return new WaitForFixedUpdate();
-
-				// Small delay between batches to let connections settle
-				yield return new WaitForSeconds(CONNECTION_BATCH_DELAY);
-
-				// Check if we're taking too long this frame
-				float frameTime = (Time.realtimeSinceStartup - frameStart) * 1000f;
-				if (frameTime > MAX_MS_PER_FRAME)
-				{
-					// Give an extra frame if we're running slow
-					yield return null;
-				}
-
-				if (ItemConduitMod.ShowDebugInfo.Value && (i % 10 == 0 || endIndex >= totalNodes))
-				{
-					Logger.LogInfo($"[ItemConduit] Connection update progress: {endIndex}/{totalNodes}");
-				}
-			}
-
-			// Wait a bit for all connections to finalize
-			yield return new WaitForSeconds(0.2f);
-
-			if (ItemConduitMod.ShowDebugInfo.Value)
-			{
-				Logger.LogInfo($"[ItemConduit] Batched connection update complete");
 			}
 		}
 
