@@ -44,7 +44,7 @@ namespace ItemConduit.Nodes
 		protected Piece piece;
 
 		/// <summary>Flag to prevent multiple detection updates</summary>
-		private bool isUpdatingDetection = false;
+		protected bool isUpdatingDetection = false;
 
 		/// <summary>Coroutine reference for unified detection</summary>
 		private Coroutine detectionCoroutine;
@@ -241,6 +241,8 @@ namespace ItemConduit.Nodes
 		{
 			if (isGhostPiece) return;
 
+			Logger.LogWarning($"[DEBUG] StartUnifiedDetection called for {name}, already updating: {isUpdatingDetection}");
+
 			if (detectionCoroutine != null)
 			{
 				StopCoroutine(detectionCoroutine);
@@ -256,8 +258,10 @@ namespace ItemConduit.Nodes
 			if (isUpdatingDetection) yield break;
 			isUpdatingDetection = true;
 
+
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{
+				Logger.LogWarning($"[DEBUG] UnifiedDetectionCoroutine STARTED for {name}");
 				Logger.LogInfo($"[ItemConduit] Starting unified detection for {name} (Type: {NodeType})");
 			}
 
@@ -300,6 +304,8 @@ namespace ItemConduit.Nodes
 			}
 
 			isUpdatingDetection = false;
+
+			Logger.LogWarning($"[DEBUG] UnifiedDetectionCoroutine ENDED for {name}");
 		}
 
 		/// <summary>

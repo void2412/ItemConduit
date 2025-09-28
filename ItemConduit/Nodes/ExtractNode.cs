@@ -107,12 +107,18 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		public override Container GetTargetContainer()
 		{
-			// If we don't have a container, try to find one
-			if (targetContainer == null && IsValidPlacedNode())
+			return targetContainer;
+		}
+
+		/// <summary>
+		/// Ensures container detection has been attempted
+		/// </summary>
+		public void EnsureContainerDetection()
+		{
+			if (targetContainer == null && IsValidPlacedNode() && !isUpdatingDetection)
 			{
 				StartUnifiedDetection();
 			}
-			return targetContainer;
 		}
 
 		#endregion
