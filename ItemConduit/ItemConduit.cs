@@ -310,7 +310,7 @@ namespace ItemConduit.Core
 					// Determine which axis is the length axis (usually Z for beams)
 					// Keep width and height the same, adjust length
 					// X is the length axis
-					boxCollider.size = new Vector3(length, originalSize.y, originalSize.z);
+					boxCollider.size = new Vector3(originalSize.x, originalSize.y, originalSize.z);
 
 					Logger.LogInfo($"[ItemConduit] Adjusted {prefabName} BoxCollider size from {originalSize} to {boxCollider.size}");
 				}
