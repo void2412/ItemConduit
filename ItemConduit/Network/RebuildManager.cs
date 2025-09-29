@@ -324,22 +324,6 @@ namespace ItemConduit.Network
 					}
 				}
 
-				// Also find nearby nodes using physics (more efficient than FindObjectsOfType)
-				float searchRadius = node.NodeLength + ItemConduitMod.ConnectionRange.Value + 2f;
-				Collider[] nearbyColliders = Physics.OverlapSphere(
-					node.transform.position,
-					searchRadius,
-					LayerMask.GetMask("piece", "piece_nonsolid")
-				);
-
-				foreach (var col in nearbyColliders)
-				{
-					BaseNode nearbyNode = col.GetComponentInParent<BaseNode>();
-					if (nearbyNode != null && nearbyNode.IsValidPlacedNode())
-					{
-						affectedNodes.Add(nearbyNode);
-					}
-				}
 			}
 
 			nodesBeingProcessed = new HashSet<BaseNode>(affectedNodes);
