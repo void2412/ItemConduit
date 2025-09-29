@@ -173,6 +173,8 @@ namespace ItemConduit.Patches
 
 					// Don't request initial rebuild - let nodes register themselves
 					Logger.LogInfo("[ItemConduit] Network manager initialized on server start");
+
+					ContainerWireframeManager.Instance.InitializeExistingContainers();
 				}
 			}
 		}
@@ -234,6 +236,18 @@ namespace ItemConduit.Patches
 						ItemConduitMod.ShowDebugInfo.Value = !ItemConduitMod.ShowDebugInfo.Value;
 						UpdateAllNodeVisualizations();
 						args.Context.AddString($"Debug visualization: {(ItemConduitMod.ShowDebugInfo.Value ? "ON" : "OFF")}");
+					}
+				);
+
+				Terminal.ConsoleCommand wireframeCmd = new Terminal.ConsoleCommand(
+					"container_wireframe",
+					"Toggle container wireframe visualization",
+					delegate (Terminal.ConsoleEventArgs args)
+					{
+						bool currentState = true; // You can track this state
+						currentState = !currentState;
+						ContainerWireframeManager.Instance.SetWireframesVisible(currentState);
+						args.Context.AddString($"Container wireframes: {(currentState ? "ON" : "OFF")}");
 					}
 				);
 			}

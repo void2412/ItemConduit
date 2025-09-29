@@ -1,6 +1,8 @@
-﻿using ItemConduit.Nodes;
+﻿using ItemConduit.Core;
+using ItemConduit.Nodes;
 using System.Collections.Generic;
 using UnityEngine;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Debug
 {
@@ -318,153 +320,406 @@ namespace ItemConduit.Debug
 		}
 	}
 
-	public class ContainerVisualizer : MonoBehaviour
+	// <summary>
+	/// Manages wireframe visualization for all containers
+	/// Independent of node system, always visible
+	/// </summary>
+	public class ContainerWireframeManager : MonoBehaviour
 	{
-		private List<LineRenderer> wireframeLines = new List<LineRenderer>();
-		private GameObject wireframeParent;
-		private Collider containerCollider;
-
-		// High contrast magenta color
-		private static readonly Color CONTAINER_COLOR = new Color(1f, 0f, 1f, 1f); // Full magenta
-		private static readonly Color CONTAINER_COLOR_GLOW = new Color(1f, 0f, 1f, 0.8f); // Slightly transparent for glow effect
-		private const float LINE_WIDTH = 0.035f; // Slightly thicker for visibility
-
-		public void Initialize(Collider collider)
+		private static ContainerWireframeManager _instance;
+		public static ContainerWireframeManager Instance
 		{
-			containerCollider = collider;
+			get
+			{
+				if (_instance == null)
+				{
+					GameObject go = new GameObject("ItemConduit_ContainerWireframes");
+					_instance = go.AddComponent<ContainerWireframeManager>();
+					DontDestroyOnLoad(go);
+				}
+				return _instance;
+			}
+		}
+
+		private Dictionary<Container, ContainerWireframe> wireframes = new Dictionary<Container, ContainerWireframe>();
+		private bool isEnabled = true;
+
+		public void RegisterContainer(Container container)
+		{
+			if (container == null || wireframes.ContainsKey(container)) return;
+
+			// Create wireframe component on the container
+			var wireframe = container.gameObject.AddComponent<ContainerWireframe>();
+			wireframe.Initialize();
+			wireframes[container] = wireframe;
+
+			if (ItemConduitMod.ShowDebugInfo.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] Added wireframe to container: {container.m_name}");
+			}
+		}
+
+		public void UnregisterContainer(Container container)
+		{
+			if (container == null || !wireframes.ContainsKey(container)) return;
+
+			if (wireframes[container] != null)
+			{
+				Destroy(wireframes[container]);
+			}
+			wireframes.Remove(container);
+		}
+
+		public void SetWireframesVisible(bool visible)
+		{
+			isEnabled = visible;
+			foreach (var wireframe in wireframes.Values)
+			{
+				if (wireframe != null)
+				{
+					wireframe.SetVisible(visible);
+				}
+			}
+		}
+
+		private void OnDestroy()
+		{
+			foreach (var wireframe in wireframes.Values)
+			{
+				if (wireframe != null)
+				{
+					Destroy(wireframe);
+				}
+			}
+			wireframes.Clear();
+		}
+
+		public void InitializeExistingContainers()
+		{
+			// Find all existing containers in the world
+			Container[] existingContainers = UnityEngine.Object.FindObjectsOfType<Container>();
+			foreach (var container in existingContainers)
+			{
+				RegisterContainer(container);
+			}
+
+			Logger.LogInfo($"[ItemConduit] Initialized wireframes for {existingContainers.Length} existing containers");
+		}
+	}
+
+	/// <summary>
+	/// Component that renders wireframe for a single container
+	/// </summary>
+	public class ContainerWireframe : MonoBehaviour
+	{
+		private List<LineRenderer> lines = new List<LineRenderer>();
+		private GameObject wireframeRoot;
+		private Collider targetCollider;
+
+		// High contrast magenta
+		private static readonly Color WIREFRAME_COLOR = new Color(1f, 0f, 1f, 1f);
+		private static readonly Color WIREFRAME_EMISSION = new Color(1f, 0f, 1f, 0.5f);
+		private const float LINE_WIDTH = 0.04f;
+
+		public void Initialize()
+		{
+			DebugColliders();
 			CreateWireframe();
+			UpdateWireframe();
+			DebugTransformHierarchy();
 		}
 
 		private void CreateWireframe()
 		{
-			wireframeParent = new GameObject("ContainerWireframe");
-			wireframeParent.transform.SetParent(transform);
-			wireframeParent.transform.localPosition = Vector3.zero;
-			wireframeParent.transform.localRotation = Quaternion.identity;
+			wireframeRoot = new GameObject("ContainerWireframe");
+			wireframeRoot.transform.SetParent(transform);
+			wireframeRoot.transform.localPosition = Vector3.zero;
+			wireframeRoot.transform.localRotation = Quaternion.identity;
+
+			// Get ONLY the collider on the container GameObject itself, not children
+			targetCollider = GetComponent<Collider>();
+
+			if (targetCollider == null)
+			{
+				// Try to find a non-trigger collider in children
+				Collider[] colliders = GetComponentsInChildren<Collider>();
+				foreach (var col in colliders)
+				{
+					if (!col.isTrigger)
+					{
+						targetCollider = col;
+						Logger.LogInfo($"[ItemConduit] Using collider from child: {col.name}");
+						break;
+					}
+				}
+			}
+
+			if (targetCollider == null)
+			{
+				Logger.LogWarning($"[ItemConduit] No suitable collider found on container {name}");
+				return;
+			}
+
+			Logger.LogInfo($"[ItemConduit] Using collider: {targetCollider.name}, Type: {targetCollider.GetType().Name}");
+
+			// Get a reference material from the game
+			Material baseMaterial = GetBaseMaterial();
 
 			// Create 12 edges for box wireframe
 			for (int i = 0; i < 12; i++)
 			{
-				GameObject edge = new GameObject($"ContainerEdge_{i}");
-				edge.transform.SetParent(wireframeParent.transform);
+				GameObject lineObj = new GameObject($"Edge_{i}");
+				lineObj.transform.SetParent(wireframeRoot.transform);
 
-				LineRenderer lr = edge.AddComponent<LineRenderer>();
+				LineRenderer lr = lineObj.AddComponent<LineRenderer>();
 
-				// Use unlit shader for better visibility
-				lr.material = new Material(Shader.Find("Unlit/Color"));
-				lr.material.color = CONTAINER_COLOR;
-				lr.material.EnableKeyword("_EMISSION");
-				lr.material.SetColor("_EmissionColor", CONTAINER_COLOR_GLOW);
+				Material mat = new Material(baseMaterial);
+				mat.color = WIREFRAME_COLOR;
 
-				lr.startColor = CONTAINER_COLOR;
-				lr.endColor = CONTAINER_COLOR;
+				if (mat.HasProperty("_EmissionColor"))
+				{
+					mat.EnableKeyword("_EMISSION");
+					mat.SetColor("_EmissionColor", WIREFRAME_EMISSION);
+				}
+
+				lr.material = mat;
+				lr.startColor = WIREFRAME_COLOR;
+				lr.endColor = WIREFRAME_COLOR;
 				lr.startWidth = LINE_WIDTH;
 				lr.endWidth = LINE_WIDTH;
 				lr.useWorldSpace = true;
 				lr.positionCount = 2;
-
-				// Add slight shadow/outline for contrast
 				lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 				lr.receiveShadows = false;
+				lr.sortingOrder = 100;
 
-				wireframeLines.Add(lr);
+				lines.Add(lr);
 			}
 
-			UpdateWireframe();
+			// Add corner spheres for extra visibility
+			AddCornerMarkers();
+		}
+
+		private void DebugColliders()
+		{
+			Collider[] allColliders = GetComponentsInChildren<Collider>();
+			Logger.LogInfo($"[ItemConduit] Container {name} has {allColliders.Length} colliders:");
+
+			foreach (var col in allColliders)
+			{
+				string type = col.GetType().Name;
+				bool isTrigger = col.isTrigger;
+				Bounds bounds = col.bounds;
+				Logger.LogInfo($"  - {col.name}: {type}, Trigger: {isTrigger}, Size: {bounds.size}");
+			}
+		}
+
+		private Material GetBaseMaterial()
+		{
+			// Try different shader options that should exist in Valheim
+			Shader shader = Shader.Find("Sprites/Default");
+
+			if (shader == null)
+				shader = Shader.Find("Standard");
+
+			if (shader == null)
+				shader = Shader.Find("Unlit/Transparent");
+
+			if (shader == null)
+				shader = Shader.Find("Legacy Shaders/Diffuse");
+
+			if (shader == null)
+			{
+				// Last resort: try to get shader from an existing renderer
+				MeshRenderer existingRenderer = FindObjectOfType<MeshRenderer>();
+				if (existingRenderer != null && existingRenderer.sharedMaterial != null)
+				{
+					return new Material(existingRenderer.sharedMaterial);
+				}
+
+				// Absolute fallback
+				Logger.LogError("[ItemConduit] Could not find any shader for wireframe!");
+				return new Material(Shader.Find("Hidden/InternalErrorShader"));
+			}
+
+			return new Material(shader);
+		}
+
+		private void AddCornerMarkers()
+		{
+			Material baseMaterial = GetBaseMaterial();
+
+			for (int i = 0; i < 8; i++)
+			{
+				GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+				marker.name = $"Corner_{i}";
+				marker.transform.SetParent(wireframeRoot.transform);
+				marker.transform.localScale = Vector3.one * 0.1f;
+
+				Destroy(marker.GetComponent<Collider>());
+
+				MeshRenderer renderer = marker.GetComponent<MeshRenderer>();
+				Material mat = new Material(baseMaterial);
+				mat.color = WIREFRAME_COLOR;
+
+				if (mat.HasProperty("_EmissionColor"))
+				{
+					mat.EnableKeyword("_EMISSION");
+					mat.SetColor("_EmissionColor", WIREFRAME_COLOR * 1.5f);
+				}
+
+				renderer.material = mat;
+				renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+			}
 		}
 
 		private void UpdateWireframe()
 		{
-			if (containerCollider == null || wireframeLines.Count < 12) return;
+			if (targetCollider == null || wireframeRoot == null) return;
 
-			Vector3[] corners = GetOBBCorners(containerCollider);
-
-			// Bottom face edges
-			wireframeLines[0].SetPositions(new Vector3[] { corners[0], corners[1] });
-			wireframeLines[1].SetPositions(new Vector3[] { corners[1], corners[2] });
-			wireframeLines[2].SetPositions(new Vector3[] { corners[2], corners[3] });
-			wireframeLines[3].SetPositions(new Vector3[] { corners[3], corners[0] });
-
-			// Top face edges
-			wireframeLines[4].SetPositions(new Vector3[] { corners[4], corners[5] });
-			wireframeLines[5].SetPositions(new Vector3[] { corners[5], corners[6] });
-			wireframeLines[6].SetPositions(new Vector3[] { corners[6], corners[7] });
-			wireframeLines[7].SetPositions(new Vector3[] { corners[7], corners[4] });
-
-			// Vertical edges
-			wireframeLines[8].SetPositions(new Vector3[] { corners[0], corners[4] });
-			wireframeLines[9].SetPositions(new Vector3[] { corners[1], corners[5] });
-			wireframeLines[10].SetPositions(new Vector3[] { corners[2], corners[6] });
-			wireframeLines[11].SetPositions(new Vector3[] { corners[3], corners[7] });
-
-			// Add corner highlights for better visibility
-			AddCornerHighlights(corners);
-		}
-
-		private void AddCornerHighlights(Vector3[] corners)
-		{
-			// Optional: Add small spheres at corners for better visibility
-			foreach (var corner in corners)
+			// Debug: Compare different bounds
+			if (targetCollider is MeshCollider meshCol)
 			{
-				GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-				sphere.name = "CornerHighlight";
-				sphere.transform.position = corner;
-				sphere.transform.localScale = Vector3.one * 0.08f;
-				sphere.transform.SetParent(wireframeParent.transform);
+				Logger.LogWarning($"[DEBUG] MeshCollider bounds comparison for {name}:");
+				Logger.LogWarning($"  - collider.bounds: {meshCol.bounds.size}");
+				Logger.LogWarning($"  - sharedMesh.bounds: {meshCol.sharedMesh.bounds.size}");
+				Logger.LogWarning($"  - Actual position: {meshCol.transform.position}");
+			}
 
-				Destroy(sphere.GetComponent<Collider>());
+			Vector3[] corners = GetColliderCorners(targetCollider);
 
-				MeshRenderer renderer = sphere.GetComponent<MeshRenderer>();
-				renderer.material = new Material(Shader.Find("Unlit/Color"));
-				renderer.material.color = CONTAINER_COLOR;
-				renderer.material.EnableKeyword("_EMISSION");
-				renderer.material.SetColor("_EmissionColor", CONTAINER_COLOR * 1.5f);
+			//Collider collider = GetComponent<Collider>() ?? GetComponentInChildren<Collider>();
+			//if (collider == null) return;
+
+			//Vector3[] corners = GetColliderCorners(collider);
+
+			// Update line positions
+			if (lines.Count >= 12)
+			{
+				// Bottom face
+				lines[0].SetPositions(new Vector3[] { corners[0], corners[1] });
+				lines[1].SetPositions(new Vector3[] { corners[1], corners[2] });
+				lines[2].SetPositions(new Vector3[] { corners[2], corners[3] });
+				lines[3].SetPositions(new Vector3[] { corners[3], corners[0] });
+
+				// Top face
+				lines[4].SetPositions(new Vector3[] { corners[4], corners[5] });
+				lines[5].SetPositions(new Vector3[] { corners[5], corners[6] });
+				lines[6].SetPositions(new Vector3[] { corners[6], corners[7] });
+				lines[7].SetPositions(new Vector3[] { corners[7], corners[4] });
+
+				// Vertical edges
+				lines[8].SetPositions(new Vector3[] { corners[0], corners[4] });
+				lines[9].SetPositions(new Vector3[] { corners[1], corners[5] });
+				lines[10].SetPositions(new Vector3[] { corners[2], corners[6] });
+				lines[11].SetPositions(new Vector3[] { corners[3], corners[7] });
+			}
+
+			// Update corner positions
+			int cornerIndex = 0;
+			foreach (Transform child in wireframeRoot.transform)
+			{
+				if (child.name.StartsWith("Corner_") && cornerIndex < 8)
+				{
+					child.position = corners[cornerIndex];
+					cornerIndex++;
+				}
+			}
+		}
+		private void DebugTransformHierarchy()
+		{
+			Logger.LogWarning($"[DEBUG] Transform hierarchy for {name}:");
+			Logger.LogWarning($"  Container position: {transform.position}");
+			Logger.LogWarning($"  Container rotation: {transform.rotation.eulerAngles}");
+
+			if (targetCollider != null)
+			{
+				Logger.LogWarning($"  Collider on: {targetCollider.gameObject.name}");
+				Logger.LogWarning($"  Collider local position: {targetCollider.transform.localPosition}");
+				Logger.LogWarning($"  Collider local rotation: {targetCollider.transform.localRotation.eulerAngles}");
+				Logger.LogWarning($"  Collider world position: {targetCollider.transform.position}");
+
+				if (targetCollider is MeshCollider mc && mc.sharedMesh != null)
+				{
+					Logger.LogWarning($"  Mesh bounds center: {mc.sharedMesh.bounds.center}");
+					Logger.LogWarning($"  Mesh bounds size: {mc.sharedMesh.bounds.size}");
+				}
 			}
 		}
 
-		private Vector3[] GetOBBCorners(Collider collider)
+		private Vector3[] GetColliderCorners(Collider collider)
 		{
-			Bounds localBounds;
 			Vector3[] worldCorners = new Vector3[8];
 
-			if (collider is BoxCollider boxCollider)
+			if (collider is BoxCollider box)
 			{
-				Vector3 center = boxCollider.center;
-				Vector3 size = boxCollider.size;
-				localBounds = new Bounds(center, size);
+				// Get local corners of the box collider
+				Vector3 center = box.center;
+				Vector3 size = box.size;
+
+				Vector3[] localCorners = new Vector3[]
+				{
+					center + new Vector3(-size.x, -size.y, -size.z) * 0.5f,
+					center + new Vector3(size.x, -size.y, -size.z) * 0.5f,
+					center + new Vector3(size.x, -size.y, size.z) * 0.5f,
+					center + new Vector3(-size.x, -size.y, size.z) * 0.5f,
+					center + new Vector3(-size.x, size.y, -size.z) * 0.5f,
+					center + new Vector3(size.x, size.y, -size.z) * 0.5f,
+					center + new Vector3(size.x, size.y, size.z) * 0.5f,
+					center + new Vector3(-size.x, size.y, size.z) * 0.5f
+				};
+
+				// Transform to world space using the collider's transform
+				for (int i = 0; i < 8; i++)
+				{
+					worldCorners[i] = collider.transform.TransformPoint(localCorners[i]);
+				}
 			}
-			else if (collider is MeshCollider meshCollider && meshCollider.sharedMesh != null)
+			else if (collider is MeshCollider meshCollider)
 			{
-				localBounds = meshCollider.sharedMesh.bounds;
+				if (meshCollider.sharedMesh != null)
+				{
+					// Get the mesh bounds (in local space of the mesh)
+					Bounds meshBounds = meshCollider.sharedMesh.bounds;
+
+					// The mesh might have its pivot offset from center
+					Vector3 meshCenter = meshBounds.center;
+					Vector3 meshSize = meshBounds.size;
+
+					// Create corners around the actual mesh center
+					Vector3[] localCorners = new Vector3[8];
+					for (int i = 0; i < 8; i++)
+					{
+						localCorners[i] = meshCenter + new Vector3(
+							((i & 1) == 0 ? -1 : 1) * meshSize.x * 0.5f,
+							((i & 2) == 0 ? -1 : 1) * meshSize.y * 0.5f,
+							((i & 4) == 0 ? -1 : 1) * meshSize.z * 0.5f
+						);
+					}
+
+					// Transform to world space using the collider's transform
+					Transform colliderTransform = collider.transform;
+					for (int i = 0; i < 8; i++)
+					{
+						worldCorners[i] = colliderTransform.TransformPoint(localCorners[i]);
+					}
+				}
 			}
 			else
 			{
-				// Fallback to world bounds converted to local
-				Bounds worldBounds = collider.bounds;
-				Vector3 localCenter = collider.transform.InverseTransformPoint(worldBounds.center);
-				Vector3 localSize = collider.transform.InverseTransformVector(worldBounds.size);
-				localBounds = new Bounds(localCenter, localSize);
-			}
+				// Fallback for other collider types
+				Bounds bounds = collider.bounds;
+				Vector3 min = bounds.min;
+				Vector3 max = bounds.max;
 
-			Vector3 min = localBounds.min;
-			Vector3 max = localBounds.max;
-
-			Vector3[] localCorners = new Vector3[]
-			{
-			new Vector3(min.x, min.y, min.z),
-			new Vector3(max.x, min.y, min.z),
-			new Vector3(max.x, min.y, max.z),
-			new Vector3(min.x, min.y, max.z),
-			new Vector3(min.x, max.y, min.z),
-			new Vector3(max.x, max.y, min.z),
-			new Vector3(max.x, max.y, max.z),
-			new Vector3(min.x, max.y, max.z)
-			};
-
-			// Transform to world space
-			for (int i = 0; i < 8; i++)
-			{
-				worldCorners[i] = collider.transform.TransformPoint(localCorners[i]);
+				worldCorners[0] = new Vector3(min.x, min.y, min.z);
+				worldCorners[1] = new Vector3(max.x, min.y, min.z);
+				worldCorners[2] = new Vector3(max.x, min.y, max.z);
+				worldCorners[3] = new Vector3(min.x, min.y, max.z);
+				worldCorners[4] = new Vector3(min.x, max.y, min.z);
+				worldCorners[5] = new Vector3(max.x, max.y, min.z);
+				worldCorners[6] = new Vector3(max.x, max.y, max.z);
+				worldCorners[7] = new Vector3(min.x, max.y, max.z);
 			}
 
 			return worldCorners;
@@ -472,14 +727,14 @@ namespace ItemConduit.Debug
 
 		public void SetVisible(bool visible)
 		{
-			if (wireframeParent != null)
-				wireframeParent.SetActive(visible);
+			if (wireframeRoot != null)
+				wireframeRoot.SetActive(visible);
 		}
 
 		private void OnDestroy()
 		{
-			if (wireframeParent != null)
-				Destroy(wireframeParent);
+			if (wireframeRoot != null)
+				Destroy(wireframeRoot);
 		}
 	}
 }

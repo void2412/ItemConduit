@@ -59,8 +59,6 @@ namespace ItemConduit.Nodes
 
 		private SnapConnectionVisualizer snapVisualizer;
 
-		private ContainerVisualizer containerVisualizer;
-
 		private DetectionMode currentDetectionMode = DetectionMode.Full;
 
 		public delegate void DetectionCompleteHandler(BaseNode node);
@@ -178,15 +176,6 @@ namespace ItemConduit.Nodes
 			StartCoroutine(DelayedStart());
 		}
 
-		protected virtual void Update()
-		{
-
-			// Update container visualization visibility
-			if (containerVisualizer != null)
-			{
-				containerVisualizer.SetVisible(ItemConduitMod.ShowDebugInfo.Value && ItemConduitMod.EnableVisualEffects.Value);
-			}
-		}
 
 		/// <summary>
 		/// Delayed start to ensure proper initialization
@@ -256,12 +245,6 @@ namespace ItemConduit.Nodes
 			if (ZNet.instance != null && ZNet.instance.IsServer())
 			{
 				NetworkManager.Instance.UnregisterNode(this);
-			}
-
-			// Clean up container visualization
-			if (containerVisualizer != null)
-			{
-				Destroy(containerVisualizer.gameObject);
 			}
 		}
 
@@ -757,7 +740,6 @@ namespace ItemConduit.Nodes
 			if (targetContainer != null && ItemConduitMod.ShowDebugInfo.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] {name} connected to container: {targetContainer.m_name}");
-				InitializeContainerVisualization();
 			}
 
 			yield return null;
@@ -1378,44 +1360,7 @@ namespace ItemConduit.Nodes
 			return new Bounds(Vector3.zero, new Vector3(0.3f, 0.3f, nodeLength));
 		}
 
-		private void InitializeContainerVisualization()
-		{
-			Logger.LogWarning($"[DEBUG] InitializeContainerVisualization called for {name}");
-
-			if (!ItemConduitMod.ShowDebugInfo.Value || !ItemConduitMod.EnableVisualEffects.Value)
-				Logger.LogWarning($"[DEBUG] Visualization disabled - Debug: {ItemConduitMod.ShowDebugInfo.Value}, Effects: {ItemConduitMod.EnableVisualEffects.Value}");
-			return;
-			return;
-
-			if (targetContainer == null)
-			{
-				Logger.LogWarning($"[DEBUG] No target container!");
-				return;
-			}
-
-			// Remove old visualizer if exists
-			if (containerVisualizer != null)
-			{
-				Destroy(containerVisualizer.gameObject);
-			}
-
-			// Create new visualizer for the container
-			GameObject vizObject = new GameObject("ContainerVisualizer");
-			vizObject.transform.SetParent(targetContainer.transform);
-			vizObject.transform.localPosition = Vector3.zero;
-			vizObject.transform.localRotation = Quaternion.identity;
-
-			containerVisualizer = vizObject.AddComponent<ContainerVisualizer>();
-
-			Collider containerCollider = targetContainer.GetComponent<Collider>()
-				?? targetContainer.GetComponentInChildren<Collider>();
-
-			if (containerCollider != null)
-			{
-				containerVisualizer.Initialize(containerCollider);
-			}
-		}
-
+		
 
 		public void UpdateSnapVisualization()
 		{
