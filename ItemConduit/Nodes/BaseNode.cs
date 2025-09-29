@@ -351,8 +351,12 @@ namespace ItemConduit.Nodes
 			{
 				// For box colliders, use their actual dimensions
 				center = transform.TransformPoint(boxCollider.center);
-				halfExtents = Vector3.Scale(boxCollider.size * 0.5f, transform.lossyScale);
+				halfExtents = Vector3.Scale(boxCollider.size * 0.5f, mainCollider.transform.lossyScale);
 				rotation = transform.rotation;
+
+				Logger.LogWarning($"BoxSize: {boxCollider.size}");
+				Logger.LogWarning($"LossyScale: {mainCollider.transform.lossyScale}");
+				Logger.LogWarning($"HalfExtents of {NodeLength}m node: {halfExtents}");
 			}
 			else
 			{
@@ -363,7 +367,7 @@ namespace ItemConduit.Nodes
 				rotation = transform.rotation;
 			}
 
-			Logger.LogWarning($"HalfExtents of {NodeLength}m node: {halfExtents}");
+			
 
 			// Perform ORIENTED overlap check (this properly handles rotation!)
 			Collider[] overlaps = Physics.OverlapBox(
@@ -578,6 +582,10 @@ namespace ItemConduit.Nodes
 				obb.center = collider.transform.TransformPoint(boxCollider.center);
 				obb.halfExtents = Vector3.Scale(boxCollider.size * 0.5f, collider.transform.lossyScale);
 				obb.rotation = collider.transform.rotation;
+
+				Logger.LogWarning($"Collider Size: {boxCollider.size}");
+				Logger.LogWarning($"half Extent: {obb.halfExtents}");
+				Logger.LogWarning($"lossyScale: {collider.transform.lossyScale}");
 			}
 			else
 			{
@@ -1230,48 +1238,6 @@ namespace ItemConduit.Nodes
 
 		#region Debug Helpers
 
-		/// <summary>
-		/// Draw debug gizmos in editor/debug mode
-		/// </summary>
-		protected virtual void OnDrawGizmos()
-		{
-			if (!ItemConduitMod.ShowDebugInfo.Value) return;
-
-			// Draw node center position
-			Gizmos.color = NodeType switch
-			{
-				NodeType.Conduit => Color.gray,
-				NodeType.Extract => Color.green,
-				NodeType.Insert => Color.blue,
-				_ => Color.white
-			};
-			Gizmos.DrawWireSphere(transform.position, 0.2f);
-
-			// Draw connections to other nodes
-			if (connectedNodes != null)
-			{
-				Gizmos.color = new Color(1f, 1f, 0f, 0.5f); // Semi-transparent yellow
-				foreach (var node in connectedNodes)
-				{
-					if (node != null)
-					{
-						Gizmos.DrawLine(transform.position, node.transform.position);
-					}
-				}
-			}
-
-			// Draw container connection for Extract/Insert nodes
-			if (targetContainer != null && CanConnectToContainers)
-			{
-				Gizmos.color = new Color(0f, 1f, 1f, 0.5f); // Cyan for container connections
-				Gizmos.DrawLine(transform.position, targetContainer.transform.position);
-			}
-
-			// Draw node bounds
-			Bounds bounds = GetNodeBounds();
-			Gizmos.color = new Color(0, 1, 0, 0.3f);
-			Gizmos.DrawWireCube(bounds.center, bounds.size);
-		}
 
 		protected virtual void InitializeBoundsVisualization()
 		{
