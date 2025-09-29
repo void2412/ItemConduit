@@ -679,29 +679,33 @@ namespace ItemConduit.Debug
 			{
 				if (meshCollider.sharedMesh != null)
 				{
-					// Get the mesh bounds (in local space of the mesh)
+					// Get the mesh bounds in local space
 					Bounds meshBounds = meshCollider.sharedMesh.bounds;
-
-					// The mesh might have its pivot offset from center
-					Vector3 meshCenter = meshBounds.center;
 					Vector3 meshSize = meshBounds.size;
 
-					// Create corners around the actual mesh center
+					// Calculate half extents
+					Vector3 halfSize = meshSize * 0.5f;
+
+					// Create corners around origin (0,0,0), NOT around meshBounds.center
+					// This gives us the actual mesh corners in local space
 					Vector3[] localCorners = new Vector3[8];
-					for (int i = 0; i < 8; i++)
-					{
-						localCorners[i] = meshCenter + new Vector3(
-							((i & 1) == 0 ? -1 : 1) * meshSize.x * 0.5f,
-							((i & 2) == 0 ? -1 : 1) * meshSize.y * 0.5f,
-							((i & 4) == 0 ? -1 : 1) * meshSize.z * 0.5f
-						);
-					}
+
+					// Bottom corners (min Y)
+					localCorners[0] = meshBounds.center + new Vector3(-halfSize.x, -halfSize.y, -halfSize.z);
+					localCorners[1] = meshBounds.center + new Vector3(halfSize.x, -halfSize.y, -halfSize.z);
+					localCorners[2] = meshBounds.center + new Vector3(halfSize.x, -halfSize.y, halfSize.z);
+					localCorners[3] = meshBounds.center + new Vector3(-halfSize.x, -halfSize.y, halfSize.z);
+
+					// Top corners (max Y)
+					localCorners[4] = meshBounds.center + new Vector3(-halfSize.x, halfSize.y, -halfSize.z);
+					localCorners[5] = meshBounds.center + new Vector3(halfSize.x, halfSize.y, -halfSize.z);
+					localCorners[6] = meshBounds.center + new Vector3(halfSize.x, halfSize.y, halfSize.z);
+					localCorners[7] = meshBounds.center + new Vector3(-halfSize.x, halfSize.y, halfSize.z);
 
 					// Transform to world space using the collider's transform
-					Transform colliderTransform = collider.transform;
 					for (int i = 0; i < 8; i++)
 					{
-						worldCorners[i] = colliderTransform.TransformPoint(localCorners[i]);
+						worldCorners[i] = collider.transform.TransformPoint(localCorners[i]);
 					}
 				}
 			}
@@ -721,6 +725,9 @@ namespace ItemConduit.Debug
 				worldCorners[6] = new Vector3(max.x, max.y, max.z);
 				worldCorners[7] = new Vector3(min.x, max.y, max.z);
 			}
+
+			Logger.LogWarning($"[DEBUG] World corners Y values: Bottom={worldCorners[0].y}, Top={worldCorners[4].y}");
+			Logger.LogWarning($"[DEBUG] Expected Y range: {collider.bounds.min.y} to {collider.bounds.max.y}");
 
 			return worldCorners;
 		}
