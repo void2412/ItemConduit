@@ -288,9 +288,7 @@ namespace ItemConduit.Nodes
 
 			if (ItemConduitMod.ShowDebugInfo.Value)
 			{ 
-				var stackTrace = new System.Diagnostics.StackTrace(true);
-				Logger.LogWarning($"[DEBUG] StartUnifiedDetection called from: {stackTrace.GetFrame(1)?.GetMethod()?.Name}");
-				Logger.LogWarning($"[DEBUG] StartUnifiedDetection called for {name} with mode: {mode}, already updating: {isUpdatingDetection}");
+
 			}
 
 			// If we're already doing a full detection, don't interrupt
@@ -353,10 +351,6 @@ namespace ItemConduit.Nodes
 				center = transform.TransformPoint(boxCollider.center);
 				halfExtents = Vector3.Scale(boxCollider.size * 0.5f, mainCollider.transform.lossyScale);
 				rotation = transform.rotation;
-
-				Logger.LogWarning($"BoxSize: {boxCollider.size}");
-				Logger.LogWarning($"LossyScale: {mainCollider.transform.lossyScale}");
-				Logger.LogWarning($"HalfExtents of {NodeLength}m node: {halfExtents}");
 			}
 			else
 			{
@@ -582,10 +576,6 @@ namespace ItemConduit.Nodes
 				obb.center = collider.transform.TransformPoint(boxCollider.center);
 				obb.halfExtents = Vector3.Scale(boxCollider.size * 0.5f, collider.transform.lossyScale);
 				obb.rotation = collider.transform.rotation;
-
-				Logger.LogWarning($"Collider Size: {boxCollider.size}");
-				Logger.LogWarning($"half Extent: {obb.halfExtents}");
-				Logger.LogWarning($"lossyScale: {collider.transform.lossyScale}");
 			}
 			else
 			{
