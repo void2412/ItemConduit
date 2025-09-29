@@ -299,6 +299,21 @@ namespace ItemConduit.Core
 					}
 				}
 				Logger.LogInfo($"[ItemConduit] {prefabName} has {snapCount} existing snappoints from {prefabClone}");
+
+				BoxCollider boxCollider = nodePrefab.GetComponentInChildren<BoxCollider>();
+				if (boxCollider != null)
+				{
+					// The original wood_beam is likely 2 units long with size (1, 1, 2)
+					// We need to adjust based on our desired length
+					Vector3 originalSize = boxCollider.size;
+
+					// Determine which axis is the length axis (usually Z for beams)
+					// Keep width and height the same, adjust length
+					// X is the length axis
+					boxCollider.size = new Vector3(length, originalSize.y, originalSize.z);
+
+					Logger.LogInfo($"[ItemConduit] Adjusted {prefabName} BoxCollider size from {originalSize} to {boxCollider.size}");
+				}
 			}
 
 			// Configure piece component for building system

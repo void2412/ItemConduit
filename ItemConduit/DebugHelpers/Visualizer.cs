@@ -110,6 +110,7 @@ namespace ItemConduit.Debug
 			Vector3 min = bounds.min;
 			Vector3 max = bounds.max;
 
+
 			return new Vector3[]
 			{
 				new Vector3(min.x, min.y, min.z), // 0
@@ -685,7 +686,6 @@ namespace ItemConduit.Debug
 
 					// Calculate half extents
 					Vector3 halfSize = meshSize * 0.5f;
-
 					// Create corners around origin (0,0,0), NOT around meshBounds.center
 					// This gives us the actual mesh corners in local space
 					Vector3[] localCorners = new Vector3[8];

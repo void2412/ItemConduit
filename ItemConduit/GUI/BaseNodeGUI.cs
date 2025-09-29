@@ -42,7 +42,7 @@ namespace ItemConduit.GUI
 
 		/// <summary>
 		/// Initialize GUI styles
-		/// </summary>
+		/// </summary> 
 		protected virtual void InitializeStyles()
 		{
 			// Window style

@@ -363,7 +363,7 @@ namespace ItemConduit.Nodes
 				rotation = transform.rotation;
 			}
 
-
+			Logger.LogWarning($"HalfExtents of {NodeLength}m node: {halfExtents}");
 
 			// Perform ORIENTED overlap check (this properly handles rotation!)
 			Collider[] overlaps = Physics.OverlapBox(
@@ -373,10 +373,7 @@ namespace ItemConduit.Nodes
 				LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small")
 			);
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
-			{
-				Logger.LogWarning($"[TIMING] {name} - After physics: {Time.realtimeSinceStartup - startTime:F3}s, found {overlaps.Length} overlaps");
-			}
+			
 
 			if (currentDetectionMode == DetectionMode.Full || currentDetectionMode == DetectionMode.ConnectionsOnly)
 			{
