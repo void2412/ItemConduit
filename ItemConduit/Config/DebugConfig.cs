@@ -10,6 +10,7 @@ namespace ItemConduit.Config
 	public static class DebugConfig
 	{
 		public static ConfigEntry<bool> showDebug {  get; private set; }
+		public static ConfigEntry<bool> showTransferLog { get; private set; }
 
 		public static void Initialize(ConfigFile config)
 		{
@@ -20,6 +21,12 @@ namespace ItemConduit.Config
 				new ConfigDescription("Toggle debug message")
 				);
 
+			showTransferLog = config.Bind(
+				"Debug",
+				"showTransferLog",
+				false,
+				new ConfigDescription("Toggle Transfer Log")
+				);
 		}
 	}
 }

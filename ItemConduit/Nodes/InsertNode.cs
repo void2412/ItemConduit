@@ -1,8 +1,9 @@
-using System.Collections;
-using UnityEngine;
+using ItemConduit.Config;
 using ItemConduit.Core;
 using ItemConduit.GUI;
-using ItemConduit.Config;
+using System.Collections;
+using System.Linq;
+using UnityEngine;
 using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Nodes
@@ -108,45 +109,61 @@ namespace ItemConduit.Nodes
 
 		#region Item Insertion
 
-		/// <summary>
-		/// Check if an item can be inserted into the container
-		/// </summary>
-		/// <param name="item">The item to check</param>
-		/// <returns>True if the item can be inserted</returns>
-		public bool CanInsertItem(ItemDrop.ItemData item)
+		public int CalculateAcceptCapacity(Inventory destInventory, ItemDrop.ItemData sourceItem, int desiredAmount)
 		{
-			Container container = GetTargetContainer();
-			if (container == null || item == null) return false;
+			if (destInventory == null || sourceItem == null || desiredAmount <= 0)
+				return 0;
 
-			Inventory inventory = container.GetInventory();
-			if (inventory == null) return false;
+			int totalCanAccept = 0;
+			int maxStackSize = sourceItem.m_shared.m_maxStackSize;
 
-			// Check if inventory has space
-			return inventory.CanAddItem(item);
+			// First, check existing stacks that can be topped up
+			var existingStacks = destInventory.GetAllItems()
+				.Where(item => item.m_shared.m_name == sourceItem.m_shared.m_name &&
+							  item.m_quality == sourceItem.m_quality &&
+							  item.m_variant == sourceItem.m_variant &&
+							  item.m_stack < maxStackSize)
+				.OrderBy(item => item.m_gridPos.y * destInventory.GetWidth() + item.m_gridPos.x) // Order by position
+				.ToList();
+
+			foreach (var existingStack in existingStacks)
+			{
+				int spaceInStack = maxStackSize - existingStack.m_stack;
+				int canAddToStack = Mathf.Min(spaceInStack, desiredAmount - totalCanAccept);
+				totalCanAccept += canAddToStack;
+
+				if (totalCanAccept >= desiredAmount)
+					return desiredAmount;
+			}
+
+			// Then check empty slots
+			int emptySlots = destInventory.GetEmptySlots();
+			if (emptySlots > 0)
+			{
+				// Calculate how many items can fit in empty slots
+				int itemsPerSlot = maxStackSize;
+				int canAddToEmpty = Mathf.Min(emptySlots * itemsPerSlot, desiredAmount - totalCanAccept);
+				totalCanAccept += canAddToEmpty;
+			}
+
+			return Mathf.Min(totalCanAccept, desiredAmount);
 		}
+
+
+
 
 		/// <summary>
 		/// Insert an item into the container
 		/// </summary>
 		/// <param name="item">The item to insert</param>
 		/// <returns>True if insertion was successful</returns>
-		public bool InsertItem(ItemDrop.ItemData item)
+		public bool InsertItem(ItemDrop.ItemData item, Inventory destInventory)
 		{
-			if (!CanInsertItem(item)) return false;
-
-			Container container = GetTargetContainer();
-			Inventory inventory = container.GetInventory();
-			bool success = inventory.AddItem(item);
+			bool success = destInventory.AddItem(item);
 
 			if (success)
 			{
 				lastInsertionTime = Time.time;
-
-				// Visual feedback
-				if (VisualConfig.transferVisualEffect.Value)
-				{
-					StartCoroutine(InsertFlashEffect());
-				}
 
 				if (DebugConfig.showDebug.Value)
 				{

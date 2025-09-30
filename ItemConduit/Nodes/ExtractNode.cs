@@ -152,6 +152,7 @@ namespace ItemConduit.Nodes
 			// Filter items based on extraction rules
 			return inventory.GetAllItems()
 				.Where(item => CanExtractItem(item))
+				.OrderBy(item => item.m_gridPos.y * inventory.GetWidth() + item.m_gridPos.x)
 				.ToList();
 		}
 
@@ -347,7 +348,7 @@ namespace ItemConduit.Nodes
 			// Trigger visual feedback
 			if (VisualConfig.transferVisualEffect.Value)
 			{
-				StartCoroutine(ExtractFlashEffect());
+				//StartCoroutine(ExtractFlashEffect());
 			}
 		}
 

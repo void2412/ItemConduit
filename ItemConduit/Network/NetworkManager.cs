@@ -451,55 +451,59 @@ namespace ItemConduit.Network
 
 					if (matchingInserts.Count == 0) continue;
 
-					// Get items to transfer
-					var items = extractNode.GetExtractableItems();
-					if (items.Count == 0) continue;
+					// Get extractable items in inventory order (left to right, top to bottom)
+					var extractableItems = extractNode.GetExtractableItems();
+					if (extractableItems.Count == 0) continue;
+
+					var sourceItem = extractableItems.First();
+					if (sourceItem == null || sourceItem.m_stack <= 0) continue;
 
 					// Calculate items per transfer based on transfer rate
-					int itemsPerTransfer = Mathf.Max(1, Mathf.RoundToInt(transferRate));
+					int maxTransferAmount = Mathf.Max(1, transferRate);
+					int remainingToTransfer = maxTransferAmount;
 
-					foreach (var item in items.Take(itemsPerTransfer))
+					foreach (var insertNode in matchingInserts)
 					{
-						if (item == null) continue;
+						if (remainingToTransfer <= 0) break;
 
-						// Try to insert into matching nodes
-						foreach (var insertNode in matchingInserts)
+						Container destContainer = insertNode.GetTargetContainer();
+						if (destContainer == null) continue;
+
+						Inventory destInventory = destContainer.GetInventory();
+						if (destInventory == null) continue;
+
+						int canAccept = insertNode.CalculateAcceptCapacity(destInventory, sourceItem, remainingToTransfer);
+
+						if (canAccept > 0) 
 						{
+							var transferItem = sourceItem.Clone();
+							transferItem.m_stack = canAccept;
 
-							if (insertNode.CanInsertItem(item))
+							if (insertNode.InsertItem(transferItem, destInventory))
 							{
-								// Clone item for transfer (transfer 1 at a time for simplicity)
-								var itemToTransfer = item.Clone();
-								itemToTransfer.m_stack = 1;
-
-								// Remove from source
-								sourceInventory.RemoveItem(item, 1);
-
-								// Add to destination
-								if (insertNode.InsertItem(itemToTransfer))
+								sourceInventory.RemoveItem(sourceItem, canAccept);
+								remainingToTransfer -= canAccept;
+								
+								if (DebugConfig.showTransferLog.Value)
 								{
-									if (DebugConfig.showDebug.Value)
-									{
-										Logger.LogInfo($"[ItemConduit] Transferred 1x {item.m_shared.m_name} from {extractNode.name} to {insertNode.name}");
-									}
-									break; // Item transferred, move to next item
+									Logger.LogInfo($"Transferred {canAccept}x {sourceItem.m_shared.m_name} from {extractNode.name} to {insertNode.name}");
 								}
-								else
-								{
-									// Failed to insert, return item
-									sourceInventory.AddItem(itemToTransfer);
-								}
+
+								extractNode.OnItemExtracted();
+								insertNode.OnItemInserted();
 							}
 						}
-
-						// Break if item has been depleted
-						if (item.m_stack <= 0) break;
+					}
+					int actuallyTransferred = maxTransferAmount - remainingToTransfer;
+					if (DebugConfig.showDebug.Value && actuallyTransferred > 0)
+					{
+						Logger.LogInfo($"{extractNode.name} completed transfer: {actuallyTransferred}/{maxTransferAmount} items moved this tick");
 					}
 				}
 			}
 			catch (Exception ex)
 			{
-				Logger.LogError($"[ItemConduit] Error processing network transfers: {ex.Message}");
+				Logger.LogError($"Error processing network transfers: {ex.Message}");
 			}
 		}
 
