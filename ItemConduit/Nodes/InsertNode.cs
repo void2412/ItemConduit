@@ -2,6 +2,7 @@ using ItemConduit.Config;
 using ItemConduit.Core;
 using ItemConduit.GUI;
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Logger = Jotunn.Logger;
@@ -21,6 +22,12 @@ namespace ItemConduit.Nodes
 
 		/// <summary>Priority level for filling order (higher = filled first)</summary>
 		public int Priority { get; private set; } = 0;
+
+		/// <summary>Set of item names to filter (whitelist or blacklist)</summary>
+		public HashSet<string> ItemFilter { get; private set; } = new HashSet<string>();
+
+		/// <summary>Whether the filter is a whitelist (true) or blacklist (false)</summary>
+		public bool IsWhitelist { get; private set; } = true;
 
 		#endregion
 
@@ -58,6 +65,7 @@ namespace ItemConduit.Nodes
 			{
 				zNetView.Register<string>("RPC_UpdateChannel", RPC_UpdateChannel);
 				zNetView.Register<int>("RPC_UpdatePriority", RPC_UpdatePriority);
+				zNetView.Register<string, bool>("RPC_UpdateFilter", RPC_UpdateFilter);
 			}
 		}
 
@@ -104,6 +112,52 @@ namespace ItemConduit.Nodes
 			return targetContainer;
 		}
 
+		#endregion
+
+		#region Item Filtering
+
+		/// <summary>
+		/// Check if an item can be inserted based on filter settings
+		/// </summary>
+		/// <param name="item">The item to check</param>
+		/// <returns>True if the item can be inserted</returns>
+		public bool CanAcceptItem(ItemDrop.ItemData item)
+		{
+			if (item == null) return false;
+
+			// No filter means accept everything
+			if (ItemFilter.Count == 0) return true;
+
+			// Get item name for filtering
+			string itemName = item.m_dropPrefab?.name ?? item.m_shared.m_name;
+			bool inFilter = ItemFilter.Contains(itemName);
+
+			// Apply whitelist/blacklist logic
+			return IsWhitelist ? inFilter : !inFilter;
+		}
+
+		/// <summary>
+		/// Get list of acceptable item types based on filter
+		/// </summary>
+		/// <returns>List of acceptable item names</returns>
+		public List<string> GetAcceptableItems()
+		{
+			if (ItemFilter.Count == 0)
+			{
+				// No filter means accept all
+				return new List<string> { "All Items" };
+			}
+
+			if (IsWhitelist)
+			{
+				return ItemFilter.ToList();
+			}
+			else
+			{
+				// For blacklist, we can't easily list all acceptable items
+				return new List<string> { $"All except {ItemFilter.Count} filtered items" };
+			}
+		}
 
 		#endregion
 
@@ -254,6 +308,24 @@ namespace ItemConduit.Nodes
 			}
 		}
 
+		public void SetFilter(HashSet<string> filter, bool isWhitelist)
+		{
+			ItemFilter = new HashSet<string>(filter);
+			IsWhitelist = isWhitelist;
+
+			// Sync to all clients
+			if (zNetView != null && zNetView.IsValid() && ZNet.instance.IsServer())
+			{
+				string filterStr = string.Join(",", filter);
+				zNetView.InvokeRPC(ZNetView.Everybody, "RPC_UpdateFilter", filterStr, isWhitelist);
+			}
+
+			if (DebugConfig.showDebug.Value)
+			{
+				string mode = isWhitelist ? "whitelist" : "blacklist";
+				Logger.LogInfo($"[ItemConduit] Insert node {name} filter set to {mode} with {filter.Count} items");
+			}
+		}
 		#endregion
 
 		#region RPC Handlers
@@ -272,6 +344,20 @@ namespace ItemConduit.Nodes
 		private void RPC_UpdatePriority(long sender, int priority)
 		{
 			Priority = priority;
+		}
+
+		/// <summary>
+		/// RPC handler for filter updates
+		/// </summary>
+		private void RPC_UpdateFilter(long sender, string filterStr, bool isWhitelist)
+		{
+			// Parse filter string back into HashSet
+			ItemFilter = new HashSet<string>(
+				filterStr.Split(',')
+					.Where(s => !string.IsNullOrEmpty(s))
+					.Select(s => s.Trim())
+			);
+			IsWhitelist = isWhitelist;
 		}
 
 		#endregion
@@ -318,6 +404,14 @@ namespace ItemConduit.Nodes
 			string priorityColor = Priority > 0 ? "yellow" : Priority < 0 ? "gray" : "white";
 			string priorityInfo = $"[Priority: <color={priorityColor}>{Priority}</color>]";
 
+			// Add filter info
+			string filterInfo = "";
+			if (ItemFilter.Count > 0)
+			{
+				string filterMode = IsWhitelist ? "Whitelist" : "Blacklist";
+				filterInfo = $"\n[Filter: {filterMode} ({ItemFilter.Count} items)]";
+			}
+
 			// Add container status
 			string containerStatus;
 			Container container = GetTargetContainer();
@@ -346,7 +440,7 @@ namespace ItemConduit.Nodes
 			// Add interaction hint
 			string interactionHint = "\n[<color=yellow>E</color>] Configure";
 
-			return $"{baseText}\n{channelInfo}\n{priorityInfo}\n{containerStatus}{interactionHint}";
+			return $"{baseText}\n{channelInfo}\n{priorityInfo}\n{filterInfo}\n{containerStatus}{interactionHint}";
 		}
 
 		#endregion
@@ -460,10 +554,14 @@ namespace ItemConduit.Nodes
 		{
 			Container container = GetTargetContainer();
 			string containerInfo = container != null ? $"{container.m_name} ({GetAvailableSpace()} free slots)" : "No container";
+			string filterInfo = ItemFilter.Count > 0
+				? $"{(IsWhitelist ? "Whitelist" : "Blacklist")} ({ItemFilter.Count} items)"
+				: "No filter";
 
 			return $"InsertNode: {name}\n" +
 				   $"  Channel: {ChannelId}\n" +
 				   $"  Priority: {Priority}\n" +
+				   $"  Filter: {filterInfo}\n" +
 				   $"  Container: {containerInfo}\n" +
 				   $"  Network: {NetworkId ?? "None"}\n" +
 				   $"  Active: {IsActive}\n" +

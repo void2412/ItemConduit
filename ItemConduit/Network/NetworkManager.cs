@@ -466,6 +466,8 @@ namespace ItemConduit.Network
 					{
 						if (remainingToTransfer <= 0) break;
 
+						if (!insertNode.CanAcceptItem(sourceItem)) break;
+
 						Container destContainer = insertNode.GetTargetContainer();
 						if (destContainer == null) continue;
 
