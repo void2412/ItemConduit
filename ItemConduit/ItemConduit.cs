@@ -33,12 +33,6 @@ namespace ItemConduit.Core
 		private static ItemConduitMod _instance;
 		public static ItemConduitMod Instance => _instance;
 
-		// Configuration entries accessible throughout the mod
-		public static ConfigEntry<float> TransferRate;
-		public static ConfigEntry<float> TransferInterval;
-		public static ConfigEntry<bool> ShowDebugInfo;
-		public static ConfigEntry<bool> EnableVisualEffects;
-
 		// Harmony instance for runtime patching
 		private Harmony harmony;
 
@@ -84,6 +78,18 @@ namespace ItemConduit.Core
 		{
 			try
 			{
+				if (PrefabManager.Instance == null)
+				{
+					Jotunn.Logger.LogError("PrefabManager.Instance is null!");
+					return;
+				}
+
+				if (PieceManager.Instance == null)
+				{
+					Jotunn.Logger.LogError("PieceManager.Instance is null!");
+					return;
+				}
+
 				// Register each type of node
 				RegisterConduitNodes();
 				RegisterExtractNodes();
@@ -97,6 +103,7 @@ namespace ItemConduit.Core
 			catch (System.Exception ex)
 			{
 				Jotunn.Logger.LogError($"Failed to register pieces: {ex.Message}");
+				Jotunn.Logger.LogError($"Stack trace: {ex.StackTrace}");
 			}
 		}
 
@@ -189,6 +196,8 @@ namespace ItemConduit.Core
 		/// </summary>
 		private void RegisterNode(string prefabClone, string prefabName, string displayName, string description, float length, NodeType nodeType, int woodCost, int bronzeCost)
 		{
+
+
 			// Clone wood_beam as base prefab for our nodes
 			GameObject beamPrefab = PrefabManager.Instance.GetPrefab(prefabClone);
 			if (beamPrefab == null)
@@ -306,7 +315,7 @@ namespace ItemConduit.Core
 				}
 			};
 
-			if (ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Jotunn.Logger.LogInfo($"Registered {displayName} [{prefabName}] with length {length}m");
 			}
