@@ -1,5 +1,6 @@
 using UnityEngine;
 using ItemConduit.Core;
+using ItemConduit.Config;
 
 namespace ItemConduit.Nodes
 {
@@ -64,7 +65,7 @@ namespace ItemConduit.Nodes
 				: "[<color=yellow>No Connections</color>]";
 
 			// Build connection details
-			if (connectionCount > 0 && ItemConduitMod.ShowDebugInfo.Value)
+			if (connectionCount > 0 && DebugConfig.showDebug.Value)
 			{
 				connectionInfo += "\nConnected to:";
 				foreach (var node in connectedNodes)
@@ -78,7 +79,7 @@ namespace ItemConduit.Nodes
 			}
 
 			// Add debug info if enabled
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				connectionInfo += $"\n[Length: {NodeLength}m]";
 				connectionInfo += $"\n[Position: {transform.position}]";

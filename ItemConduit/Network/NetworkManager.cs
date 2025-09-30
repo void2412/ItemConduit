@@ -59,7 +59,6 @@ namespace ItemConduit.Network
 
 		private float transferTick = NetworkPerformanceConfig.transferTick.Value;
 
-		private bool DEBUG_CONFIG = false;
 
 		#endregion
 
@@ -177,7 +176,7 @@ namespace ItemConduit.Network
 
 			if (allNodes.Add(node))
 			{
-				if (ItemConduitMod.ShowDebugInfo.Value)
+				if (DebugConfig.showDebug.Value)
 				{
 					Logger.LogInfo($"[ItemConduit] Registered node: {node.name} (Total: {allNodes.Count})");
 				}
@@ -204,7 +203,7 @@ namespace ItemConduit.Network
 				if (nodeNetworkMap != null)
 					nodeNetworkMap.Remove(node);
 
-				if (ItemConduitMod.ShowDebugInfo.Value)
+				if (DebugConfig.showDebug.Value)
 				{
 					Logger.LogInfo($"[ItemConduit] Unregistered node: {node.name} (Remaining: {allNodes.Count})");
 				}
@@ -243,7 +242,7 @@ namespace ItemConduit.Network
 				}
 			}
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Registered network {network.NetworkId.Substring(0, 8)} with {network.Nodes.Count} nodes");
 			}
@@ -271,7 +270,7 @@ namespace ItemConduit.Network
 
 				networks.Remove(networkId);
 
-				if (ItemConduitMod.ShowDebugInfo.Value)
+				if (DebugConfig.showDebug.Value)
 				{
 					Logger.LogInfo($"[ItemConduit] Removed network {networkId.Substring(0, 8)}");
 				}
@@ -479,7 +478,7 @@ namespace ItemConduit.Network
 								// Add to destination
 								if (insertNode.InsertItem(itemToTransfer))
 								{
-									if (ItemConduitMod.ShowDebugInfo.Value)
+									if (DebugConfig.showDebug.Value)
 									{
 										Logger.LogInfo($"[ItemConduit] Transferred 1x {item.m_shared.m_name} from {extractNode.name} to {insertNode.name}");
 									}

@@ -1,4 +1,5 @@
-﻿using ItemConduit.Core;
+﻿using ItemConduit.Config;
+using ItemConduit.Core;
 using ItemConduit.Nodes;
 using System.Collections.Generic;
 using UnityEngine;
@@ -328,6 +329,7 @@ namespace ItemConduit.Debug
 	public class ContainerWireframeManager : MonoBehaviour
 	{
 		private static ContainerWireframeManager _instance;
+
 		public static ContainerWireframeManager Instance
 		{
 			get
@@ -354,7 +356,9 @@ namespace ItemConduit.Debug
 			wireframe.Initialize();
 			wireframes[container] = wireframe;
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			
+
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Added wireframe to container: {container.m_name}");
 			}

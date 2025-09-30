@@ -3,6 +3,7 @@ using System.Linq;
 using UnityEngine;
 using ItemConduit.Nodes;
 using ItemConduit.Core;
+using ItemConduit.Config;
 using Logger = Jotunn.Logger;
 
 namespace ItemConduit.GUI
@@ -301,7 +302,7 @@ namespace ItemConduit.GUI
 			node.SetFilter(filter, isWhitelist);
 
 			// Log if debug mode
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Applied settings to extract node: Channel={channel}, " +
 						 $"Filter={filter.Count} items ({(isWhitelist ? "whitelist" : "blacklist")})");

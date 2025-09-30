@@ -21,6 +21,9 @@ namespace ItemConduit.Config
 
 		/// <summary>Maximum time in milliseconds per frame for rebuild operations</summary>
 		public static ConfigEntry<float> processingTimePerFrame { get; private set; }
+
+
+
 		#endregion
 
 		#region Transfer Config
@@ -28,6 +31,8 @@ namespace ItemConduit.Config
 
 		public static ConfigEntry<int> transferRate { get; private set; }
 		#endregion
+
+		
 
 		/// <summary>
 		/// Initialize configuration entries
@@ -85,6 +90,7 @@ namespace ItemConduit.Config
 				8f,
 				new ConfigDescription("Maximum time in milliseconds per frame for rebuild operations")
 			);
+
 
 			#endregion
 		}

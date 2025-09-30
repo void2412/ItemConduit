@@ -3,6 +3,7 @@ using ItemConduit.Core;
 using ItemConduit.Debug;
 using ItemConduit.Network;
 using ItemConduit.Nodes;
+using ItemConduit.Config;
 using UnityEngine;
 using Logger = Jotunn.Logger;
 
@@ -46,7 +47,7 @@ namespace ItemConduit.Patches
 						// Also verify the piece isn't marked for destruction
 						if (!piece.IsPlacedByPlayer())
 						{
-							if (ItemConduitMod.ShowDebugInfo.Value)
+							if (DebugConfig.showDebug.Value)
 							{
 								Logger.LogInfo($"[ItemConduit] Piece not placed by player: {piece.name}");
 							}
@@ -56,14 +57,14 @@ namespace ItemConduit.Patches
 						// Small delay to ensure the node is fully initialized
 						__instance.StartCoroutine(DelayedRebuildRequest(node, 0.5f));
 
-						if (ItemConduitMod.ShowDebugInfo.Value)
+						if (DebugConfig.showDebug.Value)
 						{
 							Logger.LogInfo($"[ItemConduit] Successfully placed conduit node: {piece.name}");
 						}
 					}
 					else
 					{
-						if (ItemConduitMod.ShowDebugInfo.Value)
+						if (DebugConfig.showDebug.Value)
 						{
 							Logger.LogInfo($"[ItemConduit] Ignoring invalid piece (likely ghost): {piece.name}");
 						}
@@ -117,7 +118,7 @@ namespace ItemConduit.Patches
 						}
 					}
 
-					if (ItemConduitMod.ShowDebugInfo.Value)
+					if (DebugConfig.showDebug.Value)
 					{
 						Logger.LogInfo($"[ItemConduit] Conduit node being destroyed: {__instance.name}");
 					}
@@ -144,7 +145,7 @@ namespace ItemConduit.Patches
 					{
 						// The ghost detection is already handled in BaseNode.CheckIfGhost()
 						// This is here as a safeguard
-						if (ItemConduitMod.ShowDebugInfo.Value)
+						if (DebugConfig.showDebug.Value)
 						{
 							// Don't spam log for ghosts
 							// Logger.LogInfo($"[ItemConduit] Ghost piece detected in placement");
@@ -233,9 +234,9 @@ namespace ItemConduit.Patches
 					"Toggle conduit debug visualization",
 					delegate (Terminal.ConsoleEventArgs args)
 					{
-						ItemConduitMod.ShowDebugInfo.Value = !ItemConduitMod.ShowDebugInfo.Value;
+						DebugConfig.showDebug.Value = !DebugConfig.showDebug.Value;
 						UpdateAllNodeVisualizations();
-						args.Context.AddString($"Debug visualization: {(ItemConduitMod.ShowDebugInfo.Value ? "ON" : "OFF")}");
+						args.Context.AddString($"Debug visualization: {(DebugConfig.showDebug.Value ? "ON" : "OFF")}");
 					}
 				);
 
@@ -259,9 +260,9 @@ namespace ItemConduit.Patches
 				{
 					if (node.TryGetComponent<BoundsVisualizer>(out var viz))
 					{
-						viz.SetVisible(ItemConduitMod.ShowDebugInfo.Value);
+						viz.SetVisible(DebugConfig.showDebug.Value);
 					}
-					else if (ItemConduitMod.ShowDebugInfo.Value)
+					else if (DebugConfig.showDebug.Value)
 					{
 						node.SendMessage("InitializeBoundsVisualization", SendMessageOptions.DontRequireReceiver);
 					}
@@ -356,7 +357,7 @@ namespace ItemConduit.Patches
 				if (ZNet.instance.IsServer())
 				{
 					// Server should sync network state to new client
-					if (ItemConduitMod.ShowDebugInfo.Value)
+					if (DebugConfig.showDebug.Value)
 					{
 						Logger.LogInfo($"[ItemConduit] New client connected, will sync network state to peer {peer.m_uid}");
 					}

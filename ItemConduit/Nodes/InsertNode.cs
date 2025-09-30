@@ -2,6 +2,7 @@ using System.Collections;
 using UnityEngine;
 using ItemConduit.Core;
 using ItemConduit.GUI;
+using ItemConduit.Config;
 using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Nodes
@@ -71,7 +72,7 @@ namespace ItemConduit.Nodes
 			// Use base class helper to find best container
 			targetContainer = FindBestOverlappingContainer(overlaps);
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				if (targetContainer != null)
 				{
@@ -157,7 +158,7 @@ namespace ItemConduit.Nodes
 					StartCoroutine(InsertFlashEffect());
 				}
 
-				if (ItemConduitMod.ShowDebugInfo.Value)
+				if (DebugConfig.showDebug.Value)
 				{
 					Logger.LogInfo($"[ItemConduit] Insert node {name} inserted {item.m_shared.m_name} x{item.m_stack}");
 				}
@@ -208,7 +209,7 @@ namespace ItemConduit.Nodes
 				zNetView.InvokeRPC(ZNetView.Everybody, "RPC_UpdateChannel", ChannelId);
 			}
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Insert node {name} channel set to: {ChannelId}");
 			}
@@ -234,7 +235,7 @@ namespace ItemConduit.Nodes
 				zNetView.InvokeRPC(ZNetView.Everybody, "RPC_UpdatePriority", Priority);
 			}
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Insert node {name} priority set to: {Priority}");
 			}

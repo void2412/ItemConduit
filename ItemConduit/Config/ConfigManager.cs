@@ -25,7 +25,9 @@ namespace ItemConduit.Config
 				Logger.LogInfo("Initiliazing config");
 
 				// Init each module
+				DebugConfig.Initialize(config);
 				NetworkPerformanceConfig.Initialize(config);
+				VisualConfig.Initialize(config);
 			}
 			catch (Exception ex)
 			{

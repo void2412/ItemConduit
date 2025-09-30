@@ -1,6 +1,7 @@
 ﻿using ItemConduit.Core;
 using ItemConduit.Debug;
 using ItemConduit.Network;
+using ItemConduit.Config;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -121,7 +122,7 @@ namespace ItemConduit.Nodes
 				zNetView.Register<bool>("RPC_SetActive", RPC_SetActive);
 			}
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Node {name} awakened (Type: {NodeType}, Length: {nodeLength}m, Ghost: {isGhostPiece})");
 			}
@@ -165,7 +166,7 @@ namespace ItemConduit.Nodes
 			// Don't process ghost pieces
 			if (isGhostPiece)
 			{
-				if (ItemConduitMod.ShowDebugInfo.Value)
+				if (DebugConfig.showDebug.Value)
 				{
 					Logger.LogInfo($"[ItemConduit] Skipping initialization for ghost piece: {name}");
 				}
@@ -198,7 +199,7 @@ namespace ItemConduit.Nodes
 				// Register with network manager
 				NetworkManager.Instance.RegisterNode(this);
 
-				if (ItemConduitMod.ShowDebugInfo.Value)
+				if (DebugConfig.showDebug.Value)
 				{
 					Logger.LogInfo($"[ItemConduit] Node {name} registered with NetworkManager");
 				}
@@ -286,7 +287,7 @@ namespace ItemConduit.Nodes
 				}
 			}
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{ 
 
 			}
@@ -311,7 +312,7 @@ namespace ItemConduit.Nodes
 		{
 			float startTime = Time.realtimeSinceStartup;
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogWarning($"[TIMING] {name} - Detection started");
 			}
@@ -323,7 +324,7 @@ namespace ItemConduit.Nodes
 			// Small delay to let physics settle
 			yield return new WaitForSeconds(0.1f);
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogWarning($"[TIMING] {name} - After wait: {Time.realtimeSinceStartup - startTime:F3}s");
 			}
@@ -392,7 +393,7 @@ namespace ItemConduit.Nodes
 			bool hasConnections = connectedNodes.Count > 0 || (CanConnectToContainers && targetContainer != null);
 			UpdateVisualState(hasConnections);
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] {name} detection complete: {connectedNodes.Count} nodes, " +
 							 $"container: {(targetContainer != null ? targetContainer.m_name : "none")}");
@@ -402,7 +403,7 @@ namespace ItemConduit.Nodes
 			IsDetectionComplete = true;
 			OnDetectionComplete?.Invoke(this);
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogWarning($"[TIMING] {name} - Detection complete: {Time.realtimeSinceStartup - startTime:F3}s");
 			}
@@ -462,22 +463,22 @@ namespace ItemConduit.Nodes
 			var existingConnections = new HashSet<BaseNode>(connectedNodes);
 			var detectedConnections = new HashSet<BaseNode>();
 
-			// First, validate existing connections
-			foreach (var existingNode in existingConnections)
-			{
-				if (existingNode != null &&
-					!existingNode.isGhostPiece &&
-					existingNode.IsValidPlacedNode())
-				{
-					float distance = Vector3.Distance(transform.position, existingNode.transform.position);
-					float maxRange = (nodeLength + existingNode.NodeLength) / 2f + ItemConduitMod.ConnectionRange.Value;
+			//// First, validate existing connections
+			//foreach (var existingNode in existingConnections)
+			//{
+			//	if (existingNode != null &&
+			//		!existingNode.isGhostPiece &&
+			//		existingNode.IsValidPlacedNode())
+			//	{
+			//		float distance = Vector3.Distance(transform.position, existingNode.transform.position);
+			//		float maxRange = (nodeLength + existingNode.NodeLength) / 2f + ItemConduitMod.ConnectionRange.Value;
 
-					if (distance <= maxRange && CanConnectTo(existingNode))
-					{
-						detectedConnections.Add(existingNode);
-					}
-				}
-			}
+			//		if (distance <= maxRange && CanConnectTo(existingNode))
+			//		{
+			//			detectedConnections.Add(existingNode);
+			//		}
+			//	}
+			//}
 
 			// Method 1: Snappoint detection for straight connections
 			var snapPoints = GetSnapPoints();
@@ -505,7 +506,7 @@ namespace ItemConduit.Nodes
 								if (!detectedConnections.Contains(otherNode))
 								{
 									detectedConnections.Add(otherNode);
-									if (ItemConduitMod.ShowDebugInfo.Value)
+									if (DebugConfig.showDebug.Value)
 									{
 										Logger.LogInfo($"[ItemConduit] Snap connection (straight): {name} <-> {otherNode.name} (dist: {dist:F3}m)");
 									}
@@ -532,7 +533,7 @@ namespace ItemConduit.Nodes
 					if (CanConnectTo(otherNode) && CheckOrientedBoundsOverlap(otherNode))
 					{
 						detectedConnections.Add(otherNode);
-						if (ItemConduitMod.ShowDebugInfo.Value)
+						if (DebugConfig.showDebug.Value)
 						{
 							Logger.LogInfo($"[ItemConduit] OBB connection (angled): {name} <-> {otherNode.name}");
 						}
@@ -704,7 +705,7 @@ namespace ItemConduit.Nodes
 							{
 								float distance = Vector3.Distance(transform.position, container.transform.position);
 
-								if (ItemConduitMod.ShowDebugInfo.Value)
+								if (DebugConfig.showDebug.Value)
 								{
 									Logger.LogInfo($"[ItemConduit] OBB overlap detected with container: {container.name} at {distance:F2}m");
 								}
@@ -715,7 +716,7 @@ namespace ItemConduit.Nodes
 									bestContainer = container;
 								}
 							}
-							else if (ItemConduitMod.ShowDebugInfo.Value)
+							else if (DebugConfig.showDebug.Value)
 							{
 								// Debug: Log containers that are close but not overlapping
 								float distance = Vector3.Distance(transform.position, container.transform.position);
@@ -732,7 +733,7 @@ namespace ItemConduit.Nodes
 			targetContainer = bestContainer;
 
 			// Initialize container visualization if we found one
-			if (targetContainer != null && ItemConduitMod.ShowDebugInfo.Value)
+			if (targetContainer != null && DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] {name} connected to container: {targetContainer.m_name}");
 			}
@@ -774,7 +775,7 @@ namespace ItemConduit.Nodes
 						{
 							float distance = Vector3.Distance(transform.position, container.transform.position);
 
-							if (ItemConduitMod.ShowDebugInfo.Value)
+							if (DebugConfig.showDebug.Value)
 							{
 								Logger.LogInfo($"[ItemConduit] Found overlapping container: {container.name} ({container.m_name}) at distance {distance:F2}m");
 
@@ -809,7 +810,7 @@ namespace ItemConduit.Nodes
 					{
 						bestContainer = container;
 
-						if (ItemConduitMod.ShowDebugInfo.Value)
+						if (DebugConfig.showDebug.Value)
 						{
 							Logger.LogInfo($"[ItemConduit] Found container below node: {container.name} ({container.m_name})");
 						}
@@ -1186,7 +1187,7 @@ namespace ItemConduit.Nodes
 
 		protected virtual void InitializeBoundsVisualization()
 		{
-			if (!ItemConduitMod.ShowDebugInfo.Value || !ItemConduitMod.EnableVisualEffects.Value)
+			if (!DebugConfig.showDebug.Value || !ItemConduitMod.EnableVisualEffects.Value)
 				return;
 
 			if (isGhostPiece) return;

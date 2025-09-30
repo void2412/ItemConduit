@@ -84,7 +84,7 @@ namespace ItemConduit.Network
 			nodesBeingProcessed = new HashSet<BaseNode>();
 			statistics = new RebuildStatistics();
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo("[ItemConduit] RebuildManager initialized");
 			}
@@ -122,7 +122,7 @@ namespace ItemConduit.Network
 			// Don't process ghost pieces
 			if (!node.IsValidPlacedNode())
 			{
-				if (ItemConduitMod.ShowDebugInfo.Value)
+				if (DebugConfig.showDebug.Value)
 				{
 					Logger.LogInfo($"[ItemConduit] Ignoring rebuild request for invalid/ghost node: {node.name}");
 				}
@@ -133,7 +133,7 @@ namespace ItemConduit.Network
 			nodesNeedingRebuild.Add(node);
 			lastRebuildRequestTime = Time.time;
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Rebuild requested for node: {node.name} (Priority: {priority})");
 			}
@@ -169,7 +169,7 @@ namespace ItemConduit.Network
 				}
 			}
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Full rebuild requested for {nodesNeedingRebuild.Count} nodes");
 			}
@@ -362,7 +362,7 @@ namespace ItemConduit.Network
 				}
 			}
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Cleared network associations for {processed} nodes");
 			}
@@ -476,7 +476,7 @@ namespace ItemConduit.Network
 				{
 					newNetworks.Add(network);
 
-					if (ItemConduitMod.ShowDebugInfo.Value)
+					if (DebugConfig.showDebug.Value)
 					{
 						Logger.LogInfo($"[ItemConduit] Created network {network.NetworkId.Substring(0, 8)} with {network.Nodes.Count} nodes");
 					}
@@ -566,7 +566,7 @@ namespace ItemConduit.Network
 				}
 			}
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Activated {processed} nodes");
 			}

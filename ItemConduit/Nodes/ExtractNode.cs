@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using ItemConduit.Core;
+using ItemConduit.Config;
 using ItemConduit.GUI;
 using Logger = Jotunn.Logger;
 
@@ -77,7 +78,7 @@ namespace ItemConduit.Nodes
 			// Use base class helper to find best container
 			targetContainer = FindBestOverlappingContainer(overlaps);
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				if (targetContainer != null)
 				{
@@ -182,7 +183,7 @@ namespace ItemConduit.Nodes
 				zNetView.InvokeRPC(ZNetView.Everybody, "RPC_UpdateChannel", ChannelId);
 			}
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] Extract node {name} channel set to: {ChannelId}");
 			}
@@ -211,7 +212,7 @@ namespace ItemConduit.Nodes
 				zNetView.InvokeRPC(ZNetView.Everybody, "RPC_UpdateFilter", filterStr, isWhitelist);
 			}
 
-			if (ItemConduitMod.ShowDebugInfo.Value)
+			if (DebugConfig.showDebug.Value)
 			{
 				string mode = isWhitelist ? "whitelist" : "blacklist";
 				Logger.LogInfo($"[ItemConduit] Extract node {name} filter set to {mode} with {filter.Count} items");

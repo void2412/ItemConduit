@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using ItemConduit.Core;
 using Logger = Jotunn.Logger;
+using ItemConduit.Config;
 
 namespace ItemConduit.Utils
 {
@@ -246,7 +247,7 @@ namespace ItemConduit.Utils
 		/// </summary>
 		public static void LogContainerInfo(GameObject obj)
 		{
-			if (!ItemConduitMod.ShowDebugInfo.Value) return;
+			if (!DebugConfig.showDebug.Value) return;
 
 			string name = GetContainerName(obj);
 

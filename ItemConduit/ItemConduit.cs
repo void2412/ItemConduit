@@ -38,8 +38,6 @@ namespace ItemConduit.Core
 		public static ConfigEntry<float> TransferInterval;
 		public static ConfigEntry<bool> ShowDebugInfo;
 		public static ConfigEntry<bool> EnableVisualEffects;
-		public static ConfigEntry<float> ConnectionRange;
-		public static ConfigEntry<float> EndpointConnectionThreshold;
 
 		// Harmony instance for runtime patching
 		private Harmony harmony;
@@ -77,22 +75,6 @@ namespace ItemConduit.Core
 			ConfigManager.Initialize(Config);
 			Logger.LogInfo("Config Load Successfully");
 
-			//TODO: Remove this and move to config files
-			// Visual Settings
-			EnableVisualEffects = Config.Bind(
-				"Visual",
-				"EnableVisualEffects",
-				true,
-				"Enable visual effects for item transfers"
-			);
-
-			// Debug Settings
-			ShowDebugInfo = Config.Bind(
-				"Debug",
-				"ShowDebugInfo",
-				true,
-				"Show debug information in console and game"
-			);
 		}
 
 		/// <summary>
@@ -205,8 +187,7 @@ namespace ItemConduit.Core
 		/// <summary>
 		/// Register a single node piece with the game's building system
 		/// </summary>
-		private void RegisterNode(string prefabClone, string prefabName, string displayName, string description,
-			float length, NodeType nodeType, int woodCost, int bronzeCost)
+		private void RegisterNode(string prefabClone, string prefabName, string displayName, string description, float length, NodeType nodeType, int woodCost, int bronzeCost)
 		{
 			// Clone wood_beam as base prefab for our nodes
 			GameObject beamPrefab = PrefabManager.Instance.GetPrefab(prefabClone);
@@ -265,20 +246,6 @@ namespace ItemConduit.Core
 				}
 				Logger.LogInfo($"[ItemConduit] {prefabName} has {snapCount} existing snappoints from {prefabClone}");
 
-				BoxCollider boxCollider = nodePrefab.GetComponentInChildren<BoxCollider>();
-				if (boxCollider != null)
-				{
-					// The original wood_beam is likely 2 units long with size (1, 1, 2)
-					// We need to adjust based on our desired length
-					Vector3 originalSize = boxCollider.size;
-
-					// Determine which axis is the length axis (usually Z for beams)
-					// Keep width and height the same, adjust length
-					// X is the length axis
-					boxCollider.size = new Vector3(originalSize.x, originalSize.y, originalSize.z);
-
-					Logger.LogInfo($"[ItemConduit] Adjusted {prefabName} BoxCollider size from {originalSize} to {boxCollider.size}");
-				}
 			}
 
 			// Configure piece component for building system

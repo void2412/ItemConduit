@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using ItemConduit.Core;
+using ItemConduit.Config;
 using Logger = Jotunn.Logger;
 
 namespace ItemConduit.GUI
@@ -57,7 +58,7 @@ namespace ItemConduit.GUI
 
 			if (activeGUIs.Add(gui))
 			{
-				if (ItemConduitMod.ShowDebugInfo.Value)
+				if (DebugConfig.showDebug.Value)
 				{
 					Logger.LogInfo($"[ItemConduit] Registered GUI: {gui.GetType().Name}");
 				}
@@ -81,7 +82,7 @@ namespace ItemConduit.GUI
 
 			if (activeGUIs.Remove(gui))
 			{
-				if (ItemConduitMod.ShowDebugInfo.Value)
+				if (DebugConfig.showDebug.Value)
 				{
 					Logger.LogInfo($"[ItemConduit] Unregistered GUI: {gui.GetType().Name}");
 				}
