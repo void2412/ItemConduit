@@ -12,6 +12,7 @@ using ItemConduit.Nodes;
 using ItemConduit.Network;
 using ItemConduit.GUI;
 using Logger = Jotunn.Logger;
+using ItemConduit.Config;
 namespace ItemConduit.Core
 {
 	/// <summary>
@@ -72,47 +73,11 @@ namespace ItemConduit.Core
 		/// </summary>
 		private void LoadConfiguration()
 		{
-			// General Settings
-			TransferRate = Config.Bind(
-				"General",
-				"TransferRate",
-				5f,
-				new ConfigDescription(
-					"Number of items transferred per second",
-					new AcceptableValueRange<float>(0.1f, 100f)
-				)
-			);
+			Logger.LogInfo($"Loading {PluginName} config");
+			ConfigManager.Initialize(Config);
+			Logger.LogInfo("Config Load Successfully");
 
-			TransferInterval = Config.Bind(
-				"General",
-				"TransferInterval",
-				0.5f,
-				new ConfigDescription(
-					"Interval between transfer operations in seconds",
-					new AcceptableValueRange<float>(0.1f, 5f)
-				)
-			);
-
-			ConnectionRange = Config.Bind(
-				"General",
-				"ConnectionRange",
-				2f,
-				new ConfigDescription(
-					"Additional range for node connections in meters",
-					new AcceptableValueRange<float>(0.5f, 5f)
-				)
-			);
-
-			EndpointConnectionThreshold = Config.Bind(
-				"General",
-				"EndpointConnectionThreshold",
-				0.2f,
-				new ConfigDescription(
-					"Maximum distance between endpoints to form a connection (very small for snappoints)",
-					new AcceptableValueRange<float>(0.05f, 1f)
-				)
-			);
-
+			//TODO: Remove this and move to config files
 			// Visual Settings
 			EnableVisualEffects = Config.Bind(
 				"Visual",

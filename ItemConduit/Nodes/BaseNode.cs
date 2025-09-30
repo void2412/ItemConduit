@@ -875,23 +875,6 @@ namespace ItemConduit.Nodes
 		}
 
 		/// <summary>
-		/// Establish a bidirectional connection between nodes
-		/// </summary>
-		private void EstablishConnection(BaseNode otherNode)
-		{
-			if (otherNode == null || otherNode.isGhostPiece) return;
-
-			AddConnection(otherNode);
-			otherNode.AddConnection(this);
-
-			// Visual feedback for successful connection
-			if (ItemConduitMod.EnableVisualEffects.Value)
-			{
-				CreateConnectionEffect(transform.position, otherNode.transform.position);
-			}
-		}
-
-		/// <summary>
 		/// Get connection points for this node
 		/// </summary>
 		public virtual Vector3[] GetConnectionPoints()
@@ -1043,34 +1026,6 @@ namespace ItemConduit.Nodes
 		#region Visual Effects
 
 		/// <summary>
-		/// Create a visual effect for successful connections
-		/// </summary>
-		private void CreateConnectionEffect(Vector3 point1, Vector3 point2)
-		{
-			//if (!ItemConduitMod.EnableVisualEffects.Value) return;
-
-			//// Create a temporary particle effect or flash at the connection point
-			//Vector3 connectionPoint = (point1 + point2) / 2f;
-
-			//GameObject effect = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-			//effect.name = "connection_flash";
-			//effect.transform.position = connectionPoint;
-			//effect.transform.localScale = Vector3.one * 0.3f;
-
-			//Destroy(effect.GetComponent<Collider>());
-
-			//var renderer = effect.GetComponent<Renderer>();
-			//if (renderer != null)
-			//{
-			//	renderer.material = new Material(Shader.Find("Sprites/Default"));
-			//	renderer.material.color = Color.yellow;
-			//}
-
-			//// Destroy after a short time
-			//Destroy(effect, 0.5f);
-		}
-
-		/// <summary>
 		/// Update visual indicators based on active state
 		/// </summary>
 		protected virtual void UpdateVisualState(bool active)
@@ -1196,7 +1151,7 @@ namespace ItemConduit.Nodes
 		{
 			return NodeType switch
 			{
-				NodeType.Conduit => $"<color=gray>Conduit Node</color>",
+				NodeType.Conduit => $"<color=white>Conduit Node</color>",
 				NodeType.Extract => $"<color=green>Extract Node</color>",
 				NodeType.Insert => $"<color=blue>Insert Node</color>",
 				_ => "Unknown Node"

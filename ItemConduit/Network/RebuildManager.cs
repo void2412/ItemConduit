@@ -5,6 +5,7 @@ using System.Linq;
 using UnityEngine;
 using ItemConduit.Core;
 using ItemConduit.Nodes;
+using ItemConduit.Config;
 using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Network
@@ -59,16 +60,16 @@ namespace ItemConduit.Network
 		private RebuildStatistics statistics;
 
 		/// <summary>Maximum nodes to process per frame in connection detection</summary>
-		private const int CONNECTIONS_PER_FRAME = 3;
+		private int CONNECTIONS_PER_FRAME = NetworkPerformanceConfig.nodeProcessPerFrame.Value;
 
 		/// <summary>Maximum nodes to process per frame in network creation</summary>
-		private const int NETWORKS_PER_FRAME = 5;
+		private int NETWORKS_PER_FRAME = NetworkPerformanceConfig.networkProcessPerFrame.Value;
 
 		/// <summary>Maximum time in milliseconds per frame for rebuild operations</summary>
-		private const float MAX_MS_PER_FRAME = 8f;
+		private float MAX_MS_PER_FRAME = NetworkPerformanceConfig.processingTimePerFrame.Value;
 
-		/// <summary>Delay between connection batches</summary>
-		private const float CONNECTION_BATCH_DELAY = 0.05f;
+		private bool DEBUG_CONFIG = false;
+
 
 		#endregion
 

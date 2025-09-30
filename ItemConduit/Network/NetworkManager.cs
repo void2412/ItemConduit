@@ -6,6 +6,7 @@ using UnityEngine;
 using ItemConduit.Core;
 using ItemConduit.Nodes;
 using Logger = Jotunn.Logger;
+using ItemConduit.Config;
 
 namespace ItemConduit.Network
 {
@@ -53,6 +54,12 @@ namespace ItemConduit.Network
 
 		/// <summary>Reference to the rebuild manager</summary>
 		private RebuildManager rebuildManager;
+
+		private int transferRate = NetworkPerformanceConfig.transferRate.Value;
+
+		private float transferTick = NetworkPerformanceConfig.transferTick.Value;
+
+		private bool DEBUG_CONFIG = false;
 
 		#endregion
 
@@ -373,7 +380,7 @@ namespace ItemConduit.Network
 			while (true)
 			{
 				// Wait for transfer interval
-				yield return new WaitForSeconds(ItemConduitMod.TransferInterval.Value);
+				yield return new WaitForSeconds(transferTick);
 
 				// Skip if not server or rebuilding
 				if (!ZNet.instance.IsServer() || IsRebuilding())
@@ -450,7 +457,7 @@ namespace ItemConduit.Network
 					if (items.Count == 0) continue;
 
 					// Calculate items per transfer based on transfer rate
-					int itemsPerTransfer = Mathf.Max(1, Mathf.RoundToInt(ItemConduitMod.TransferRate.Value * ItemConduitMod.TransferInterval.Value));
+					int itemsPerTransfer = Mathf.Max(1, Mathf.RoundToInt(transferRate));
 
 					foreach (var item in items.Take(itemsPerTransfer))
 					{
