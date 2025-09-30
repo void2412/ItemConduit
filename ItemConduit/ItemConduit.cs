@@ -22,16 +22,16 @@ namespace ItemConduit.Core
 	[BepInPlugin(PluginGUID, PluginName, PluginVersion)]
 	[BepInDependency(Jotunn.Main.ModGuid)]
 	[NetworkCompatibility(CompatibilityLevel.EveryoneMustHaveMod, VersionStrictness.Minor)]
-	public class ItemConduitMod : BaseUnityPlugin
+	public class ItemConduit : BaseUnityPlugin
 	{
 		// Plugin metadata
-		public const string PluginGUID = "com.yourname.itemconduit";
+		public const string PluginGUID = "void.itemconduit";
 		public const string PluginName = "ItemConduit";
 		public const string PluginVersion = "1.0.0";
 
 		// Singleton instance for global access
-		private static ItemConduitMod _instance;
-		public static ItemConduitMod Instance => _instance;
+		private static ItemConduit _instance;
+		public static ItemConduit Instance => _instance;
 
 		// Harmony instance for runtime patching
 		private Harmony harmony;
@@ -55,7 +55,7 @@ namespace ItemConduit.Core
 			PrefabManager.OnVanillaPrefabsAvailable += RegisterPieces;
 
 			// Initialize the network management system
-			ItemConduit.Network.NetworkManager.Instance.Initialize();
+			global::ItemConduit.Network.NetworkManager.Instance.Initialize();
 
 			Jotunn.Logger.LogInfo($"{PluginName} v{PluginVersion} initialized successfully!");
 		}
@@ -357,7 +357,7 @@ namespace ItemConduit.Core
 			harmony?.UnpatchSelf();
 
 			// Shutdown network manager
-			ItemConduit.Network.NetworkManager.Instance?.Shutdown();
+			global::ItemConduit.Network.NetworkManager.Instance?.Shutdown();
 
 			Jotunn.Logger.LogInfo($"{PluginName} shutdown complete");
 		}
