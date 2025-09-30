@@ -354,6 +354,7 @@ namespace ItemConduit.Debug
 			// Create wireframe component on the container
 			var wireframe = container.gameObject.AddComponent<ContainerWireframe>();
 			wireframe.Initialize();
+			wireframe.SetVisible(VisualConfig.containerWireframe.Value);
 			wireframes[container] = wireframe;
 
 			
@@ -730,9 +731,11 @@ namespace ItemConduit.Debug
 				worldCorners[7] = new Vector3(min.x, max.y, max.z);
 			}
 
-			Logger.LogWarning($"[DEBUG] World corners Y values: Bottom={worldCorners[0].y}, Top={worldCorners[4].y}");
-			Logger.LogWarning($"[DEBUG] Expected Y range: {collider.bounds.min.y} to {collider.bounds.max.y}");
-
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogWarning($"[DEBUG] World corners Y values: Bottom={worldCorners[0].y}, Top={worldCorners[4].y}");
+				Logger.LogWarning($"[DEBUG] Expected Y range: {collider.bounds.min.y} to {collider.bounds.max.y}");
+			}
 			return worldCorners;
 		}
 

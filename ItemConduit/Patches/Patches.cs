@@ -229,26 +229,36 @@ namespace ItemConduit.Patches
 		{
 			private static void Postfix()
 			{
-				Terminal.ConsoleCommand debugCmd = new Terminal.ConsoleCommand(
-					"conduit_debug",
-					"Toggle conduit debug visualization",
+				Terminal.ConsoleCommand nodeWireframeCmd = new Terminal.ConsoleCommand(
+					"conduit_wireframe",
+					"Toggle conduit wireframe visualization",
 					delegate (Terminal.ConsoleEventArgs args)
 					{
-						DebugConfig.showDebug.Value = !DebugConfig.showDebug.Value;
+						VisualConfig.nodeWireframe.Value = !VisualConfig.nodeWireframe.Value;
 						UpdateAllNodeVisualizations();
-						args.Context.AddString($"Debug visualization: {(DebugConfig.showDebug.Value ? "ON" : "OFF")}");
+						args.Context.AddString($"Node wireframe visualization: {(VisualConfig.nodeWireframe.Value ? "ON" : "OFF")}");
 					}
 				);
 
-				Terminal.ConsoleCommand wireframeCmd = new Terminal.ConsoleCommand(
+				Terminal.ConsoleCommand ContainerWireframeCmd = new Terminal.ConsoleCommand(
 					"container_wireframe",
 					"Toggle container wireframe visualization",
 					delegate (Terminal.ConsoleEventArgs args)
 					{
-						bool currentState = true; // You can track this state
-						currentState = !currentState;
-						ContainerWireframeManager.Instance.SetWireframesVisible(currentState);
-						args.Context.AddString($"Container wireframes: {(currentState ? "ON" : "OFF")}");
+						VisualConfig.containerWireframe.Value = !VisualConfig.containerWireframe.Value;
+						ContainerWireframeManager.Instance.SetWireframesVisible(VisualConfig.containerWireframe.Value);
+						args.Context.AddString($"Container wireframes: {(VisualConfig.containerWireframe.Value ? "ON" : "OFF")}");
+					}
+				);
+
+				Terminal.ConsoleCommand snappointSphereCmd = new Terminal.ConsoleCommand(
+					"conduit_snappoint",
+					"Toggle conduit snappoint visualization",
+					delegate (Terminal.ConsoleEventArgs args)
+					{
+						VisualConfig.snappointSphere.Value = !VisualConfig.snappointSphere.Value;
+						UpdateAllNodeVisualizations();
+						args.Context.AddString($"Node snappoint visualization: {(VisualConfig.snappointSphere.Value ? "ON" : "OFF")}");
 					}
 				);
 			}
@@ -260,13 +270,24 @@ namespace ItemConduit.Patches
 				{
 					if (node.TryGetComponent<BoundsVisualizer>(out var viz))
 					{
-						viz.SetVisible(DebugConfig.showDebug.Value);
+						viz.SetVisible(VisualConfig.nodeWireframe.Value);
 					}
-					else if (DebugConfig.showDebug.Value)
+					else if (VisualConfig.nodeWireframe.Value)
 					{
-						node.SendMessage("InitializeBoundsVisualization", SendMessageOptions.DontRequireReceiver);
+						node.SendMessage("Initialize node wireframe visualization", SendMessageOptions.DontRequireReceiver);
 					}
+
+					if (node.TryGetComponent<SnapConnectionVisualizer>(out var snap))
+					{
+						snap.SetVisible(VisualConfig.snappointSphere.Value);
+					}
+					else if (VisualConfig.snappointSphere.Value)
+					{
+						node.SendMessage("Initialize node snappoint visualization", SendMessageOptions.DontRequireReceiver);
+					}
+
 				}
+
 			}
 		}
 

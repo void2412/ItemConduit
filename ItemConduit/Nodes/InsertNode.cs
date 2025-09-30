@@ -153,7 +153,7 @@ namespace ItemConduit.Nodes
 				lastInsertionTime = Time.time;
 
 				// Visual feedback
-				if (ItemConduitMod.EnableVisualEffects.Value)
+				if (VisualConfig.transferVisualEffect.Value)
 				{
 					StartCoroutine(InsertFlashEffect());
 				}
@@ -353,7 +353,7 @@ namespace ItemConduit.Nodes
 		{
 			base.UpdateVisualState(active);
 
-			if (!ItemConduitMod.EnableVisualEffects.Value) return;
+			if (!VisualConfig.transferVisualEffect.Value) return;
 
 			// Add blue pulse effect when inserting
 			if (active && Time.time - lastInsertionTime < 1f)
@@ -391,7 +391,7 @@ namespace ItemConduit.Nodes
 			lastInsertionTime = Time.time;
 
 			// Additional visual or audio feedback could be added here
-			if (ItemConduitMod.EnableVisualEffects.Value)
+			if (VisualConfig.transferVisualEffect.Value)
 			{
 				// Could add particle effect or sound
 			}

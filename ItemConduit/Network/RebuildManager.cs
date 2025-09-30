@@ -68,8 +68,6 @@ namespace ItemConduit.Network
 		/// <summary>Maximum time in milliseconds per frame for rebuild operations</summary>
 		private float MAX_MS_PER_FRAME = NetworkPerformanceConfig.processingTimePerFrame.Value;
 
-		private bool DEBUG_CONFIG = false;
-
 
 		#endregion
 

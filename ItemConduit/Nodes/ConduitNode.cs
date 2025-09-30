@@ -13,8 +13,6 @@ namespace ItemConduit.Nodes
 	{
 		// Visual effect components (optional)
 		private LineRenderer connectionVisualizer;
-		private Material activeMaterial;
-		private Material inactiveMaterial;
 
 		/// <summary>
 		/// Initialize conduit node type
@@ -25,7 +23,7 @@ namespace ItemConduit.Nodes
 			NodeType = NodeType.Conduit;
 
 			// Initialize visual components if enabled
-			if (ItemConduitMod.EnableVisualEffects.Value)
+			if (VisualConfig.transferVisualEffect.Value)
 			{
 				InitializeVisuals();
 			}
@@ -95,7 +93,7 @@ namespace ItemConduit.Nodes
 		{
 			base.UpdateVisualState(active);
 
-			if (!ItemConduitMod.EnableVisualEffects.Value) return;
+			if (!VisualConfig.transferVisualEffect.Value) return;
 
 			// Update material or particle effects
 			MeshRenderer renderer = GetComponentInChildren<MeshRenderer>();
@@ -122,7 +120,7 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		private void UpdateConnectionVisuals()
 		{
-			if (connectionVisualizer == null || !ItemConduitMod.EnableVisualEffects.Value) return;
+			if (connectionVisualizer == null || !VisualConfig.transferVisualEffect.Value) return;
 
 			// For now, disable line renderer as it would need more complex handling
 			// In a full implementation, this would draw lines to connected nodes
@@ -147,7 +145,7 @@ namespace ItemConduit.Nodes
 			base.FindConnections();
 
 			// Update visuals when connections change
-			if (ItemConduitMod.EnableVisualEffects.Value)
+			if (VisualConfig.transferVisualEffect.Value)
 			{
 				UpdateConnectionVisuals();
 			}

@@ -22,7 +22,7 @@ namespace ItemConduit.Config
 		/// <summary>Maximum time in milliseconds per frame for rebuild operations</summary>
 		public static ConfigEntry<float> processingTimePerFrame { get; private set; }
 
-
+		public static ConfigEntry<float> connectionRange {  get; private set; }
 
 		#endregion
 
@@ -32,7 +32,7 @@ namespace ItemConduit.Config
 		public static ConfigEntry<int> transferRate { get; private set; }
 		#endregion
 
-		
+
 
 		/// <summary>
 		/// Initialize configuration entries
@@ -91,7 +91,12 @@ namespace ItemConduit.Config
 				new ConfigDescription("Maximum time in milliseconds per frame for rebuild operations")
 			);
 
-
+			connectionRange = config.Bind(
+				"Network Rebuild Settings",
+				"connectionRange",
+				0.2f,
+				new ConfigDescription("Range to validate connections.")
+			);
 			#endregion
 		}
 

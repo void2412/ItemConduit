@@ -332,7 +332,7 @@ namespace ItemConduit.Nodes
 		{
 			base.UpdateVisualState(active);
 
-			if (!ItemConduitMod.EnableVisualEffects.Value) return;
+			if (!VisualConfig.transferVisualEffect.Value) return;
 
 			// Add green pulse effect when extracting
 			if (active && Time.time - lastExtractionTime < 1f)
@@ -355,7 +355,7 @@ namespace ItemConduit.Nodes
 			lastExtractionTime = Time.time;
 
 			// Trigger visual feedback
-			if (ItemConduitMod.EnableVisualEffects.Value)
+			if (VisualConfig.transferVisualEffect.Value)
 			{
 				StartCoroutine(ExtractFlashEffect());
 			}

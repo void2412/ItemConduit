@@ -67,7 +67,7 @@ namespace ItemConduit.Nodes
 
 		#endregion
 
-		#region Container Management
+		#region Container Management Fields
 
 		/// <summary>Reference to connected container (null for Conduit nodes)</summary>
 		protected Container targetContainer;
@@ -463,22 +463,22 @@ namespace ItemConduit.Nodes
 			var existingConnections = new HashSet<BaseNode>(connectedNodes);
 			var detectedConnections = new HashSet<BaseNode>();
 
-			//// First, validate existing connections
-			//foreach (var existingNode in existingConnections)
-			//{
-			//	if (existingNode != null &&
-			//		!existingNode.isGhostPiece &&
-			//		existingNode.IsValidPlacedNode())
-			//	{
-			//		float distance = Vector3.Distance(transform.position, existingNode.transform.position);
-			//		float maxRange = (nodeLength + existingNode.NodeLength) / 2f + ItemConduitMod.ConnectionRange.Value;
+			// First, validate existing connections
+			foreach (var existingNode in existingConnections)
+			{
+				if (existingNode != null &&
+					!existingNode.isGhostPiece &&
+					existingNode.IsValidPlacedNode())
+				{
+					float distance = Vector3.Distance(transform.position, existingNode.transform.position);
+					float maxRange = (nodeLength + existingNode.NodeLength) / 2f + NetworkPerformanceConfig.connectionRange.Value;
 
-			//		if (distance <= maxRange && CanConnectTo(existingNode))
-			//		{
-			//			detectedConnections.Add(existingNode);
-			//		}
-			//	}
-			//}
+					if (distance <= maxRange && CanConnectTo(existingNode))
+					{
+						detectedConnections.Add(existingNode);
+					}
+				}
+			}
 
 			// Method 1: Snappoint detection for straight connections
 			var snapPoints = GetSnapPoints();
@@ -1037,7 +1037,7 @@ namespace ItemConduit.Nodes
 			IsActive = active;
 
 			// Base implementation - can be overridden for visual effects
-			if (ItemConduitMod.EnableVisualEffects.Value)
+			if (VisualConfig.transferVisualEffect.Value)
 			{
 				// Update material or particle effects based on active state
 				MeshRenderer renderer = GetComponentInChildren<MeshRenderer>();
@@ -1187,7 +1187,7 @@ namespace ItemConduit.Nodes
 
 		protected virtual void InitializeBoundsVisualization()
 		{
-			if (!DebugConfig.showDebug.Value || !ItemConduitMod.EnableVisualEffects.Value)
+			if (!DebugConfig.showDebug.Value)
 				return;
 
 			if (isGhostPiece) return;
@@ -1222,55 +1222,7 @@ namespace ItemConduit.Nodes
 				boundsVisualizer.UpdateCollider(mainCollider);
 			}
 		}
-
-		protected Bounds GetLocalNodeBounds()
-		{
-			Collider[] colliders = GetComponentsInChildren<Collider>();
-
-			if (colliders.Length == 0)
-			{
-				// Fallback to calculated bounds based on node length
-				return new Bounds(Vector3.zero, new Vector3(0.3f, 0.3f, nodeLength));
-			}
-
-			// Find first non-trigger collider
-			Collider mainCollider = null;
-			foreach (var col in colliders)
-			{
-				if (!col.isTrigger)
-				{
-					mainCollider = col;
-					break;
-				}
-			}
-
-			if (mainCollider != null)
-			{
-				// Get local bounds
-				if (mainCollider is BoxCollider box)
-				{
-					return new Bounds(box.center, box.size);
-				}
-				else if (mainCollider is MeshCollider mesh && mesh.sharedMesh != null)
-				{
-					return mesh.sharedMesh.bounds;
-				}
-				else
-				{
-					// Convert world bounds to local
-					Bounds worldBounds = mainCollider.bounds;
-					Vector3 localCenter = transform.InverseTransformPoint(worldBounds.center);
-					Vector3 localSize = transform.InverseTransformVector(worldBounds.size);
-					return new Bounds(localCenter, localSize);
-				}
-			}
-
-			// Fallback
-			return new Bounds(Vector3.zero, new Vector3(0.3f, 0.3f, nodeLength));
-		}
-
-		
-
+	
 		public void UpdateSnapVisualization()
 		{
 			if (snapVisualizer != null)
