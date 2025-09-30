@@ -15,73 +15,7 @@ namespace ItemConduit.Patches
 	/// </summary>
 	public static class HarmonyPatches
 	{
-		/// <summary>
-		/// Patch for when a piece is removed/destroyed
-		/// Handles cleanup and network rebuild
-		/// </summary>
-		[HarmonyPatch(typeof(Piece), "DropResources")]
-		public static class Piece_DropResources_Patch
-		{
-			/// <summary>
-			/// Before a piece drops resources (is being destroyed)
-			/// </summary>
-			private static void Prefix(Piece __instance)
-			{
-				if (__instance == null) return;
-				if (ZNet.instance == null || !ZNet.instance.IsServer()) return;
-
-				// Check if this is a conduit node
-				BaseNode node = __instance.GetComponent<BaseNode>();
-				if (node != null && node.IsValidPlacedNode())
-				{
-					// Get connected nodes before destruction
-					var connectedNodes = node.GetConnectedNodes();
-
-					// Request rebuild for connected nodes after this one is destroyed
-					foreach (var connectedNode in connectedNodes)
-					{
-						if (connectedNode != null && connectedNode.IsValidPlacedNode())
-						{
-							RebuildManager.Instance.RequestRebuildForNode(connectedNode);
-						}
-					}
-
-					if (DebugConfig.showDebug.Value)
-					{
-						Logger.LogInfo($"[ItemConduit] Conduit node being destroyed: {__instance.name}");
-					}
-				}
-			}
-		}
-
-		/// <summary>
-		/// Patch to prevent ghost pieces from being processed
-		/// </summary>
-		[HarmonyPatch(typeof(Player), "UpdatePlacementGhost")]
-		public static class Player_UpdatePlacementGhost_Patch
-		{
-			/// <summary>
-			/// Mark placement ghost pieces so they can be ignored
-			/// </summary>
-			private static void Postfix(Player __instance)
-			{
-				if (__instance.m_placementGhost != null)
-				{
-					// Check if the ghost has a node component
-					BaseNode node = __instance.m_placementGhost.GetComponent<BaseNode>();
-					if (node != null)
-					{
-						// The ghost detection is already handled in BaseNode.CheckIfGhost()
-						// This is here as a safeguard
-						if (DebugConfig.showDebug.Value)
-						{
-							// Don't spam log for ghosts
-							// Logger.LogInfo($"[ItemConduit] Ghost piece detected in placement");
-						}
-					}
-				}
-			}
-		}
+		
 
 		/// <summary>
 		/// Patch for game initialization

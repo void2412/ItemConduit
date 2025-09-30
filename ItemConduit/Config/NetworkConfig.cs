@@ -95,7 +95,7 @@ namespace ItemConduit.Config
 				"Network Rebuild Settings",
 				"connectionRange",
 				0.2f,
-				new ConfigDescription("Range to validate connections.")
+				new ConfigDescription("Range for snappoint connection.")
 			);
 			#endregion
 		}

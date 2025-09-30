@@ -197,6 +197,12 @@ namespace ItemConduit.Nodes
 			if (ZNet.instance != null && ZNet.instance.IsServer())
 			{
 				StartUnifiedDetection();
+
+				while (!IsDetectionComplete)
+				{
+					yield return null;
+				}
+
 				// Register with network manager
 				NetworkManager.Instance.RegisterNode(this);
 
