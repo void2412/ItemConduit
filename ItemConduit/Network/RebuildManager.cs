@@ -60,13 +60,13 @@ namespace ItemConduit.Network
 		private RebuildStatistics statistics;
 
 		/// <summary>Maximum nodes to process per frame in connection detection</summary>
-		private int CONNECTIONS_PER_FRAME = NetworkPerformanceConfig.nodeProcessPerFrame.Value;
+		private int CONNECTIONS_PER_FRAME = NetworkConfig.nodeProcessPerFrame.Value;
 
 		/// <summary>Maximum nodes to process per frame in network creation</summary>
-		private int NETWORKS_PER_FRAME = NetworkPerformanceConfig.networkProcessPerFrame.Value;
+		private int NETWORKS_PER_FRAME = NetworkConfig.networkProcessPerFrame.Value;
 
 		/// <summary>Maximum time in milliseconds per frame for rebuild operations</summary>
-		private float MAX_MS_PER_FRAME = NetworkPerformanceConfig.processingTimePerFrame.Value;
+		private float MAX_MS_PER_FRAME = NetworkConfig.processingTimePerFrame.Value;
 
 
 		#endregion

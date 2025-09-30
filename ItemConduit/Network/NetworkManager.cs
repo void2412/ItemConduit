@@ -55,9 +55,9 @@ namespace ItemConduit.Network
 		/// <summary>Reference to the rebuild manager</summary>
 		private RebuildManager rebuildManager;
 
-		private int transferRate = NetworkPerformanceConfig.transferRate.Value;
+		private int transferRate = NetworkConfig.transferRate.Value;
 
-		private float transferTick = NetworkPerformanceConfig.transferTick.Value;
+		private float transferTick = NetworkConfig.transferTick.Value;
 
 
 		#endregion

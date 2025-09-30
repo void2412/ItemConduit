@@ -26,7 +26,7 @@ namespace ItemConduit.Config
 
 				// Init each module
 				DebugConfig.Initialize(config);
-				NetworkPerformanceConfig.Initialize(config);
+				NetworkConfig.Initialize(config);
 				VisualConfig.Initialize(config);
 			}
 			catch (Exception ex)

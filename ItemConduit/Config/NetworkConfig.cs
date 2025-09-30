@@ -8,7 +8,7 @@ namespace ItemConduit.Config
 	/// Configuration for network performance tuning
 	/// Allows server admins to adjust performance parameters without recompiling
 	/// </summary>
-	public static class NetworkPerformanceConfig
+	public static class NetworkConfig
 	{
 		#region Rebuild Config
 		public static ConfigEntry<float> rebuildInterval { get; private set; }

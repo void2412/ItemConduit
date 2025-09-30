@@ -463,30 +463,13 @@ namespace ItemConduit.Nodes
 			var existingConnections = new HashSet<BaseNode>(connectedNodes);
 			var detectedConnections = new HashSet<BaseNode>();
 
-			// First, validate existing connections
-			foreach (var existingNode in existingConnections)
-			{
-				if (existingNode != null &&
-					!existingNode.isGhostPiece &&
-					existingNode.IsValidPlacedNode())
-				{
-					float distance = Vector3.Distance(transform.position, existingNode.transform.position);
-					float maxRange = (nodeLength + existingNode.NodeLength) / 2f + NetworkPerformanceConfig.connectionRange.Value;
-
-					if (distance <= maxRange && CanConnectTo(existingNode))
-					{
-						detectedConnections.Add(existingNode);
-					}
-				}
-			}
-
 			// Method 1: Snappoint detection for straight connections
 			var snapPoints = GetSnapPoints();
 			foreach (var snapPoint in snapPoints)
 			{
 				Collider[] snapOverlaps = Physics.OverlapSphere(
 					snapPoint.position,
-					0.15f,
+					NetworkConfig.connectionRange.Value,
 					LayerMask.GetMask("piece", "piece_nonsolid")
 				);
 
