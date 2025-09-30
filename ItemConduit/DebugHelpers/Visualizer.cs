@@ -16,6 +16,7 @@ namespace ItemConduit.Debug
 		{
 			// Create collider wireframe with 12 edges  
 			colliderWireframe = CreateWireframeBox("ColliderWireframe", colliderColor, 0.025f, colliderLines);
+			this.SetVisible(VisualConfig.nodeWireframe.Value);
 		}
 
 		private GameObject CreateWireframeBox(string name, Color color, float width, List<LineRenderer> linesList)
@@ -174,6 +175,7 @@ namespace ItemConduit.Debug
 		{
 			node = baseNode;
 			CreateSnapMarkers();
+			this.SetVisible(VisualConfig.snappointSphere.Value);
 		}
 
 		private void CreateSnapMarkers()
