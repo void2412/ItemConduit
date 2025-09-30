@@ -112,16 +112,6 @@ namespace ItemConduit.Nodes
 			return targetContainer;
 		}
 
-		/// <summary>
-		/// Ensures container detection has been attempted
-		/// </summary>
-		public void EnsureContainerDetection()
-		{
-			if (targetContainer == null && IsValidPlacedNode() && !isUpdatingDetection)
-			{
-				StartUnifiedDetection();
-			}
-		}
 
 		#endregion
 

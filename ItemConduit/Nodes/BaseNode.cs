@@ -196,6 +196,7 @@ namespace ItemConduit.Nodes
 			// Only register on server
 			if (ZNet.instance != null && ZNet.instance.IsServer())
 			{
+				StartUnifiedDetection();
 				// Register with network manager
 				NetworkManager.Instance.RegisterNode(this);
 
@@ -208,11 +209,11 @@ namespace ItemConduit.Nodes
 			InitializeBoundsVisualization();
 
 			
-			if (CanConnectToContainers)
-			{
-				yield return new WaitForSeconds(0.5f);
-				StartUnifiedDetection(DetectionMode.ContainersOnly);
-			}
+			//if (CanConnectToContainers)
+			//{
+			//	yield return new WaitForSeconds(0.5f);
+			//	StartUnifiedDetection(DetectionMode.ContainersOnly);
+			//}
 		}
 
 		/// <summary>
@@ -921,7 +922,9 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		public void AddConnection(BaseNode node)
 		{
-			if (node != null && node != this && !node.isGhostPiece && !connectedNodes.Contains(node))
+			if (node == null || node == this || node.isGhostPiece) return;
+
+			if (!connectedNodes.Contains(node))
 			{
 				connectedNodes.Add(node);
 			}

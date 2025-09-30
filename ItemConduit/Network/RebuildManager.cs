@@ -51,7 +51,7 @@ namespace ItemConduit.Network
 		private Coroutine rebuildCoroutine;
 
 		/// <summary>Time to wait before starting rebuild (to batch multiple changes)</summary>
-		private float rebuildDelay = 0.5f;
+		private float rebuildDelay = NetworkConfig.rebuildInterval.Value;
 
 		/// <summary>Time of last rebuild request</summary>
 		private float lastRebuildRequestTime;
@@ -440,7 +440,7 @@ namespace ItemConduit.Network
 							if (stuck != null && stuck.gameObject != null)
 							{
 								Logger.LogError($"[ItemConduit] Force completing: {stuck.name}");
-								stuck.OnDetectionComplete -= null; // This line also looks wrong
+								stuck.OnDetectionComplete -= null;
 							}
 						}
 						catch (MissingReferenceException)
