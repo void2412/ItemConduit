@@ -443,11 +443,10 @@ namespace ItemConduit.GUI
 			int priority = (int)prioritySlider.value;
 			node.SetPriority(priority);
 
-			// Set filter if used
-			if (!string.IsNullOrWhiteSpace(filterInput.text))
-			{
-				node.SetFilter(ParseFilter(), whitelistToggle.isOn);
-			}
+			// Set filter
+
+			node.SetFilter(ParseFilter(), whitelistToggle.isOn);
+
 
 			if (DebugConfig.showDebug.Value)
 			{
@@ -496,6 +495,11 @@ namespace ItemConduit.GUI
 				{
 					filter.Add(trimmed);
 				}
+			}
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"Filter Settings: {string.Join(",", filter)}");
 			}
 			return filter;
 		}

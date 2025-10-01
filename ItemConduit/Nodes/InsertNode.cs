@@ -373,7 +373,7 @@ namespace ItemConduit.Nodes
 
 		public void SetFilter(HashSet<string> filter, bool isWhitelist)
 		{
-			ItemFilter = new HashSet<string>(filter);
+			ItemFilter =filter != null ? new HashSet<string>(filter): new HashSet<string>(); 
 			IsWhitelist = isWhitelist;
 
 			// Save to ZDO for persistence
@@ -429,13 +429,26 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		private void RPC_UpdateFilter(long sender, string filterStr, bool isWhitelist)
 		{
-			// Parse filter string back into HashSet
-			ItemFilter = new HashSet<string>(
-				filterStr.Split(',')
-					.Where(s => !string.IsNullOrEmpty(s))
-					.Select(s => s.Trim())
-			);
+			if (string.IsNullOrEmpty(filterStr))
+			{
+				ItemFilter = new HashSet<string>();
+			}
+			else
+			{
+				// Parse filter string back into HashSet
+				ItemFilter = new HashSet<string>(
+					filterStr.Split(',')
+						.Where(s => !string.IsNullOrEmpty(s))
+						.Select(s => s.Trim())
+				);
+			}
+				
 			IsWhitelist = isWhitelist;
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] {NodeType} node {name} received filter update via RPC: {ItemFilter.Count} items, mode: {(IsWhitelist ? "whitelist" : "blacklist")}");
+			}
 		}
 
 
