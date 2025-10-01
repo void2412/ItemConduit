@@ -65,6 +65,42 @@ namespace ItemConduit.Nodes
 			}
 		}
 
+		protected override void Start()
+		{
+			base.Start();
+
+			if (!isGhostPiece && zNetView != null && zNetView.IsValid()) {
+				LoadFromZDO();
+			}
+		}
+
+		private void LoadFromZDO()
+		{
+			ZDO zdo = zNetView.GetZDO();
+			if (zdo == null) return;
+
+			string savedChannel = zdo.GetString("ItemConduit_Channel", "None");
+			ChannelId = savedChannel;
+
+			string savedFilter = zdo.GetString("ItemConduit_Filter", "");
+			bool savedIsWhitelist = zdo.GetBool("ItemConduit_IsWhitelist", true);
+
+			if (!string.IsNullOrEmpty(savedFilter))
+			{
+				ItemFilter = new HashSet<string>(
+					savedFilter.Split(',')
+						.Where(s => !string.IsNullOrEmpty(s))
+						.Select(s => s.Trim())
+				);
+			}
+			IsWhitelist = savedIsWhitelist;
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] Loaded ExtractNode config - Channel: {ChannelId}, Filter items: {ItemFilter.Count}");
+			}
+		}
+
 		#endregion
 
 		#region Container Detection Override
@@ -168,6 +204,16 @@ namespace ItemConduit.Nodes
 		{
 			ChannelId = string.IsNullOrEmpty(channelId) ? "None" : channelId;
 
+			// Save to ZDO for persistence
+			if (zNetView != null && zNetView.IsValid())
+			{
+				ZDO zdo = zNetView.GetZDO();
+				if (zdo != null)
+				{
+					zdo.Set("ItemConduit_Channel", ChannelId);
+				}
+			}
+
 			// Sync to all clients
 			if (zNetView != null && zNetView.IsValid() && ZNet.instance.IsServer())
 			{
@@ -195,6 +241,19 @@ namespace ItemConduit.Nodes
 		{
 			ItemFilter = new HashSet<string>(filter);
 			IsWhitelist = isWhitelist;
+
+			// Save to ZDO for persistence
+			if (zNetView != null && zNetView.IsValid())
+			{
+				ZDO zdo = zNetView.GetZDO();
+				if (zdo != null)
+				{
+					string filterStr = string.Join(",", filter);
+					zdo.Set("ItemConduit_Filter", filterStr);
+					zdo.Set("ItemConduit_IsWhitelist", isWhitelist);
+				}
+			}
+
 
 			// Sync to all clients
 			if (zNetView != null && zNetView.IsValid() && ZNet.instance.IsServer())

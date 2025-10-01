@@ -69,6 +69,48 @@ namespace ItemConduit.Nodes
 			}
 		}
 
+		protected override void Start()
+		{
+			base.Start();
+
+			if (!isGhostPiece && zNetView != null && zNetView.IsValid()) {
+				LoadFromZDO();
+			}
+		}
+
+		private void LoadFromZDO()
+		{
+			ZDO zdo = zNetView.GetZDO();
+			if (zdo == null) return;
+
+			// Load channel
+			string savedChannel = zdo.GetString("ItemConduit_Channel", "None");
+			ChannelId = savedChannel;
+
+			// Load priority
+			int savedPriority = zdo.GetInt("ItemConduit_Priority", 0);
+			Priority = savedPriority;
+
+			// Load filter
+			string savedFilter = zdo.GetString("ItemConduit_Filter", "");
+			bool savedIsWhitelist = zdo.GetBool("ItemConduit_IsWhitelist", true);
+
+			if (!string.IsNullOrEmpty(savedFilter))
+			{
+				ItemFilter = new HashSet<string>(
+					savedFilter.Split(',')
+						.Where(s => !string.IsNullOrEmpty(s))
+						.Select(s => s.Trim())
+				);
+			}
+			IsWhitelist = savedIsWhitelist;
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] Loaded InsertNode config - Channel: {ChannelId}, Priority: {Priority}, Filter items: {ItemFilter.Count}");
+			}
+		}
+
 		#endregion
 
 		#region Container Detection Override
@@ -130,7 +172,7 @@ namespace ItemConduit.Nodes
 
 			// Get item name for filtering
 			string itemName = item.m_dropPrefab?.name ?? item.m_shared.m_name;
-			bool inFilter = ItemFilter.Contains(itemName);
+			bool inFilter = ItemFilter.Contains(itemName.ToLower());
 
 			// Apply whitelist/blacklist logic
 			return IsWhitelist ? inFilter : !inFilter;
@@ -262,7 +304,17 @@ namespace ItemConduit.Nodes
 		/// <param name="channelId">The channel ID to set</param>
 		public void SetChannel(string channelId)
 		{
-			ChannelId = string.IsNullOrEmpty(channelId) ? "None" : channelId;
+			ChannelId = string.IsNullOrEmpty(channelId) ? "" : channelId;
+
+			// Save to ZDO for persistence
+			if (zNetView != null && zNetView.IsValid())
+			{
+				ZDO zdo = zNetView.GetZDO();
+				if (zdo != null)
+				{
+					zdo.Set("ItemConduit_Channel", ChannelId);
+				}
+			}
 
 			// Sync to all clients
 			if (zNetView != null && zNetView.IsValid() && ZNet.instance.IsServer())
@@ -290,6 +342,16 @@ namespace ItemConduit.Nodes
 		{
 			Priority = priority;
 
+			// Save to ZDO for persistence
+			if (zNetView != null && zNetView.IsValid())
+			{
+				ZDO zdo = zNetView.GetZDO();
+				if (zdo != null)
+				{
+					zdo.Set("ItemConduit_Priority", Priority);
+				}
+			}
+
 			// Sync to all clients
 			if (zNetView != null && zNetView.IsValid() && ZNet.instance.IsServer())
 			{
@@ -313,6 +375,19 @@ namespace ItemConduit.Nodes
 			ItemFilter = new HashSet<string>(filter);
 			IsWhitelist = isWhitelist;
 
+			// Save to ZDO for persistence
+			if (zNetView != null && zNetView.IsValid())
+			{
+				ZDO zdo = zNetView.GetZDO();
+				if (zdo != null)
+				{
+					string filterStr = string.Join(",", filter);
+					zdo.Set("ItemConduit_Filter", filterStr);
+					zdo.Set("ItemConduit_IsWhitelist", isWhitelist);
+				}
+			}
+
+
 			// Sync to all clients
 			if (zNetView != null && zNetView.IsValid() && ZNet.instance.IsServer())
 			{
@@ -326,6 +401,8 @@ namespace ItemConduit.Nodes
 				Logger.LogInfo($"[ItemConduit] Insert node {name} filter set to {mode} with {filter.Count} items");
 			}
 		}
+
+
 		#endregion
 
 		#region RPC Handlers
@@ -359,6 +436,7 @@ namespace ItemConduit.Nodes
 			);
 			IsWhitelist = isWhitelist;
 		}
+
 
 		#endregion
 
