@@ -544,7 +544,7 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		public void RefreshContainerConnection()
 		{
-			RefreshDetection();
+			RefreshDetection(DetectionMode.ContainersOnly);
 		}
 
 		/// <summary>

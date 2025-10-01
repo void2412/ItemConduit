@@ -1006,11 +1006,11 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Force refresh all detections
 		/// </summary>
-		public void RefreshDetection()
+		public void RefreshDetection(DetectionMode mode = DetectionMode.Full)
 		{
 			if (IsValidPlacedNode())
 			{
-				StartUnifiedDetection();
+				StartUnifiedDetection(mode);
 			}
 		}
 
