@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using ItemConduit.Core;
 using ItemConduit.Config;
 using Logger = Jotunn.Logger;
 
@@ -8,21 +7,21 @@ namespace ItemConduit.GUI
 {
 	/// <summary>
 	/// Manages all GUI windows for the ItemConduit mod
-	/// Handles GUI registration and rendering
+	/// Renamed from GUIManager to avoid conflict with Jotunn.Managers.GUIManager
 	/// </summary>
-	public class GUIManager : MonoBehaviour
+	public class GUIController : MonoBehaviour
 	{
 		#region Singleton
 
-		private static GUIManager _instance;
-		public static GUIManager Instance
+		private static GUIController _instance;
+		public static GUIController Instance
 		{
 			get
 			{
 				if (_instance == null)
 				{
-					GameObject go = new GameObject("ItemConduit_GUIManager");
-					_instance = go.AddComponent<GUIManager>();
+					GameObject go = new GameObject("ItemConduit_GUIController");
+					_instance = go.AddComponent<GUIController>();
 					DontDestroyOnLoad(go);
 				}
 				return _instance;
@@ -134,6 +133,11 @@ namespace ItemConduit.GUI
 			// Enable cursor for GUI interaction
 			Cursor.lockState = CursorLockMode.None;
 			Cursor.visible = true;
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo("[ItemConduit] Enabled GUI mode");
+			}
 		}
 
 		/// <summary>
@@ -144,6 +148,11 @@ namespace ItemConduit.GUI
 			// Restore cursor state
 			Cursor.lockState = previousCursorLockMode;
 			Cursor.visible = previousCursorVisible;
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo("[ItemConduit] Disabled GUI mode");
+			}
 		}
 
 		#endregion
@@ -151,50 +160,11 @@ namespace ItemConduit.GUI
 		#region Unity Events
 
 		/// <summary>
-		/// Render all active GUIs
-		/// </summary>
-		private void OnGUI()
-		{
-			if (!hasActiveGUI) return;
-
-			// Draw background overlay
-			if (activeGUIs.Count > 0)
-			{
-				DrawBackgroundOverlay();
-			}
-
-			// Draw each active GUI
-			foreach (var gui in activeGUIs)
-			{
-				if (gui != null && gui.IsVisible)
-				{
-					try
-					{
-						gui.DrawGUI();
-					}
-					catch (System.Exception ex)
-					{
-						Logger.LogError($"[ItemConduit] Error drawing GUI: {ex.Message}");
-					}
-				}
-			}
-		}
-
-		/// <summary>
-		/// Draw semi-transparent background overlay
-		/// </summary>
-		private void DrawBackgroundOverlay()
-		{
-			UnityEngine.GUI.color = new Color(0, 0, 0, 0.5f);
-			UnityEngine.GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-			UnityEngine.GUI.color = Color.white;
-		}
-
-		/// <summary>
 		/// Handle escape key globally
 		/// </summary>
 		private void Update()
 		{
+			// Close all GUIs when ESC is pressed
 			if (hasActiveGUI && Input.GetKeyDown(KeyCode.Escape))
 			{
 				CloseAll();
@@ -228,6 +198,14 @@ namespace ItemConduit.GUI
 		public int GetActiveGUICount()
 		{
 			return activeGUIs.Count;
+		}
+
+		/// <summary>
+		/// Get list of active GUIs (for debugging)
+		/// </summary>
+		public IEnumerable<BaseNodeGUI> GetActiveGUIs()
+		{
+			return new List<BaseNodeGUI>(activeGUIs);
 		}
 
 		#endregion

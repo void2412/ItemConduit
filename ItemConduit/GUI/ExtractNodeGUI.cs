@@ -1,23 +1,28 @@
+using ItemConduit.Config;
+using ItemConduit.Nodes;
+using Jotunn;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using ItemConduit.Nodes;
-using System.Collections.Generic;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.GUI
 {
+	/// <summary>
+	/// GUI for configuring Extract Nodes - Hopper visual style
+	/// </summary>
 	public class ExtractNodeGUI : BaseNodeGUI
 	{
 		private ExtractNode node;
 
 		// UI Elements
 		private InputField channelInput;
-		private InputField filterInput;
 		private Toggle whitelistToggle;
-		private Text statusText;
+		private InputField filterInput;
 
 		protected override Vector2 GetPanelSize()
 		{
-			return new Vector2(500, 600);
+			return new Vector2(400, 380);
 		}
 
 		public void Initialize(ExtractNode extractNode)
@@ -26,200 +31,103 @@ namespace ItemConduit.GUI
 			InitializeBaseNodeUI();
 			BuildUI();
 			LoadCurrentSettings();
+
+			// Apply Jötunn styling after UI is built
+			ApplyJotunnStyling(panel);
+
+			// Apply localization
+			ApplyLocalization();
+
+			// Fix references (like ValheimHopper)
+			uiRoot.FixReferences(true);
 		}
 
 		private void BuildUI()
 		{
-			// Create content container with scroll view
-			GameObject scrollView = CreateScrollView(panel);
-			GameObject content = scrollView.transform.Find("Viewport/Content").gameObject;
-
-			// Title
-			CreateTitle(content.transform, "Extract Node Configuration");
-
-			// Add spacing
-			CreateSpacer(content.transform, 20);
-
-			// Channel Section
-			CreateSectionHeader(content.transform, "Channel ID");
-			channelInput = CreateInputField(content.transform, "Enter channel ID...");
-			CreateChannelButtons(content.transform);
-
-			// Add spacing
-			CreateSpacer(content.transform, 20);
-
-			// Filter Section
-			CreateSectionHeader(content.transform, "Item Filter");
-
-			GameObject filterToggleContainer = CreateHorizontalGroup(content.transform);
-			whitelistToggle = CreateToggle(filterToggleContainer.transform, "Whitelist Mode");
-
-			filterInput = CreateMultilineInputField(content.transform, "Enter item names (one per line)...", 150);
-			CreateFilterButtons(content.transform);
-
-			// Add spacing
-			CreateSpacer(content.transform, 20);
-
-			// Status Section
-			CreateSectionHeader(content.transform, "Status");
-			statusText = CreateStatusText(content.transform);
-
-			// Add spacing
-			CreateSpacer(content.transform, 30);
-
-			// Buttons
-			CreateActionButtons(content.transform);
-		}
-
-		private GameObject CreateScrollView(GameObject parent)
-		{
-			GameObject scrollView = new GameObject("ScrollView");
-			scrollView.transform.SetParent(parent.transform, false);
-
-			ScrollRect scrollRect = scrollView.AddComponent<ScrollRect>();
-			Image scrollBg = scrollView.AddComponent<Image>();
-			scrollBg.color = new Color(0, 0, 0, 0.3f);
-
-			RectTransform scrollRectTransform = scrollView.GetComponent<RectTransform>();
-			scrollRectTransform.anchorMin = Vector2.zero;
-			scrollRectTransform.anchorMax = Vector2.one;
-			scrollRectTransform.offsetMin = new Vector2(20, 20);
-			scrollRectTransform.offsetMax = new Vector2(-20, -20);
-
-			// Viewport
-			GameObject viewport = new GameObject("Viewport");
-			viewport.transform.SetParent(scrollView.transform, false);
-
-			Image viewportImage = viewport.AddComponent<Image>();
-			viewportImage.color = Color.clear;
-			Mask viewportMask = viewport.AddComponent<Mask>();
-			viewportMask.showMaskGraphic = false;
-
-			RectTransform viewportRect = viewport.GetComponent<RectTransform>();
-			viewportRect.anchorMin = Vector2.zero;
-			viewportRect.anchorMax = Vector2.one;
-			viewportRect.offsetMin = Vector2.zero;
-			viewportRect.offsetMax = Vector2.zero;
-
-			// Content
+			// Create content container (NO scroll view - keep it compact like Hopper)
 			GameObject content = new GameObject("Content");
-			content.transform.SetParent(viewport.transform, false);
+			content.transform.SetParent(panel.transform, false);
 
 			VerticalLayoutGroup contentLayout = content.AddComponent<VerticalLayoutGroup>();
-			contentLayout.padding = new RectOffset(10, 10, 10, 10);
-			contentLayout.spacing = 5;
+			contentLayout.padding = new RectOffset(20, 20, 20, 20);
+			contentLayout.spacing = 8;
 			contentLayout.childForceExpandWidth = true;
 			contentLayout.childForceExpandHeight = false;
 
-			ContentSizeFitter contentFitter = content.AddComponent<ContentSizeFitter>();
-			contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
 			RectTransform contentRect = content.GetComponent<RectTransform>();
-			contentRect.anchorMin = new Vector2(0, 1);
-			contentRect.anchorMax = new Vector2(1, 1);
-			contentRect.pivot = new Vector2(0.5f, 1);
-			contentRect.anchoredPosition = Vector2.zero;
+			contentRect.anchorMin = Vector2.zero;
+			contentRect.anchorMax = Vector2.one;
+			contentRect.offsetMin = Vector2.zero;
+			contentRect.offsetMax = Vector2.zero;
 
-			scrollRect.content = contentRect;
-			scrollRect.viewport = viewportRect;
-			scrollRect.horizontal = false;
-			scrollRect.vertical = true;
-			scrollRect.scrollSensitivity = 30;
+			// Title
+			CreateTitle(content.transform, "Extract Node Configuration");
+			CreateSpacer(content.transform, 10);
 
-			return scrollView;
+			// Channel ID
+			CreateLabel(content.transform, "Channel ID:");
+			channelInput = CreateSimpleInputField(content.transform);
+			CreateSpacer(content.transform, 8);
+
+			// Whitelist toggle (Hopper style - text left, checkbox right)
+			whitelistToggle = CreateHopperToggle(content.transform, "Whitelist mode");
+			CreateSpacer(content.transform, 4);
+
+			// Filter input
+			CreateLabel(content.transform, "Item Filter:");
+			filterInput = CreateMultilineInputField(content.transform, 100);
+			CreateSpacer(content.transform, 12);
+
+			// Action buttons (horizontal row like Hopper)
+			CreateActionButtons(content.transform);
 		}
 
-		private void CreateTitle(Transform parent, string text)
+		#region UI Component Creation (Hopper Style)
+
+		private Text CreateLabel(Transform parent, string text)
 		{
-			GameObject titleObj = new GameObject("Title");
-			titleObj.transform.SetParent(parent, false);
+			GameObject labelObj = new GameObject("Label");
+			labelObj.transform.SetParent(parent, false);
 
-			Text titleText = titleObj.AddComponent<Text>();
-			titleText.text = text;
-			titleText.font = norseFont ?? Font.CreateDynamicFontFromOSFont("Arial", 14);
-			titleText.fontSize = 24;
-			titleText.color = new Color(1f, 0.82f, 0f); // Golden yellow
-			titleText.alignment = TextAnchor.MiddleCenter;
+			Text label = labelObj.AddComponent<Text>();
+			label.text = text;
+			label.alignment = TextAnchor.MiddleLeft;
 
-			LayoutElement layoutElement = titleObj.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 40;
+			LayoutElement layoutElement = labelObj.AddComponent<LayoutElement>();
+			layoutElement.preferredHeight = 20;
+
+			return label;
 		}
 
-		private void CreateSectionHeader(Transform parent, string text)
-		{
-			GameObject headerObj = new GameObject("Header_" + text);
-			headerObj.transform.SetParent(parent, false);
-
-			Text headerText = headerObj.AddComponent<Text>();
-			headerText.text = text;
-			headerText.font = norseFont ?? Font.CreateDynamicFontFromOSFont("Arial", 14);
-			headerText.fontSize = 18;
-			headerText.color = new Color(0.9f, 0.9f, 0.8f);
-			headerText.fontStyle = FontStyle.Bold;
-
-			LayoutElement layoutElement = headerObj.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 30;
-		}
-
-		private void CreateSpacer(Transform parent, float height)
-		{
-			GameObject spacer = new GameObject("Spacer");
-			spacer.transform.SetParent(parent, false);
-
-			LayoutElement layoutElement = spacer.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = height;
-		}
-
-		private GameObject CreateHorizontalGroup(Transform parent)
-		{
-			GameObject group = new GameObject("HorizontalGroup");
-			group.transform.SetParent(parent, false);
-
-			HorizontalLayoutGroup layout = group.AddComponent<HorizontalLayoutGroup>();
-			layout.spacing = 10;
-			layout.childForceExpandWidth = false;
-			layout.childForceExpandHeight = false;
-
-			LayoutElement layoutElement = group.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 30;
-
-			return group;
-		}
-
-		private InputField CreateInputField(Transform parent, string placeholder)
+		private InputField CreateSimpleInputField(Transform parent)
 		{
 			GameObject fieldObj = new GameObject("InputField");
 			fieldObj.transform.SetParent(parent, false);
 
 			Image background = fieldObj.AddComponent<Image>();
-			background.color = new Color(0.2f, 0.2f, 0.2f, 0.8f);
+			background.color = new Color(0, 0, 0, 0.5f);
 
 			InputField input = fieldObj.AddComponent<InputField>();
 
-			// Text component
+			// Text
 			GameObject textObj = new GameObject("Text");
 			textObj.transform.SetParent(fieldObj.transform, false);
 			Text text = textObj.AddComponent<Text>();
-			text.font = norseFont ?? Font.CreateDynamicFontFromOSFont("Arial", 14);
-			text.fontSize = 16;
-			text.color = Color.white;
 			text.supportRichText = false;
 
 			RectTransform textRect = textObj.GetComponent<RectTransform>();
 			textRect.anchorMin = Vector2.zero;
 			textRect.anchorMax = Vector2.one;
-			textRect.offsetMin = new Vector2(10, 5);
-			textRect.offsetMax = new Vector2(-10, -5);
+			textRect.offsetMin = new Vector2(8, 2);
+			textRect.offsetMax = new Vector2(-8, -2);
 
 			// Placeholder
 			GameObject placeholderObj = new GameObject("Placeholder");
 			placeholderObj.transform.SetParent(fieldObj.transform, false);
 			Text placeholderText = placeholderObj.AddComponent<Text>();
-			placeholderText.font = text.font;
-			placeholderText.fontSize = text.fontSize;
 			placeholderText.fontStyle = FontStyle.Italic;
 			placeholderText.color = new Color(0.5f, 0.5f, 0.5f, 0.5f);
-			placeholderText.text = placeholder;
+			placeholderText.text = "Enter channel...";
 
 			RectTransform placeholderRect = placeholderObj.GetComponent<RectTransform>();
 			placeholderRect.anchorMin = Vector2.zero;
@@ -232,15 +140,21 @@ namespace ItemConduit.GUI
 			input.placeholder = placeholderText;
 
 			LayoutElement layoutElement = fieldObj.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 35;
+			layoutElement.preferredHeight = 30;
 
 			return input;
 		}
 
-		private InputField CreateMultilineInputField(Transform parent, string placeholder, float height)
+		private InputField CreateMultilineInputField(Transform parent, float height)
 		{
-			InputField input = CreateInputField(parent, placeholder);
+			InputField input = CreateSimpleInputField(parent);
 			input.lineType = InputField.LineType.MultiLineNewline;
+
+			Text placeholderText = input.placeholder as Text;
+			if (placeholderText != null)
+			{
+				placeholderText.text = "Item names (one per line)...";
+			}
 
 			LayoutElement layoutElement = input.GetComponent<LayoutElement>();
 			layoutElement.preferredHeight = height;
@@ -248,30 +162,52 @@ namespace ItemConduit.GUI
 			return input;
 		}
 
-		private Toggle CreateToggle(Transform parent, string label)
+		/// <summary>
+		/// Create toggle in Hopper style: text on left, checkbox on right
+		/// </summary>
+		private Toggle CreateHopperToggle(Transform parent, string label)
 		{
-			GameObject toggleObj = new GameObject("Toggle_" + label);
-			toggleObj.transform.SetParent(parent, false);
+			GameObject toggleRow = new GameObject("ToggleRow_" + label);
+			toggleRow.transform.SetParent(parent, false);
 
+			// Horizontal layout
+			HorizontalLayoutGroup layout = toggleRow.AddComponent<HorizontalLayoutGroup>();
+			layout.spacing = 10;
+			layout.childForceExpandWidth = false;
+			layout.childForceExpandHeight = false;
+			layout.childAlignment = TextAnchor.MiddleLeft;
+
+			// Label text (on the left)
+			GameObject labelObj = new GameObject("Label");
+			labelObj.transform.SetParent(toggleRow.transform, false);
+			Text labelText = labelObj.AddComponent<Text>();
+			labelText.text = label;
+			labelText.alignment = TextAnchor.MiddleLeft;
+
+			LayoutElement labelLayout = labelObj.AddComponent<LayoutElement>();
+			labelLayout.flexibleWidth = 1;
+
+			// Toggle (on the right)
+			GameObject toggleObj = new GameObject("Toggle");
+			toggleObj.transform.SetParent(toggleRow.transform, false);
 			Toggle toggle = toggleObj.AddComponent<Toggle>();
 
-			// Background
+			// Background circle
 			GameObject background = new GameObject("Background");
 			background.transform.SetParent(toggleObj.transform, false);
 			Image bgImage = background.AddComponent<Image>();
-			bgImage.color = new Color(0.3f, 0.3f, 0.3f);
+			bgImage.color = new Color(0.2f, 0.2f, 0.2f);
 
 			RectTransform bgRect = background.GetComponent<RectTransform>();
-			bgRect.anchorMin = Vector2.zero;
-			bgRect.anchorMax = Vector2.zero;
+			bgRect.anchorMin = new Vector2(0.5f, 0.5f);
+			bgRect.anchorMax = new Vector2(0.5f, 0.5f);
 			bgRect.sizeDelta = new Vector2(20, 20);
-			bgRect.anchoredPosition = new Vector2(10, 0);
 
 			// Checkmark
 			GameObject checkmark = new GameObject("Checkmark");
 			checkmark.transform.SetParent(background.transform, false);
 			Image checkImage = checkmark.AddComponent<Image>();
-			checkImage.color = new Color(0.8f, 0.8f, 0.2f);
+			checkImage.color = new Color(0.8f, 0.7f, 0.3f); // Yellow-ish like Hopper
 
 			RectTransform checkRect = checkmark.GetComponent<RectTransform>();
 			checkRect.anchorMin = Vector2.zero;
@@ -279,107 +215,56 @@ namespace ItemConduit.GUI
 			checkRect.offsetMin = new Vector2(4, 4);
 			checkRect.offsetMax = new Vector2(-4, -4);
 
-			// Label
-			GameObject labelObj = new GameObject("Label");
-			labelObj.transform.SetParent(toggleObj.transform, false);
-			Text text = labelObj.AddComponent<Text>();
-			text.text = label;
-			text.font = norseFont ?? Font.CreateDynamicFontFromOSFont("Arial", 14);
-			text.fontSize = 14;
-			text.color = Color.white;
-
-			RectTransform labelRect = labelObj.GetComponent<RectTransform>();
-			labelRect.anchorMin = Vector2.zero;
-			labelRect.anchorMax = new Vector2(1, 1);
-			labelRect.offsetMin = new Vector2(35, 0);
-			labelRect.offsetMax = Vector2.zero;
-
 			toggle.targetGraphic = bgImage;
 			toggle.graphic = checkImage;
 
-			LayoutElement layoutElement = toggleObj.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 25;
-			layoutElement.preferredWidth = 200;
+			LayoutElement toggleLayout = toggleObj.AddComponent<LayoutElement>();
+			toggleLayout.preferredWidth = 20;
+			toggleLayout.preferredHeight = 20;
+			toggleLayout.flexibleWidth = 0;
+
+			LayoutElement rowLayout = toggleRow.AddComponent<LayoutElement>();
+			rowLayout.preferredHeight = 25;
 
 			return toggle;
 		}
 
-		private void CreateChannelButtons(Transform parent)
-		{
-			GameObject buttonGroup = CreateHorizontalGroup(parent);
-
-			CreateSmallButton(buttonGroup.transform, "None", () => channelInput.text = "None");
-			CreateSmallButton(buttonGroup.transform, "Ore", () => channelInput.text = "Ore");
-			CreateSmallButton(buttonGroup.transform, "Food", () => channelInput.text = "Food");
-			CreateSmallButton(buttonGroup.transform, "Materials", () => channelInput.text = "Materials");
-		}
-
-		private void CreateFilterButtons(Transform parent)
-		{
-			GameObject buttonGroup = CreateHorizontalGroup(parent);
-
-			CreateSmallButton(buttonGroup.transform, "Ores", () => AddToFilter("CopperOre\nTinOre\nIronOre"));
-			CreateSmallButton(buttonGroup.transform, "Metals", () => AddToFilter("Copper\nBronze\nIron"));
-			CreateSmallButton(buttonGroup.transform, "Wood", () => AddToFilter("Wood\nFineWood\nCoreWood"));
-			CreateSmallButton(buttonGroup.transform, "Clear", () => filterInput.text = "");
-		}
-
-		private void AddToFilter(string items)
-		{
-			if (string.IsNullOrEmpty(filterInput.text))
-				filterInput.text = items;
-			else
-				filterInput.text += "\n" + items;
-		}
-
-		private Text CreateStatusText(Transform parent)
-		{
-			GameObject statusObj = new GameObject("Status");
-			statusObj.transform.SetParent(parent, false);
-
-			Text text = statusObj.AddComponent<Text>();
-			text.font = norseFont ?? Font.CreateDynamicFontFromOSFont("Arial", 14);
-			text.fontSize = 14;
-			text.color = new Color(0.7f, 0.7f, 0.7f);
-
-			LayoutElement layoutElement = statusObj.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 25;
-
-			return text;
-		}
-
+		/// <summary>
+		/// Create action buttons in Hopper style (horizontal row at bottom)
+		/// </summary>
 		private void CreateActionButtons(Transform parent)
 		{
-			GameObject buttonContainer = CreateHorizontalGroup(parent);
+			GameObject buttonRow = new GameObject("ButtonRow");
+			buttonRow.transform.SetParent(parent, false);
 
-			CreateValheimButton(buttonContainer.transform, "Apply", OnApply);
-			CreateValheimButton(buttonContainer.transform, "Reset", OnReset);
-			CreateValheimButton(buttonContainer.transform, "Cancel", OnCancel);
+			HorizontalLayoutGroup layout = buttonRow.AddComponent<HorizontalLayoutGroup>();
+			layout.spacing = 10;
+			layout.childForceExpandWidth = true;
+			layout.childForceExpandHeight = false;
+
+			// Create three buttons like Hopper: Reset, Copy, Paste equivalent
+			CreateHopperButton(buttonRow.transform, "Apply", OnApply);
+			CreateHopperButton(buttonRow.transform, "Reset", OnReset);
+			CreateHopperButton(buttonRow.transform, "Cancel", OnCancel);
+
+			LayoutElement rowLayout = buttonRow.AddComponent<LayoutElement>();
+			rowLayout.preferredHeight = 35;
 		}
 
-		private void CreateSmallButton(Transform parent, string text, System.Action action)
-		{
-			CreateValheimButton(parent, text, action, 70, 25);
-		}
-
-		private void CreateValheimButton(Transform parent, string text, System.Action action, float width = 120, float height = 35)
+		private void CreateHopperButton(Transform parent, string text, System.Action action)
 		{
 			GameObject buttonObj = new GameObject("Button_" + text);
 			buttonObj.transform.SetParent(parent, false);
 
 			Button button = buttonObj.AddComponent<Button>();
-
 			Image buttonImage = buttonObj.AddComponent<Image>();
-			buttonImage.color = new Color(0.5f, 0.35f, 0.15f); // Wood color
+			buttonImage.color = new Color(0, 0, 0, 0.7f); // Dark background like Hopper
 
 			// Button text
 			GameObject textObj = new GameObject("Text");
 			textObj.transform.SetParent(buttonObj.transform, false);
 			Text buttonText = textObj.AddComponent<Text>();
 			buttonText.text = text;
-			buttonText.font = norseFont ?? Font.CreateDynamicFontFromOSFont("Arial", 14);
-			buttonText.fontSize = 14;
-			buttonText.color = Color.white;
 			buttonText.alignment = TextAnchor.MiddleCenter;
 
 			RectTransform textRect = textObj.GetComponent<RectTransform>();
@@ -388,25 +273,31 @@ namespace ItemConduit.GUI
 			textRect.offsetMin = Vector2.zero;
 			textRect.offsetMax = Vector2.zero;
 
-			// Button colors
-			ColorBlock colors = button.colors;
-			colors.normalColor = new Color(1f, 1f, 1f, 1f);
-			colors.highlightedColor = new Color(1.2f, 1.2f, 1.2f, 1f);
-			colors.pressedColor = new Color(0.8f, 0.8f, 0.8f, 1f);
-			button.colors = colors;
-
 			button.targetGraphic = buttonImage;
 			button.onClick.AddListener(() => action());
 
 			LayoutElement layoutElement = buttonObj.AddComponent<LayoutElement>();
-			layoutElement.preferredWidth = width;
-			layoutElement.preferredHeight = height;
+			layoutElement.preferredHeight = 35;
+			layoutElement.flexibleWidth = 1;
 		}
+
+		#endregion
+
+		#region Event Handlers
 
 		private void OnApply()
 		{
+			// Set channel
 			node.SetChannel(channelInput.text);
+
+			// Set filter
 			node.SetFilter(ParseFilter(), whitelistToggle.isOn);
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] Applied settings: Channel={channelInput.text}");
+			}
+
 			Hide();
 		}
 
@@ -423,14 +314,17 @@ namespace ItemConduit.GUI
 		private void LoadCurrentSettings()
 		{
 			channelInput.text = node.ChannelId ?? "None";
-			whitelistToggle.isOn = node.IsWhitelist;
 
 			if (node.ItemFilter != null && node.ItemFilter.Count > 0)
 			{
 				filterInput.text = string.Join("\n", node.ItemFilter);
+				whitelistToggle.isOn = node.IsWhitelist;
 			}
-
-			UpdateStatus();
+			else
+			{
+				filterInput.text = "";
+				whitelistToggle.isOn = true;
+			}
 		}
 
 		private HashSet<string> ParseFilter()
@@ -448,17 +342,6 @@ namespace ItemConduit.GUI
 			return filter;
 		}
 
-		private void UpdateStatus()
-		{
-			Container container = node.GetTargetContainer();
-			if (container != null)
-			{
-				statusText.text = $"<color=green>Connected:</color> {container.m_name}";
-			}
-			else
-			{
-				statusText.text = "<color=red>Not Connected</color>";
-			}
-		}
+		#endregion
 	}
 }

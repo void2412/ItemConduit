@@ -1,4 +1,4 @@
-using HarmonyLib;
+﻿using HarmonyLib;
 using ItemConduit.Core;
 using ItemConduit.Debug;
 using ItemConduit.Network;
@@ -161,14 +161,11 @@ namespace ItemConduit.Patches
 		[HarmonyPatch(typeof(Player), "TakeInput")]
 		public static class Player_TakeInput_Patch
 		{
-			/// <summary>
-			/// Check if input should be blocked
-			/// </summary>
-			/// <returns>False to skip original method if GUI is open</returns>
 			private static bool Prefix(Player __instance)
 			{
 				// Block input if our GUI is open
-				if (GUI.GUIManager.Instance != null && GUI.GUIManager.Instance.HasActiveGUI())
+				// CHANGE: GUIManager → GUIController
+				if (GUI.GUIController.Instance != null && GUI.GUIController.Instance.HasActiveGUI())
 				{
 					// Clear any movement input
 					__instance.m_moveDir = Vector3.zero;
@@ -186,14 +183,11 @@ namespace ItemConduit.Patches
 		[HarmonyPatch(typeof(Game), "Pause")]
 		public static class Game_Pause_Patch
 		{
-			/// <summary>
-			/// Check if game should be allowed to pause
-			/// </summary>
-			/// <returns>False to prevent original method execution if GUI is open</returns>
 			private static bool Prefix()
 			{
 				// Don't pause if ItemConduit GUI is open
-				if (GUI.GUIManager.Instance != null && GUI.GUIManager.Instance.HasActiveGUI())
+				// CHANGE: GUIManager → GUIController
+				if (GUI.GUIController.Instance != null && GUI.GUIController.Instance.HasActiveGUI())
 				{
 					return false; // Skip original pause method
 				}
@@ -208,12 +202,10 @@ namespace ItemConduit.Patches
 		[HarmonyPatch(typeof(InventoryGui), "Show")]
 		public static class InventoryGui_Show_Patch
 		{
-			/// <summary>
-			/// Prevent inventory from showing if our GUI is open
-			/// </summary>
 			private static bool Prefix()
 			{
-				if (GUI.GUIManager.Instance != null && GUI.GUIManager.Instance.HasActiveGUI())
+				// CHANGE: GUIManager → GUIController
+				if (GUI.GUIController.Instance != null && GUI.GUIController.Instance.HasActiveGUI())
 				{
 					return false; // Don't show inventory
 				}
