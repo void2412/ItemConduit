@@ -6,6 +6,7 @@ using ItemConduit.Core;
 using ItemConduit.Config;
 using ItemConduit.GUI;
 using Logger = Jotunn.Logger;
+using System;
 
 namespace ItemConduit.Nodes
 {
@@ -167,7 +168,7 @@ namespace ItemConduit.Nodes
 
 			// Get item name for filtering
 			string itemName = item.m_dropPrefab?.name ?? item.m_shared.m_name;
-			bool inFilter = ItemFilter.Contains(itemName);
+			bool inFilter = ItemFilter.Any(f => f.Equals(itemName, StringComparison.OrdinalIgnoreCase));
 
 			// Apply whitelist/blacklist logic
 			return IsWhitelist ? inFilter : !inFilter;

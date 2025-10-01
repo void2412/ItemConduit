@@ -1,6 +1,7 @@
 using ItemConduit.Config;
 using ItemConduit.Core;
 using ItemConduit.GUI;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -172,7 +173,7 @@ namespace ItemConduit.Nodes
 
 			// Get item name for filtering
 			string itemName = item.m_dropPrefab?.name ?? item.m_shared.m_name;
-			bool inFilter = ItemFilter.Contains(itemName.ToLower());
+			bool inFilter = ItemFilter.Any(f => f.Equals(itemName, StringComparison.OrdinalIgnoreCase));
 
 			// Apply whitelist/blacklist logic
 			return IsWhitelist ? inFilter : !inFilter;
