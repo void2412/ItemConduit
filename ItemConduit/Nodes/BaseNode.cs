@@ -1014,6 +1014,11 @@ namespace ItemConduit.Nodes
 			}
 		}
 
+		public void RefreshContainerConnection()
+		{
+			RefreshDetection(DetectionMode.ContainersOnly);
+		}
+
 		#endregion
 
 		#region Visual Effects

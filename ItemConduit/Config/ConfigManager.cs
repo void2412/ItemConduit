@@ -28,6 +28,7 @@ namespace ItemConduit.Config
 				DebugConfig.Initialize(config);
 				NetworkConfig.Initialize(config);
 				VisualConfig.Initialize(config);
+				ContainerEventConfig.Initialize(config);
 			}
 			catch (Exception ex)
 			{

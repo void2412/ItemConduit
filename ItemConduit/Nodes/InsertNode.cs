@@ -539,13 +539,7 @@ namespace ItemConduit.Nodes
 
 		#region Debug
 
-		/// <summary>
-		/// Force refresh container connection (useful for debugging)
-		/// </summary>
-		public void RefreshContainerConnection()
-		{
-			RefreshDetection(DetectionMode.ContainersOnly);
-		}
+		
 
 		/// <summary>
 		/// Get debug information about this insert node
