@@ -439,12 +439,10 @@ namespace ItemConduit.Network
 					Inventory sourceInventory = sourceContainer.GetInventory();
 					if (sourceInventory == null) continue;
 
-					// Find matching insert nodes (same channel or "None")
+					// Find matching insert nodes (same channel)
 					var matchingInserts = network.InsertNodes
 						.Where(n => n != null && n.IsActive &&
-								   (n.ChannelId == extractNode.ChannelId ||
-									extractNode.ChannelId == "None" ||
-									n.ChannelId == "None"))
+								   (n.ChannelId == extractNode.ChannelId))
 						.OrderByDescending(n => n.Priority)
 						.ThenBy(n => Vector3.Distance(extractNode.transform.position, n.transform.position))
 						.ToList();
