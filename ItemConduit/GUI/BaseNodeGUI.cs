@@ -101,12 +101,12 @@ namespace ItemConduit.GUI
 
 			// Add background image
 			Image background = panel.AddComponent<Image>();
-			background.color = new Color(0.1f, 0.1f, 0.1f, 0.95f);
-			background.sprite = GetPanelSprite();
-			background.type = Image.Type.Sliced;
+			background.color = GUIManager.Instance.ValheimOrange;
+			//background.sprite = GetPanelSprite();
+			//background.type = Image.Type.Sliced;
 
 			// Add border
-			CreateBorder(panel);
+			//CreateBorder(panel);
 
 			return panel;
 		}
