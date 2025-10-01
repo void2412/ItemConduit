@@ -453,48 +453,96 @@ namespace ItemConduit.Network
 					var extractableItems = extractNode.GetExtractableItems();
 					if (extractableItems.Count == 0) continue;
 
-					var sourceItem = extractableItems.First();
-					if (sourceItem == null || sourceItem.m_stack <= 0) continue;
-
+					
 					// Calculate items per transfer based on transfer rate
 					int maxTransferAmount = Mathf.Max(1, transferRate);
 					int remainingToTransfer = maxTransferAmount;
 
-					foreach (var insertNode in matchingInserts)
+					#region transfer only 1 type up to transferRate amount
+					//Transfer only 1 type
+					//var sourceItem = extractableItems.First();
+					//if (sourceItem == null || sourceItem.m_stack <= 0) continue;
+
+					//foreach (var insertNode in matchingInserts)
+					//{
+					//	if (remainingToTransfer <= 0) break;
+
+					//	if (!insertNode.CanAcceptItem(sourceItem)) break;
+
+					//	Container destContainer = insertNode.GetTargetContainer();
+					//	if (destContainer == null) continue;
+
+					//	Inventory destInventory = destContainer.GetInventory();
+					//	if (destInventory == null) continue;
+
+					//	int canAccept = insertNode.CalculateAcceptCapacity(destInventory, sourceItem, remainingToTransfer);
+
+					//	if (canAccept > 0) 
+					//	{
+					//		var transferItem = sourceItem.Clone();
+					//		transferItem.m_stack = canAccept;
+
+					//		if (insertNode.InsertItem(transferItem, destInventory))
+					//		{
+					//			sourceInventory.RemoveItem(sourceItem, canAccept);
+					//			remainingToTransfer -= canAccept;
+								
+					//			if (DebugConfig.showTransferLog.Value)
+					//			{
+					//				Logger.LogInfo($"Transferred {canAccept}x {sourceItem.m_shared.m_name} from {extractNode.name} to {insertNode.name}");
+					//			}
+
+					//			extractNode.OnItemExtracted();
+					//			insertNode.OnItemInserted();
+					//		}
+					//	}
+					//}
+					
+					#endregion
+
+					#region transfer multiple type up to transferRate amount
+					foreach (var item in extractableItems)
 					{
-						if (remainingToTransfer <= 0) break;
+						if (item == null) continue;
 
-						if (!insertNode.CanAcceptItem(sourceItem)) break;
-
-						Container destContainer = insertNode.GetTargetContainer();
-						if (destContainer == null) continue;
-
-						Inventory destInventory = destContainer.GetInventory();
-						if (destInventory == null) continue;
-
-						int canAccept = insertNode.CalculateAcceptCapacity(destInventory, sourceItem, remainingToTransfer);
-
-						if (canAccept > 0) 
+						foreach (var insertNode in matchingInserts)
 						{
-							var transferItem = sourceItem.Clone();
+							if (remainingToTransfer <= 0) break;
+
+							if (!insertNode.CanAcceptItem(item)) break;
+
+							Container destContainer = insertNode.GetTargetContainer();
+							if (destContainer == null) continue;
+
+							Inventory destInventory = destContainer.GetInventory();
+							if (destInventory == null) continue;
+
+							int canAccept = insertNode.CalculateAcceptCapacity(destInventory, item, remainingToTransfer);
+
+							if (canAccept <= 0) continue;
+
+							var transferItem = item.Clone();
 							transferItem.m_stack = canAccept;
 
-							if (insertNode.InsertItem(transferItem, destInventory))
-							{
-								sourceInventory.RemoveItem(sourceItem, canAccept);
-								remainingToTransfer -= canAccept;
-								
-								if (DebugConfig.showTransferLog.Value)
-								{
-									Logger.LogInfo($"Transferred {canAccept}x {sourceItem.m_shared.m_name} from {extractNode.name} to {insertNode.name}");
-								}
+							if (!insertNode.InsertItem(transferItem, destInventory)) continue;
 
-								extractNode.OnItemExtracted();
-								insertNode.OnItemInserted();
+							sourceInventory.RemoveItem(item, canAccept);
+							remainingToTransfer -= canAccept;
+
+							if (DebugConfig.showTransferLog.Value)
+							{
+								Logger.LogInfo($"Transferred {canAccept}x {item.m_shared.m_name} from {extractNode.name} to {insertNode.name}");
 							}
+
+							extractNode.OnItemExtracted();
+							insertNode.OnItemInserted();
 						}
+
+						if (item.m_stack <= 0) break;
 					}
+					#endregion
 					int actuallyTransferred = maxTransferAmount - remainingToTransfer;
+
 					if (DebugConfig.showDebug.Value && actuallyTransferred > 0)
 					{
 						Logger.LogInfo($"{extractNode.name} completed transfer: {actuallyTransferred}/{maxTransferAmount} items moved this tick");
