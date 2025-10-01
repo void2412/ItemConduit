@@ -156,99 +156,8 @@ namespace ItemConduit.Patches
 
 		#region GUI Integration Patches
 
-		/// <summary>
-		/// Patch to block player input when ItemConduit GUI is open
-		/// </summary>
-		[HarmonyPatch(typeof(Player), "TakeInput")]
-		public static class Player_TakeInput_Patch
-		{
-			private static bool Prefix(Player __instance)
-			{
-				// Block input if our GUI is open
-				// CHANGE: GUIManager → GUIController
-				if (GUIController.Instance != null && GUIController.Instance.HasActiveGUI())
-				{
-					// Clear any movement input
-					__instance.m_moveDir = Vector3.zero;
-					__instance.m_lookDir = Vector3.zero;
-					return false; // Skip the original TakeInput method
-				}
+		
 
-				return true; // Allow normal input
-			}
-		}
-		/// <summary>
-		/// Patch to block all ZInput when ItemConduit GUI is open
-		/// This prevents attacks, building, and all other actions
-		/// </summary>
-		[HarmonyPatch(typeof(ZInput), "GetButton")]
-		public static class ZInput_GetButton_Patch
-		{
-			private static bool Prefix(ref bool __result)
-			{
-				if (GUIController.Instance != null && GUIController.Instance.HasActiveGUI())
-				{
-					__result = false;
-					return false; // Skip original method
-				}
-				return true;
-			}
-		}
-
-		/// <summary>
-		/// Patch to block all ZInput button down events when ItemConduit GUI is open
-		/// </summary>
-		[HarmonyPatch(typeof(ZInput), "GetButtonDown")]
-		public static class ZInput_GetButtonDown_Patch
-		{
-			private static bool Prefix(ref bool __result)
-			{
-				if (GUIController.Instance != null && GUIController.Instance.HasActiveGUI())
-				{
-					__result = false;
-					return false;
-				}
-				return true;
-			}
-		}
-
-		/// <summary>
-		/// Patch to block all ZInput button up events when ItemConduit GUI is open
-		/// </summary>
-		[HarmonyPatch(typeof(ZInput), "GetButtonUp")]
-		public static class ZInput_GetButtonUp_Patch
-		{
-			private static bool Prefix(ref bool __result)
-			{
-				if (GUIController.Instance != null && GUIController.Instance.HasActiveGUI())
-				{
-					__result = false;
-					return false;
-				}
-				return true;
-			}
-		}
-		/// <summary>
-		/// Patch to block camera rotation when ItemConduit GUI is open
-		/// </summary>
-		[HarmonyPatch(typeof(GameCamera), "UpdateCamera")]
-		public static class GameCamera_UpdateCamera_Patch
-		{
-			/// <summary>
-			/// Prevent camera updates when GUI is open
-			/// </summary>
-			/// <returns>False to skip camera update if GUI is open</returns>
-			private static bool Prefix(GameCamera __instance)
-			{
-				// Block camera movement if our GUI is open
-				if (GUIController.Instance != null && GUIController.Instance.HasActiveGUI())
-				{
-					return false; // Skip the camera update
-				}
-
-				return true; // Allow normal camera behavior
-			}
-		}
 
 		/// <summary>
 		/// Patch to prevent game pause when ItemConduit GUI is open
@@ -269,22 +178,7 @@ namespace ItemConduit.Patches
 			}
 		}
 
-		/// <summary>
-		/// Patch to prevent inventory from opening while configuring nodes
-		/// </summary>
-		[HarmonyPatch(typeof(InventoryGui), "Show")]
-		public static class InventoryGui_Show_Patch
-		{
-			private static bool Prefix()
-			{
-				// CHANGE: GUIManager → GUIController
-				if (GUIController.Instance != null && GUIController.Instance.HasActiveGUI())
-				{
-					return false; // Don't show inventory
-				}
-				return true;
-			}
-		}
+	
 
 		#endregion
 

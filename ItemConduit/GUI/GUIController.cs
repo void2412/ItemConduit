@@ -164,6 +164,14 @@ namespace ItemConduit.GUI
 		/// </summary>
 		private void Update()
 		{
+			// Enforce cursor state while GUI is active
+			if (hasActiveGUI)
+			{
+				// Force cursor to be visible and unlocked every frame
+				Cursor.visible = true;
+				Cursor.lockState = CursorLockMode.None;
+			}
+
 			// Close all GUIs when ESC is pressed
 			if (hasActiveGUI && Input.GetKeyDown(KeyCode.Escape))
 			{
