@@ -380,7 +380,7 @@ namespace ItemConduit.Nodes
 			{
 				GameObject guiObj = new GameObject("InsertNodeGUI");
 				gui = guiObj.AddComponent<InsertNodeGUI>();
-				gui.Initialize(this);
+				((InsertNodeGUI)gui).Initialize(this);
 			}
 
 			// Show the GUI

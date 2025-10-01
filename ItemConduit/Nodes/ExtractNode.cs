@@ -256,7 +256,7 @@ namespace ItemConduit.Nodes
 			{
 				GameObject guiObj = new GameObject("ExtractNodeGUI");
 				gui = guiObj.AddComponent<ExtractNodeGUI>();
-				gui.Initialize(this);
+				((ExtractNodeGUI)gui).Initialize(this);
 			}
 
 			// Show the GUI

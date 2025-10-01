@@ -1,162 +1,253 @@
-﻿using Jotunn.Managers;
-using UnityEngine;
+﻿using UnityEngine;
+using UnityEngine.UI;
+using ItemConduit.Nodes;
+using ItemConduit.Config;
+using Logger = Jotunn.Logger;
+using System.Reflection;
 
 namespace ItemConduit.GUI
 {
-	/// <summary>
-	/// Base class for node configuration GUIs
-	/// Provides common functionality for all node GUI windows
-	/// </summary>
 	public abstract class BaseNodeGUI : MonoBehaviour
 	{
-		#region Fields
+		// UI Panel components
+		protected GameObject uiRoot;
+		protected GameObject panel;
+		protected RectTransform panelRect;
 
-		/// <summary>Whether the GUI window is currently visible</summary>
+		// Valheim UI references
+		protected static GameObject valheimGUIRoot;
+		protected static Font norseFont;
+
+		// Panel state
 		protected bool isVisible = false;
 
-		/// <summary>Window position and size</summary>
-		protected Rect windowRect = new Rect(Screen.width / 2 - 200, Screen.height / 2 - 150, 400, 300);
-
-		/// <summary>Window title</summary>
-		protected string windowTitle = "Node Configuration";
-
-		/// <summary>GUI style for window</summary>
-		protected GUIStyle windowStyle;
-
-		/// <summary>GUI style for labels</summary>
-		protected GUIStyle labelStyle;
-
-		/// <summary>GUI style for buttons</summary>
-		protected GUIStyle buttonStyle;
-
-		#endregion
-
-		#region Properties
-
-		/// <summary>Check if GUI is currently visible</summary>
-		public bool IsVisible => isVisible;
-
-		#endregion
-
-		#region Initialization
-
-		/// <summary>
-		/// Initialize GUI styles
-		/// </summary> 
-		protected virtual void InitializeStyles()
+		protected virtual void Awake()
 		{
-			// Window style
-			windowStyle = new GUIStyle(UnityEngine.GUI.skin.window);
-			windowStyle.normal.textColor = Color.white;
-			windowStyle.fontSize = 14;
-			windowStyle.fontStyle = FontStyle.Bold;
-
-			// Label style
-			labelStyle = new GUIStyle(UnityEngine.GUI.skin.label);
-			labelStyle.normal.textColor = Color.white;
-			labelStyle.fontSize = 12;
-
-			// Button style
-			buttonStyle = new GUIStyle(UnityEngine.GUI.skin.button);
-			buttonStyle.fontSize = 12;
+			// Keep the GUI object alive
+			DontDestroyOnLoad(gameObject);
 		}
 
-		#endregion
+		protected virtual void InitializeBaseNodeUI()
+		{
+			// Get Valheim's GUI root
+			if (valheimGUIRoot == null && Hud.instance != null)
+			{
+				valheimGUIRoot = Hud.instance.gameObject;
+			}
 
-		#region Visibility Management
+			// Get Valheim's font from Text components (not TMP)
+			if (norseFont == null && InventoryGui.instance != null)
+			{
+				// Try to find a Text component with the Norse font
+				Text[] texts = InventoryGui.instance.GetComponentsInChildren<Text>();
+				if (texts.Length > 0)
+				{
+					norseFont = texts[0].font;
+				}
+			}
 
-		/// <summary>
-		/// Show the GUI window
-		/// </summary>
+			CreateValheimPanel();
+		}
+
+		protected virtual void CreateValheimPanel()
+		{
+			// Create UI root
+			uiRoot = new GameObject("ItemConduitUI");
+			Canvas canvas = uiRoot.AddComponent<Canvas>();
+			canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+			canvas.sortingOrder = 100; // Render on top
+
+			CanvasScaler scaler = uiRoot.AddComponent<CanvasScaler>();
+			scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+			scaler.referenceResolution = new Vector2(1920, 1080);
+
+			uiRoot.AddComponent<GraphicRaycaster>();
+
+			// Add canvas group for fade in/out
+			CanvasGroup canvasGroup = uiRoot.AddComponent<CanvasGroup>();
+
+			// Create the panel using Valheim's style
+			panel = CreateStyledPanel();
+			panel.transform.SetParent(uiRoot.transform, false);
+
+			// Position panel in center of screen
+			panelRect = panel.GetComponent<RectTransform>();
+			panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+			panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+			panelRect.pivot = new Vector2(0.5f, 0.5f);
+			panelRect.anchoredPosition = Vector2.zero;
+			panelRect.sizeDelta = GetPanelSize();
+		}
+
+		protected GameObject CreateStyledPanel()
+		{
+			GameObject panel = new GameObject("Panel");
+			RectTransform rect = panel.AddComponent<RectTransform>();
+
+			// Add background image (dark panel)
+			Image background = panel.AddComponent<Image>();
+			background.color = new Color(0.1f, 0.1f, 0.1f, 0.95f); // Dark background
+			background.sprite = GetPanelSprite();
+			background.type = Image.Type.Sliced;
+
+			// Add wooden border frame
+			GameObject border = CreateBorder(panel);
+
+			return panel;
+		}
+
+		protected GameObject CreateBorder(GameObject parent)
+		{
+			GameObject border = new GameObject("Border");
+			border.transform.SetParent(parent.transform, false);
+
+			Image borderImage = border.AddComponent<Image>();
+			borderImage.color = new Color(0.5f, 0.35f, 0.15f, 1f); // Wood color
+			borderImage.sprite = GetBorderSprite();
+			borderImage.type = Image.Type.Sliced;
+			borderImage.fillCenter = false; // Only show border, not fill
+
+			RectTransform borderRect = border.GetComponent<RectTransform>();
+			borderRect.anchorMin = Vector2.zero;
+			borderRect.anchorMax = Vector2.one;
+			borderRect.offsetMin = new Vector2(-10, -10);
+			borderRect.offsetMax = new Vector2(10, 10);
+
+			return border;
+		}
+
+		protected Sprite GetPanelSprite()
+		{
+			// Try to get a panel sprite from Valheim's UI
+			if (InventoryGui.instance != null)
+			{
+				Image[] images = InventoryGui.instance.GetComponentsInChildren<Image>();
+				foreach (var img in images)
+				{
+					if (img.sprite != null && img.name.ToLower().Contains("bkg"))
+					{
+						return img.sprite;
+					}
+				}
+			}
+
+			// Fallback: create a simple sprite
+			Texture2D tex = new Texture2D(32, 32);
+			Color fillColor = new Color(0.15f, 0.12f, 0.1f);
+			for (int i = 0; i < 32; i++)
+			{
+				for (int j = 0; j < 32; j++)
+				{
+					tex.SetPixel(i, j, fillColor);
+				}
+			}
+			tex.Apply();
+			return Sprite.Create(tex, new Rect(0, 0, 32, 32), Vector2.one * 0.5f, 100f, 1, SpriteMeshType.FullRect, new Vector4(8, 8, 8, 8));
+		}
+
+		protected Sprite GetBorderSprite()
+		{
+			// Try to get a border sprite from Valheim's UI
+			if (InventoryGui.instance != null)
+			{
+				Image[] images = InventoryGui.instance.GetComponentsInChildren<Image>();
+				foreach (var img in images)
+				{
+					if (img.sprite != null && img.name.ToLower().Contains("border"))
+					{
+						return img.sprite;
+					}
+				}
+			}
+
+			// Fallback to panel sprite
+			return GetPanelSprite();
+		}
+
+		protected abstract Vector2 GetPanelSize();
+
 		public virtual void Show()
 		{
+			if (uiRoot == null)
+			{
+				InitializeBaseNodeUI();
+			}
+
 			isVisible = true;
-			GUIManager.Instance.RegisterGUI(this);
+			uiRoot.SetActive(true);
 
-			// Initialize styles if needed
-			if (windowStyle == null)
+			// Show cursor like Valheim does
+			Cursor.lockState = CursorLockMode.None;
+			Cursor.visible = true;
+
+			// Block game input using reflection
+			if (GameCamera.instance != null)
 			{
-				InitializeStyles();
+				typeof(GameCamera).GetField("m_mouseCapture", BindingFlags.NonPublic | BindingFlags.Instance)
+					?.SetValue(GameCamera.instance, false);
 			}
 
-			// Pause game while configuring
-			if (Player.m_localPlayer != null)
-			{
-				// Note: This is a simplified approach. 
-				// In a full implementation, you'd properly handle game pause
-			}
+			// Play UI sound
+			PlayOpenSound();
 		}
 
-		/// <summary>
-		/// Hide the GUI window
-		/// </summary>
 		public virtual void Hide()
 		{
 			isVisible = false;
-			GUIManager.Instance.UnregisterGUI(this);
-
-			// Resume game
-			if (Player.m_localPlayer != null)
+			if (uiRoot != null)
 			{
-				// Resume game logic
+				uiRoot.SetActive(false);
+			}
+
+			// Restore game input
+			if (GameCamera.instance != null)
+			{
+				typeof(GameCamera).GetField("m_mouseCapture", BindingFlags.NonPublic | BindingFlags.Instance)
+					?.SetValue(GameCamera.instance, true);
+			}
+
+			// Play close sound
+			PlayCloseSound();
+		}
+
+		protected void PlayOpenSound()
+		{
+			// Find and play inventory open sound
+			if (Menu.instance != null)
+			{
+				var showMethod = typeof(Menu).GetMethod("Show", BindingFlags.NonPublic | BindingFlags.Instance);
+				if (showMethod != null)
+				{
+					// The Show method typically plays the UI sound
+					AudioSource audioSource = Menu.instance.GetComponent<AudioSource>();
+					if (audioSource != null && audioSource.clip != null)
+					{
+						audioSource.Play();
+					}
+				}
 			}
 		}
 
-		/// <summary>
-		/// Toggle GUI visibility
-		/// </summary>
-		public void Toggle()
+		protected void PlayCloseSound()
 		{
-			if (isVisible)
-				Hide();
-			else
-				Show();
-		}
-
-		#endregion
-
-		#region GUI Drawing
-
-		/// <summary>
-		/// Draw the GUI (called by GUIManager)
-		/// </summary>
-		public abstract void DrawGUI();
-
-		/// <summary>
-		/// Draw the close button in the window
-		/// </summary>
-		protected void DrawCloseButton()
-		{
-			if (UnityEngine.GUI.Button(new Rect(windowRect.width - 25, 5, 20, 20), "X"))
+			// Similar approach for close sound
+			if (Menu.instance != null)
 			{
-				Hide();
+				AudioSource audioSource = Menu.instance.GetComponent<AudioSource>();
+				if (audioSource != null && audioSource.clip != null)
+				{
+					audioSource.Play();
+				}
 			}
 		}
 
-		/// <summary>
-		/// Make window draggable
-		/// </summary>
-		protected void MakeWindowDraggable()
-		{
-			// Make the window draggable by its title bar
-			UnityEngine.GUI.DragWindow(new Rect(0, 0, windowRect.width, 20));
-		}
-
-		#endregion
-
-		#region Input Handling
-
-		/// <summary>
-		/// Check for escape key to close window
-		/// </summary>
 		protected virtual void Update()
 		{
+			// Handle ESC key to close
 			if (isVisible && Input.GetKeyDown(KeyCode.Escape))
 			{
 				Hide();
 			}
 		}
-
-		#endregion
 	}
 }
