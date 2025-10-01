@@ -1,7 +1,8 @@
-﻿using ItemConduit.Core;
+﻿using ItemConduit.Config;
+using ItemConduit.Core;
 using ItemConduit.Debug;
+using ItemConduit.Events;
 using ItemConduit.Network;
-using ItemConduit.Config;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -173,6 +174,11 @@ namespace ItemConduit.Nodes
 				return;
 			}
 
+			if (CanConnectToContainers && !isGhostPiece)
+			{
+				ContainerEventManager.Instance.RegisterNode(this);
+			}
+
 			// Add a small delay to ensure everything is initialized
 			StartCoroutine(DelayedStart());
 		}
@@ -191,6 +197,12 @@ namespace ItemConduit.Nodes
 			if (isGhostPiece)
 			{
 				yield break;
+			}
+
+			if (CanConnectToContainers && !isGhostPiece)
+			{
+				ItemConduit.Events.ContainerEventManager.Instance.RegisterNode(this);
+				Logger.LogInfo($"[ItemConduit] {name} registered for container events");
 			}
 
 			// Only register on server
@@ -248,6 +260,12 @@ namespace ItemConduit.Nodes
 
 			// Clear container reference
 			targetContainer = null;
+
+			// Unregister from container events
+			if (CanConnectToContainers)
+			{
+				ContainerEventManager.Instance.UnregisterNode(this);
+			}
 
 			// Unregister from network manager
 			if (ZNet.instance != null && ZNet.instance.IsServer())
@@ -1014,9 +1032,84 @@ namespace ItemConduit.Nodes
 			}
 		}
 
-		public void RefreshContainerConnection()
+
+		#endregion
+
+		#region Container Event Handling
+
+		/// <summary>
+		/// Called when a container is placed nearby
+		/// </summary>
+		public virtual void OnNearbyContainerPlaced(Container container, float distance)
 		{
-			RefreshDetection(DetectionMode.ContainersOnly);
+			// Only Extract/Insert nodes care about containers
+			if (!CanConnectToContainers) return;
+
+			if (CanConnectToContainers && !isGhostPiece)
+			{
+				ItemConduit.Events.ContainerEventManager.Instance.RegisterNode(this);
+				if (DebugConfig.showDebug.Value)
+				{
+					Logger.LogInfo($"[ItemConduit] {name} registered for container events");
+				}
+				
+			}
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] {name} notified: container placed {distance:F1}m away");
+			}
+
+			// Schedule a container detection refresh
+			StartCoroutine(DelayedContainerRefresh(0.1f));
+		}
+
+		/// <summary>
+		/// Called when a container is removed nearby
+		/// </summary>
+		public virtual void OnNearbyContainerRemoved(Container container, float distance)
+		{
+			// Only Extract/Insert nodes care about containers
+			if (!CanConnectToContainers) return;
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] {name} notified: container removed {distance:F1}m away");
+			}
+
+			// If this was our connected container, clear it immediately
+			if (targetContainer == container)
+			{
+				targetContainer = null;
+				UpdateVisualState(connectedNodes.Count > 0); // Update visual state
+
+				if (DebugConfig.showDebug.Value)
+				{
+					Logger.LogWarning($"[ItemConduit] {name} lost its connected container!");
+				}
+
+				// Try to find another container
+				StartCoroutine(DelayedContainerRefresh(0.5f));
+			}
+			else
+			{
+				// Still refresh to potentially find better containers
+				StartCoroutine(DelayedContainerRefresh(0.3f));
+			}
+		}
+
+		/// <summary>
+		/// Delayed container refresh to let physics settle
+		/// </summary>
+		private IEnumerator DelayedContainerRefresh(float delay)
+		{
+			yield return new WaitForSeconds(delay);
+
+			// Only refresh if we're a valid placed node
+			if (IsValidPlacedNode() && CanConnectToContainers)
+			{
+				RefreshDetection(DetectionMode.ContainersOnly);
+			}
 		}
 
 		#endregion

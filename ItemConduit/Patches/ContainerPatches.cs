@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using ItemConduit.Debug;
+using ItemConduit.Events;
 using UnityEngine;
 
 namespace ItemConduit.Patches
@@ -19,6 +20,8 @@ namespace ItemConduit.Patches
 			{
 				// Register container for wireframe visualization
 				ContainerWireframeManager.Instance.RegisterContainer(__instance);
+
+				ContainerEventManager.Instance.NotifyContainerPlaced(__instance);
 			}
 		}
 
@@ -36,6 +39,7 @@ namespace ItemConduit.Patches
 					if (container != null)
 					{
 						ContainerWireframeManager.Instance.UnregisterContainer(container);
+						ContainerEventManager.Instance.NotifyContainerRemoved(container);
 					}
 				}
 			}
@@ -55,6 +59,26 @@ namespace ItemConduit.Patches
 					if (container != null)
 					{
 						ContainerWireframeManager.Instance.UnregisterContainer(container);
+						ContainerEventManager.Instance.NotifyContainerRemoved(container);
+					}
+				}
+			}
+		}
+
+		/// <summary>
+		/// Additional patch for container destruction via damage
+		/// </summary>
+		[HarmonyPatch(typeof(WearNTear), "Destroy")]
+		public static class WearNTear_Destroy_Patch
+		{
+			private static void Prefix(WearNTear __instance)
+			{
+				if (__instance != null)
+				{
+					Container container = __instance.GetComponent<Container>();
+					if (container != null)
+					{
+						ContainerEventManager.Instance.NotifyContainerRemoved(container);
 					}
 				}
 			}
