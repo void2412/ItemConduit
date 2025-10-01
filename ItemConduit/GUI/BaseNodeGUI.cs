@@ -39,6 +39,16 @@ namespace ItemConduit.GUI
 			DontDestroyOnLoad(gameObject);
 		}
 
+		protected virtual void Update()
+		{
+			// Force cursor to stay visible while GUI is open
+			if (isVisible)
+			{
+				Cursor.visible = true;
+				Cursor.lockState = CursorLockMode.None;
+			}
+		}
+
 		#endregion
 
 		#region Initialization
@@ -279,9 +289,20 @@ namespace ItemConduit.GUI
 			// Register with our GUIController (not Jötunn's GUIManager)
 			GUIController.Instance?.RegisterGUI(this);
 
-			// Show cursor
-			Cursor.lockState = CursorLockMode.None;
+			// FORCE cursor to show - Valheim fights this, so we're aggressive
 			Cursor.visible = true;
+			Cursor.lockState = CursorLockMode.None;
+
+			// Disable GameCamera mouse capture using reflection (like old code did)
+			if (GameCamera.instance != null)
+			{
+				var mouseCaptureField = typeof(GameCamera).GetField("m_mouseCapture",
+					System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+				if (mouseCaptureField != null)
+				{
+					mouseCaptureField.SetValue(GameCamera.instance, false);
+				}
+			}
 
 			if (DebugConfig.showDebug.Value)
 			{
@@ -301,6 +322,17 @@ namespace ItemConduit.GUI
 
 				// Unregister from our GUIController (not Jötunn's GUIManager)
 				GUIController.Instance?.UnregisterGUI(this);
+
+				// Restore GameCamera mouse capture
+				if (GameCamera.instance != null)
+				{
+					var mouseCaptureField = typeof(GameCamera).GetField("m_mouseCapture",
+						System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+					if (mouseCaptureField != null)
+					{
+						mouseCaptureField.SetValue(GameCamera.instance, true);
+					}
+				}
 
 				if (DebugConfig.showDebug.Value)
 				{
