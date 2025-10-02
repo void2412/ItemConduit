@@ -1,6 +1,7 @@
 using UnityEngine;
 using ItemConduit.Core;
 using ItemConduit.Config;
+using ItemConduit.Utils;
 
 namespace ItemConduit.Nodes
 {

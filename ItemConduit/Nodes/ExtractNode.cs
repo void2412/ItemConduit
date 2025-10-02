@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using ItemConduit.Core;
+using ItemConduit.Utils;
 using ItemConduit.Config;
 using ItemConduit.GUI;
 using Logger = Jotunn.Logger;
