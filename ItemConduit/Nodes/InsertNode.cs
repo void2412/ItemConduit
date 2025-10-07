@@ -207,6 +207,7 @@ namespace ItemConduit.Nodes
 
 		#region Item Insertion
 
+		// TODO: Add fixed to be able to work with different types (Smeltery, ...)
 		public int CalculateAcceptCapacity(Inventory destInventory, ItemDrop.ItemData sourceItem, int desiredAmount)
 		{
 			if (destInventory == null || sourceItem == null || desiredAmount <= 0)
@@ -249,7 +250,7 @@ namespace ItemConduit.Nodes
 
 
 
-
+		// TODO: Add fixed to be able to work with different types (Smeltery, ...)
 		/// <summary>
 		/// Insert an item into the container
 		/// </summary>

@@ -458,49 +458,8 @@ namespace ItemConduit.Network
 					int maxTransferAmount = Mathf.Max(1, transferRate);
 					int remainingToTransfer = maxTransferAmount;
 
-					#region transfer only 1 type up to transferRate amount
-					//Transfer only 1 type
-					//var sourceItem = extractableItems.First();
-					//if (sourceItem == null || sourceItem.m_stack <= 0) continue;
 
-					//foreach (var insertNode in matchingInserts)
-					//{
-					//	if (remainingToTransfer <= 0) break;
-
-					//	if (!insertNode.CanAcceptItem(sourceItem)) break;
-
-					//	Container destContainer = insertNode.GetTargetContainer();
-					//	if (destContainer == null) continue;
-
-					//	Inventory destInventory = destContainer.GetInventory();
-					//	if (destInventory == null) continue;
-
-					//	int canAccept = insertNode.CalculateAcceptCapacity(destInventory, sourceItem, remainingToTransfer);
-
-					//	if (canAccept > 0) 
-					//	{
-					//		var transferItem = sourceItem.Clone();
-					//		transferItem.m_stack = canAccept;
-
-					//		if (insertNode.InsertItem(transferItem, destInventory))
-					//		{
-					//			sourceInventory.RemoveItem(sourceItem, canAccept);
-					//			remainingToTransfer -= canAccept;
-								
-					//			if (DebugConfig.showTransferLog.Value)
-					//			{
-					//				Logger.LogInfo($"Transferred {canAccept}x {sourceItem.m_shared.m_name} from {extractNode.name} to {insertNode.name}");
-					//			}
-
-					//			extractNode.OnItemExtracted();
-					//			insertNode.OnItemInserted();
-					//		}
-					//	}
-					//}
-					
-					#endregion
-
-					#region transfer multiple type up to transferRate amount
+		// transfer multiple type up to transferRate amount
 					foreach (var item in extractableItems)
 					{
 						if (item == null) continue;
@@ -511,6 +470,8 @@ namespace ItemConduit.Network
 
 							if (!insertNode.CanAcceptItem(item)) break;
 
+
+							// TODO: Add fixed to be able to work with different types (Smeltery, ...)
 							Container destContainer = insertNode.GetTargetContainer();
 							if (destContainer == null) continue;
 
@@ -526,6 +487,7 @@ namespace ItemConduit.Network
 
 							if (!insertNode.InsertItem(transferItem, destInventory)) continue;
 
+							// TODO: Add fixed to be able to work with different types (Smeltery, ...)
 							sourceInventory.RemoveItem(item, canAccept);
 							remainingToTransfer -= canAccept;
 
@@ -540,7 +502,7 @@ namespace ItemConduit.Network
 
 						if (item.m_stack <= 0) break;
 					}
-					#endregion
+					
 					int actuallyTransferred = maxTransferAmount - remainingToTransfer;
 
 					if (DebugConfig.showDebug.Value && actuallyTransferred > 0)

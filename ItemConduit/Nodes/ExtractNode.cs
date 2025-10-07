@@ -144,7 +144,8 @@ namespace ItemConduit.Nodes
 
 		/// <summary>
 		/// Override to return stored container reference
-		/// </summary>
+		/// </summary> 
+		// TODO: Add fixed to be able to work with different types (Smeltery, ...) Fix for Container.GetInventory() as well
 		public override Container GetTargetContainer()
 		{
 			return targetContainer;
@@ -179,6 +180,8 @@ namespace ItemConduit.Nodes
 		/// Get all items that can be extracted from the container
 		/// </summary>
 		/// <returns>List of extractable items</returns>
+
+		// TODO: Add fixed to be able to work with different types (Smeltery, ...)
 		public List<ItemDrop.ItemData> GetExtractableItems()
 		{
 			Container container = GetTargetContainer();
