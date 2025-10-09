@@ -19,11 +19,10 @@ namespace ItemConduit.Patches
 		{
 			private static void Postfix(Smelter __instance)
 			{
-				if (__instance.GetComponent<StandardContainerExtension>() == null)
+				if (__instance.GetComponent<SmelteryExtension>() == null)
 				{
-					__instance.gameObject.AddComponent<StandardContainerExtension>();
+					__instance.gameObject.AddComponent<SmelteryExtension>();
 				}
-				__instance.gameObject.AddComponent<SmelteryExtension>();
 
 				IContainerInterface @interface = __instance.gameObject.GetComponent<IContainerInterface>();
 				ContainerEventManager.Instance.NotifyContainerPlaced(@interface);
