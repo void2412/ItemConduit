@@ -2,6 +2,7 @@
 using ItemConduit.Core;
 using ItemConduit.Debug;
 using ItemConduit.Events;
+using ItemConduit.Interfaces;
 using ItemConduit.Network;
 using ItemConduit.Utils;
 using System;
@@ -72,7 +73,7 @@ namespace ItemConduit.Nodes
 		#region Container Management Fields
 
 		/// <summary>Reference to connected container (null for Conduit nodes)</summary>
-		protected Container targetContainer;
+		protected IContainerInterface targetContainer;
 
 		/// <summary>Whether this node type can connect to containers</summary>
 		protected virtual bool CanConnectToContainers => false;
@@ -422,7 +423,7 @@ namespace ItemConduit.Nodes
 			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] {name} detection complete: {connectedNodes.Count} nodes, " +
-							 $"container: {(targetContainer != null ? targetContainer.m_name : "none")}");
+							 $"container: {(targetContainer != null ? targetContainer.GetName() : "none")}");
 			}
 
 			isUpdatingDetection = false;
@@ -682,82 +683,21 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Process container connections (virtual for override in subclasses)
 		/// </summary>
-		/// TODO: Add fixes to be able to work with different types (Smeltery, ...)
+		
 		protected virtual IEnumerator ProcessContainerConnection(Collider[] overlaps)
 		{
-			Container bestContainer = null;
-			float closestDistance = float.MaxValue;
-
-			foreach (var col in overlaps)
-			{
-				if (col == null || col.transform == transform) continue;
-
-				Container container = col.GetComponent<Container>()
-					?? col.GetComponentInParent<Container>()
-					?? col.GetComponentInChildren<Container>();
-
-				if (container != null)
-				{
-					// Get container's collider for OBB testing
-					Collider containerCollider = container.GetComponent<Collider>()
-						?? container.GetComponentInChildren<Collider>();
-
-					if (containerCollider != null)
-					{
-						Collider myCollider = GetMainCollider();
-						if (myCollider != null)
-						{
-							// Use proper OBB-OBB intersection test
-							OBB myOBB = GetOBB(myCollider);
-							OBB containerOBB = GetOBB(containerCollider);
-
-							if (TestOBBOverlap(myOBB, containerOBB))
-							{
-								float distance = Vector3.Distance(transform.position, container.transform.position);
-
-								if (DebugConfig.showDebug.Value)
-								{
-									Logger.LogInfo($"[ItemConduit] OBB overlap detected with container: {container.name} at {distance:F2}m");
-								}
-
-								if (distance < closestDistance)
-								{
-									closestDistance = distance;
-									bestContainer = container;
-								}
-							}
-							else if (DebugConfig.showDebug.Value)
-							{
-								// Debug: Log containers that are close but not overlapping
-								float distance = Vector3.Distance(transform.position, container.transform.position);
-								if (distance < 5f)
-								{
-									Logger.LogInfo($"[ItemConduit] Container {container.name} nearby but no OBB overlap at {distance:F2}m");
-								}
-							}
-						}
-					}
-				}
-			}
-
-			targetContainer = bestContainer;
-
-			// Initialize container visualization if we found one
-			if (targetContainer != null && DebugConfig.showDebug.Value)
-			{
-				Logger.LogInfo($"[ItemConduit] {name} connected to container: {targetContainer.m_name}");
-			}
-
 			yield return null;
 		}
 
 		/// <summary>
 		/// Find the best overlapping container from collision results
 		/// </summary>
-		protected Container FindBestOverlappingContainer(Collider[] overlaps)
+		/// TODO: Add fixes to be able to work with different types (Smeltery, ...)
+
+		protected IContainerInterface FindBestOverlappingContainer(Collider[] overlaps)
 		{
 			float closestDistance = float.MaxValue;
-			Container bestContainer = null;
+			IContainerInterface bestContainer = null;
 
 			// Get our own collider for bounds checking
 			Collider myCollider = GetMainCollider();
@@ -768,28 +708,28 @@ namespace ItemConduit.Nodes
 				if (col == null || col.transform == transform) continue;
 
 				// Try multiple ways to find container
-				Container container = col.GetComponent<Container>()
-					?? col.GetComponentInParent<Container>()
-					?? col.GetComponentInChildren<Container>();
+				IContainerInterface containerInterface = col.GetComponent<IContainerInterface>()
+					?? col.GetComponentInParent<IContainerInterface>()
+					?? col.GetComponentInChildren<IContainerInterface>();
 
-				if (container != null)
+				if (containerInterface != null)
 				{
 					// Get the container's collider
-					Collider containerCollider = container.GetComponent<Collider>()
-						?? container.GetComponentInChildren<Collider>();
+					Collider containerCollider = col.GetComponent<Collider>()
+						?? col.GetComponentInChildren<Collider>();
 
 					if (containerCollider != null)
 					{
 						// Check for actual intersection using oriented bounds
 						if (myCollider.bounds.Intersects(containerCollider.bounds))
 						{
-							float distance = Vector3.Distance(transform.position, container.transform.position);
+							float distance = Vector3.Distance(transform.position, col.transform.position);
 
 							if (DebugConfig.showDebug.Value)
 							{
-								Logger.LogInfo($"[ItemConduit] Found overlapping container: {container.name} ({container.m_name}) at distance {distance:F2}m");
+								Logger.LogInfo($"[ItemConduit] Found overlapping container: {col.name} ({containerInterface.GetName()}) at distance {distance:F2}m");
 
-								Inventory inv = container.GetInventory();
+								Inventory inv = containerInterface.GetInventory();
 								if (inv != null)
 								{
 									Logger.LogInfo($"[ItemConduit]   Inventory: {inv.GetWidth()}x{inv.GetHeight()} slots, {inv.GetAllItems().Count} items");
@@ -799,7 +739,7 @@ namespace ItemConduit.Nodes
 							if (distance < closestDistance)
 							{
 								closestDistance = distance;
-								bestContainer = container;
+								bestContainer = containerInterface;
 							}
 						}
 					}
@@ -813,8 +753,8 @@ namespace ItemConduit.Nodes
 				if (Physics.Raycast(transform.position, Vector3.down, out hit, 2f,
 					LayerMask.GetMask("piece", "piece_nonsolid", "Default_small")))
 				{
-					Container container = hit.collider.GetComponent<Container>()
-						?? hit.collider.GetComponentInParent<Container>();
+					IContainerInterface container = hit.collider.GetComponent<IContainerInterface>()
+						?? hit.collider.GetComponentInParent<IContainerInterface>();
 
 					if (container != null && container.GetInventory() != null)
 					{
@@ -822,7 +762,7 @@ namespace ItemConduit.Nodes
 
 						if (DebugConfig.showDebug.Value)
 						{
-							Logger.LogInfo($"[ItemConduit] Found container below node: {container.name} ({container.m_name})");
+							Logger.LogInfo($"[ItemConduit] Found container below node: {container.GetName()}");
 						}
 					}
 				}
@@ -1017,7 +957,7 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Get the target container (virtual for override)
 		/// </summary>
-		public virtual Container GetTargetContainer()
+		public virtual IContainerInterface GetTargetContainer()
 		{
 			// Base implementation returns null (Conduit nodes don't have containers)
 			return null;
@@ -1042,7 +982,7 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Called when a container is placed nearby
 		/// </summary>
-		public virtual void OnNearbyContainerPlaced(Container container, float distance)
+		public virtual void OnNearbyContainerPlaced(IContainerInterface container, float distance)
 		{
 			// Only Extract/Insert nodes care about containers
 			if (!CanConnectToContainers) return;
@@ -1069,7 +1009,7 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Called when a container is removed nearby
 		/// </summary>
-		public virtual void OnNearbyContainerRemoved(Container container, float distance)
+		public virtual void OnNearbyContainerRemoved(IContainerInterface container, float distance)
 		{
 			// Only Extract/Insert nodes care about containers
 			if (!CanConnectToContainers) return;

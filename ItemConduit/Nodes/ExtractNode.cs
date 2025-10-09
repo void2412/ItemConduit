@@ -1,13 +1,14 @@
+using ItemConduit.Config;
+using ItemConduit.Core;
+using ItemConduit.GUI;
+using ItemConduit.Interfaces;
+using ItemConduit.Utils;
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using ItemConduit.Core;
-using ItemConduit.Utils;
-using ItemConduit.Config;
-using ItemConduit.GUI;
 using Logger = Jotunn.Logger;
-using System;
 
 namespace ItemConduit.Nodes
 {
@@ -120,7 +121,7 @@ namespace ItemConduit.Nodes
 			{
 				if (targetContainer != null)
 				{
-					Logger.LogWarning($"[ItemConduit] Extract node {name} connected to container: {targetContainer.m_name}");
+					Logger.LogWarning($"[ItemConduit] Extract node {name} connected to container: {targetContainer.GetName()}");
 
 					Inventory inv = targetContainer.GetInventory();
 					if (inv != null)
@@ -146,7 +147,7 @@ namespace ItemConduit.Nodes
 		/// Override to return stored container reference
 		/// </summary> 
 		// TODO: Add fixed to be able to work with different types (Smeltery, ...) Fix for Container.GetInventory() as well
-		public override Container GetTargetContainer()
+		public override IContainerInterface GetTargetContainer()
 		{
 			return targetContainer;
 		}
@@ -184,7 +185,7 @@ namespace ItemConduit.Nodes
 		// TODO: Add fixed to be able to work with different types (Smeltery, ...)
 		public List<ItemDrop.ItemData> GetExtractableItems()
 		{
-			Container container = GetTargetContainer();
+			IContainerInterface container = GetTargetContainer();
 			if (container == null) return new List<ItemDrop.ItemData>();
 
 			Inventory inventory = container.GetInventory();
@@ -355,7 +356,7 @@ namespace ItemConduit.Nodes
 
 			// Add container status
 			string containerStatus;
-			Container container = GetTargetContainer();
+			IContainerInterface container = GetTargetContainer();
 			if (container != null)
 			{
 				Inventory inv = container.GetInventory();

@@ -97,5 +97,10 @@ namespace ItemConduit.Extensions
 		{
 			return container.m_name;
 		}
+
+		public UnityEngine.Vector3 GetTransformPosition()
+		{
+			return container.transform.position;
+		}
 	}
 }

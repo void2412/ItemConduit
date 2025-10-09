@@ -1,12 +1,13 @@
+using ItemConduit.Config;
+using ItemConduit.Core;
+using ItemConduit.Interfaces;
+using ItemConduit.Nodes;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using ItemConduit.Core;
-using ItemConduit.Nodes;
 using Logger = Jotunn.Logger;
-using ItemConduit.Config;
 
 namespace ItemConduit.Network
 {
@@ -433,7 +434,7 @@ namespace ItemConduit.Network
 				{
 					if (extractNode == null || !extractNode.IsActive) continue;
 
-					Container sourceContainer = extractNode.GetTargetContainer();
+					IContainerInterface sourceContainer = extractNode.GetTargetContainer();
 					if (sourceContainer == null) continue;
 
 					Inventory sourceInventory = sourceContainer.GetInventory();
@@ -471,14 +472,14 @@ namespace ItemConduit.Network
 							if (!insertNode.CanAcceptItem(item)) break;
 
 
-							// TODO: Add fixed to be able to work with different types (Smeltery, ...)
-							Container destContainer = insertNode.GetTargetContainer();
+						
+							IContainerInterface destContainer = insertNode.GetTargetContainer();
 							if (destContainer == null) continue;
 
 							Inventory destInventory = destContainer.GetInventory();
 							if (destInventory == null) continue;
 
-							int canAccept = insertNode.CalculateAcceptCapacity(destInventory, item, remainingToTransfer);
+							int canAccept = insertNode.CalculateAcceptCapacity(destContainer, item, remainingToTransfer);
 
 							if (canAccept <= 0) continue;
 

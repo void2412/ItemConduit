@@ -172,5 +172,10 @@ namespace ItemConduit.Extensions
 		{
 			return smelter.m_name;
 		}
+
+		public UnityEngine.Vector3 GetTransformPosition()
+		{
+			return smelter.transform.position;
+		}
 	}
 }

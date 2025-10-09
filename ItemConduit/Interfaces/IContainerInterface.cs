@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace ItemConduit.Interfaces
 {
@@ -20,6 +22,7 @@ namespace ItemConduit.Interfaces
 		Inventory GetInventory();
 		string GetName();
 
+		UnityEngine.Vector3 GetTransformPosition();
 	}
 
 }

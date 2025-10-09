@@ -1,4 +1,5 @@
 ﻿using ItemConduit.Config;
+using ItemConduit.Interfaces;
 using ItemConduit.Nodes;
 using System.Collections;
 using System.Collections.Generic;
@@ -30,7 +31,7 @@ namespace ItemConduit.Events
 		#endregion
 
 		#region Events
-		public delegate void ContainerEventHandler(Container container, Vector3 position);
+		public delegate void ContainerEventHandler(IContainerInterface container, Vector3 position);
 
 		/// <summary>Fired when a container is placed in the world</summary>
 		public event ContainerEventHandler OnContainerPlaced;
@@ -40,7 +41,7 @@ namespace ItemConduit.Events
 		#endregion
 
 		#region Private Fields
-		private Dictionary<Container, Vector3> trackedContainers = new Dictionary<Container, Vector3>();
+		private Dictionary<IContainerInterface, Vector3> trackedContainers = new Dictionary<IContainerInterface, Vector3>();
 		private HashSet<BaseNode> subscribedNodes = new HashSet<BaseNode>();
 		#endregion
 
@@ -54,17 +55,17 @@ namespace ItemConduit.Events
 		/// <summary>
 		/// Notify that a container has been placed
 		/// </summary>
-		public void NotifyContainerPlaced(Container container)
+		public void NotifyContainerPlaced(IContainerInterface container)
 		{
 			if (container == null) return;
 
 			if (!trackedContainers.ContainsKey(container))
 			{
-				trackedContainers[container] = container.transform.position;
+				trackedContainers[container] = container.GetTransformPosition();
 
 				if (DebugConfig.showDebug.Value)
 				{
-					Logger.LogInfo($"[ItemConduit] ContainerEvent: {container.m_name} placed at {container.transform.position}");
+					Logger.LogInfo($"[ItemConduit] ContainerEvent: {container.GetName()} placed at {container.GetTransformPosition()}");
 				}
 
 				// Fire event with delay to let physics settle
@@ -75,18 +76,18 @@ namespace ItemConduit.Events
 		/// <summary>
 		/// Notify that a container is being removed
 		/// </summary>
-		public void NotifyContainerRemoved(Container container)
+		public void NotifyContainerRemoved(IContainerInterface container)
 		{
 			if (container == null) return;
 
 			if (trackedContainers.ContainsKey(container))
 			{
-				Vector3 position = container.transform.position;
+				Vector3 position = container.GetTransformPosition();
 				trackedContainers.Remove(container);
 
 				if (DebugConfig.showDebug.Value)
 				{
-					Logger.LogInfo($"[ItemConduit] ContainerEvent: {container.m_name} removed from {position}");
+					Logger.LogInfo($"[ItemConduit] ContainerEvent: {container.GetName()} removed from {position}");
 				}
 
 				// Fire event immediately before container is destroyed
@@ -127,9 +128,9 @@ namespace ItemConduit.Events
 		/// <summary>
 		/// Get all containers near a position
 		/// </summary>
-		public List<Container> GetContainersNearPosition(Vector3 position, float range)
+		public List<IContainerInterface> GetContainersNearPosition(Vector3 position, float range)
 		{
-			List<Container> nearbyContainers = new List<Container>();
+			List<IContainerInterface> nearbyContainers = new List<IContainerInterface>();
 
 			foreach (var kvp in trackedContainers)
 			{
@@ -146,7 +147,7 @@ namespace ItemConduit.Events
 
 		#region Private Methods
 
-		private IEnumerator DelayedContainerPlacedEvent(Container container)
+		private IEnumerator DelayedContainerPlacedEvent(IContainerInterface container)
 		{
 			// Wait for physics to settle
 			float delay = ContainerEventConfig.containerEventDelay?.Value ?? 0.5f;
@@ -155,14 +156,14 @@ namespace ItemConduit.Events
 			// Verify container still exists
 			if (container != null && container.GetInventory() != null)
 			{
-				OnContainerPlaced?.Invoke(container, container.transform.position);
+				OnContainerPlaced?.Invoke(container, container.GetTransformPosition());
 
 				// Also notify nearby nodes directly
-				NotifyNearbyNodesDirectly(container.transform.position, true, container);
+				NotifyNearbyNodesDirectly(container.GetTransformPosition(), true, container);
 			}
 		}
 
-		private void NotifyNearbyNodesDirectly(Vector3 position, bool isPlacement, Container container)
+		private void NotifyNearbyNodesDirectly(Vector3 position, bool isPlacement, IContainerInterface container)
 		{
 			
 			float range = ContainerEventConfig.containerDetectionRange.Value;

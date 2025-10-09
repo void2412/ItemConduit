@@ -1,12 +1,13 @@
 using ItemConduit.Config;
 using ItemConduit.Core;
 using ItemConduit.GUI;
+using ItemConduit.Interfaces;
+using ItemConduit.Utils;
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using ItemConduit.Utils;
 using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Nodes
@@ -129,7 +130,7 @@ namespace ItemConduit.Nodes
 			{
 				if (targetContainer != null)
 				{
-					Logger.LogWarning($"[ItemConduit] Insert node {name} connected to container: {targetContainer.m_name}");
+					Logger.LogWarning($"[ItemConduit] Insert node {name} connected to container: {targetContainer.GetName()}");
 
 					Inventory inv = targetContainer.GetInventory();
 					if (inv != null)
@@ -151,7 +152,7 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Override to return stored container reference
 		/// </summary>
-		public override Container GetTargetContainer()
+		public override IContainerInterface GetTargetContainer()
 		{
 			return targetContainer;
 		}
@@ -208,44 +209,12 @@ namespace ItemConduit.Nodes
 		#region Item Insertion
 
 		// TODO: Add fixed to be able to work with different types (Smeltery, ...)
-		public int CalculateAcceptCapacity(Inventory destInventory, ItemDrop.ItemData sourceItem, int desiredAmount)
+		public int CalculateAcceptCapacity(IContainerInterface container, ItemDrop.ItemData sourceItem, int desiredAmount)
 		{
-			if (destInventory == null || sourceItem == null || desiredAmount <= 0)
+			if (container == null || sourceItem == null || (desiredAmount <= 0 && sourceItem.m_stack <= 0))
 				return 0;
 
-			int totalCanAccept = 0;
-			int maxStackSize = sourceItem.m_shared.m_maxStackSize;
-
-			// First, check existing stacks that can be topped up
-			var existingStacks = destInventory.GetAllItems()
-				.Where(item => item.m_shared.m_name == sourceItem.m_shared.m_name &&
-							  item.m_quality == sourceItem.m_quality &&
-							  item.m_variant == sourceItem.m_variant &&
-							  item.m_stack < maxStackSize)
-				.OrderBy(item => item.m_gridPos.y * destInventory.GetWidth() + item.m_gridPos.x) // Order by position
-				.ToList();
-
-			foreach (var existingStack in existingStacks)
-			{
-				int spaceInStack = maxStackSize - existingStack.m_stack;
-				int canAddToStack = Mathf.Min(spaceInStack, desiredAmount - totalCanAccept);
-				totalCanAccept += canAddToStack;
-
-				if (totalCanAccept >= desiredAmount)
-					return desiredAmount;
-			}
-
-			// Then check empty slots
-			int emptySlots = destInventory.GetEmptySlots();
-			if (emptySlots > 0)
-			{
-				// Calculate how many items can fit in empty slots
-				int itemsPerSlot = maxStackSize;
-				int canAddToEmpty = Mathf.Min(emptySlots * itemsPerSlot, desiredAmount - totalCanAccept);
-				totalCanAccept += canAddToEmpty;
-			}
-
-			return Mathf.Min(totalCanAccept, desiredAmount);
+			return container.CalculateAcceptCapacity(sourceItem, desiredAmount);
 		}
 
 
@@ -277,25 +246,7 @@ namespace ItemConduit.Nodes
 		/// Get available space in the container
 		/// </summary>
 		/// <returns>Number of free slots</returns>
-		public int GetAvailableSpace()
-		{
-			Container container = GetTargetContainer();
-			if (container == null) return 0;
 
-			Inventory inventory = container.GetInventory();
-			if (inventory == null) return 0;
-
-			return inventory.GetEmptySlots();
-		}
-
-		/// <summary>
-		/// Check if container is full
-		/// </summary>
-		/// <returns>True if container has no empty slots</returns>
-		public bool IsContainerFull()
-		{
-			return GetAvailableSpace() == 0;
-		}
 
 		#endregion
 
@@ -508,7 +459,7 @@ namespace ItemConduit.Nodes
 
 			// Add container status
 			string containerStatus;
-			Container container = GetTargetContainer();
+			IContainerInterface container = GetTargetContainer();
 			if (container != null)
 			{
 				Inventory inv = container.GetInventory();
@@ -632,30 +583,6 @@ namespace ItemConduit.Nodes
 		#endregion
 
 		#region Debug
-
-		
-
-		/// <summary>
-		/// Get debug information about this insert node
-		/// </summary>
-		public string GetDebugInfo()
-		{
-			Container container = GetTargetContainer();
-			string containerInfo = container != null ? $"{container.m_name} ({GetAvailableSpace()} free slots)" : "No container";
-			string filterInfo = ItemFilter.Count > 0
-				? $"{(IsWhitelist ? "Whitelist" : "Blacklist")} ({ItemFilter.Count} items)"
-				: "No filter";
-
-			return $"InsertNode: {name}\n" +
-				   $"  Channel: {ChannelId}\n" +
-				   $"  Priority: {Priority}\n" +
-				   $"  Filter: {filterInfo}\n" +
-				   $"  Container: {containerInfo}\n" +
-				   $"  Network: {NetworkId ?? "None"}\n" +
-				   $"  Active: {IsActive}\n" +
-				   $"  Connected Nodes: {connectedNodes.Count}";
-		}
-
 		#endregion
 	}
 }

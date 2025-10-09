@@ -1,6 +1,8 @@
 ﻿using HarmonyLib;
 using ItemConduit.Debug;
 using ItemConduit.Events;
+using ItemConduit.Extensions;
+using ItemConduit.Interfaces;
 using UnityEngine;
 
 namespace ItemConduit.Patches
@@ -18,10 +20,16 @@ namespace ItemConduit.Patches
 		{
 			private static void Postfix(Container __instance)
 			{
+				if (__instance.GetComponent<StandardContainerExtension>() == null)
+				{
+					__instance.gameObject.AddComponent<StandardContainerExtension>();
+				}
+
 				// Register container for wireframe visualization
 				ContainerWireframeManager.Instance.RegisterContainer(__instance);
 
-				ContainerEventManager.Instance.NotifyContainerPlaced(__instance);
+				IContainerInterface @interface = __instance.gameObject.GetComponent<IContainerInterface>();
+				ContainerEventManager.Instance.NotifyContainerPlaced(@interface);
 			}
 		}
 
@@ -39,7 +47,8 @@ namespace ItemConduit.Patches
 					if (container != null)
 					{
 						ContainerWireframeManager.Instance.UnregisterContainer(container);
-						ContainerEventManager.Instance.NotifyContainerRemoved(container);
+						IContainerInterface @interface = container.gameObject.GetComponent<IContainerInterface>();
+						ContainerEventManager.Instance.NotifyContainerRemoved(@interface);
 					}
 				}
 			}
@@ -59,7 +68,8 @@ namespace ItemConduit.Patches
 					if (container != null)
 					{
 						ContainerWireframeManager.Instance.UnregisterContainer(container);
-						ContainerEventManager.Instance.NotifyContainerRemoved(container);
+						IContainerInterface @interface = container.gameObject.GetComponent<IContainerInterface>();
+						ContainerEventManager.Instance.NotifyContainerRemoved(@interface);
 					}
 				}
 			}
@@ -78,7 +88,8 @@ namespace ItemConduit.Patches
 					Container container = __instance.GetComponent<Container>();
 					if (container != null)
 					{
-						ContainerEventManager.Instance.NotifyContainerRemoved(container);
+						IContainerInterface @interface = container.gameObject.GetComponent<IContainerInterface>();
+						ContainerEventManager.Instance.NotifyContainerRemoved(@interface);
 					}
 				}
 			}
