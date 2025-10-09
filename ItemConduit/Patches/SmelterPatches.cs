@@ -48,18 +48,6 @@ namespace ItemConduit.Patches
 
 				var extension = __instance.GetComponent<SmelteryExtension>();
 
-				if (!extension.isConnected)
-				{
-					if (extension.oreProcessedList.Count > 0)
-					{
-						foreach (var item in extension.oreProcessedList)
-						{
-							__instance.Spawn(item.Key, item.Value);
-							extension.oreProcessedList.Remove(item.Key);
-						}
-					}
-				}
-
 				double deltaTime = __instance.GetDeltaTime();
 				float num = __instance.GetAccumulator();
 				num += (float)deltaTime;

@@ -1,4 +1,5 @@
 ﻿using ItemConduit.Interfaces;
+using ItemConduit.Nodes;
 using Jotunn;
 using System;
 using System.Collections.Generic;
@@ -7,20 +8,80 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Extensions
 {
 	public class SmelteryExtension : BaseExtension, IContainerInterface
 	{
-		public bool isConnected { get; set; } = false;
 		private Smelter smelter;
-		public Dictionary<string, int> oreProcessedList;
-
+		public Dictionary<string, int> oreProcessedList = new Dictionary<string, int>();
+		private HashSet<BaseNode> connectedNodes = new HashSet<BaseNode>();
+		public bool isConnected
+		{
+			get { return connectedNodes.Count > 0; }
+		}
 		protected override void Awake()
 		{
 			base.Awake();
 			smelter = GetComponent<Smelter>();
 		}
+
+		public void OnNodeConnected(BaseNode node)
+		{
+			if (node != null && (node is ExtractNode || node is InsertNode))
+			{
+				connectedNodes.Add(node);
+
+				if (ItemConduit.Config.DebugConfig.showDebug.Value)
+				{
+					Logger.LogInfo($"[ItemConduit] Node {node.name} connected to {GetName()}. Total connected: {connectedNodes.Count}");
+				}
+			}
+		}
+
+		public void OnNodeDisconnected(BaseNode node)
+		{
+			if (node != null)
+			{
+				connectedNodes.Remove(node);
+
+				if (ItemConduit.Config.DebugConfig.showDebug.Value)
+				{
+					Logger.LogInfo($"[ItemConduit] Node {node.name} disconnected from {GetName()}. Remaining connected: {connectedNodes.Count}");
+				}
+
+				// If no more nodes are connected and we have processed ore, spawn them
+				if (!isConnected && oreProcessedList.Count > 0)
+				{
+					foreach (var item in oreProcessedList.ToList())
+					{
+						smelter.Spawn(item.Key, item.Value);
+						oreProcessedList.Remove(item.Key);
+					}
+				}
+			}
+		}
+
+		private void CleanupDisconnectedNodes()
+		{
+			connectedNodes.RemoveWhere(node => node == null || !node.IsValidPlacedNode());
+		}
+
+		private void OnDestroy()
+		{
+			// Notify all connected nodes that this container is being destroyed
+			foreach (var node in connectedNodes.ToList())
+			{
+				if (node != null)
+				{
+					// The node will handle clearing its targetContainer reference
+					node.OnNearbyContainerRemoved(this, 0);
+				}
+			}
+			connectedNodes.Clear();
+		}
+
 		public int CalculateAcceptCapacity(ItemDrop.ItemData sourceItem, int desiredAmount)
 		{
 			if (sourceItem == null || desiredAmount <= 0) return 0;

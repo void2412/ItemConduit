@@ -2,6 +2,7 @@
 using ItemConduit.Core;
 using ItemConduit.Debug;
 using ItemConduit.Events;
+using ItemConduit.Extensions;
 using ItemConduit.Interfaces;
 using ItemConduit.Network;
 using ItemConduit.Utils;
@@ -1022,6 +1023,11 @@ namespace ItemConduit.Nodes
 			// If this was our connected container, clear it immediately
 			if (targetContainer == container)
 			{
+				if (targetContainer is SmelteryExtension smeltery)
+				{
+					smeltery.OnNodeDisconnected(this);
+				}
+
 				targetContainer = null;
 				UpdateVisualState(connectedNodes.Count > 0); // Update visual state
 

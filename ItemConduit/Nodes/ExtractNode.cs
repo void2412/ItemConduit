@@ -1,5 +1,6 @@
 using ItemConduit.Config;
 using ItemConduit.Core;
+using ItemConduit.Extensions;
 using ItemConduit.GUI;
 using ItemConduit.Interfaces;
 using ItemConduit.Utils;
@@ -104,6 +105,17 @@ namespace ItemConduit.Nodes
 			}
 		}
 
+		protected override void OnDestroy()
+		{
+			// Disconnect from container if it's a smelter
+			if (targetContainer != null && targetContainer is SmelteryExtension smeltery)
+			{
+				smeltery.OnNodeDisconnected(this);
+			}
+
+			base.OnDestroy();
+		}
+
 		#endregion
 
 		#region Container Detection Override
@@ -113,9 +125,25 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		protected override IEnumerator ProcessContainerConnection(Collider[] overlaps)
 		{
-
+			IContainerInterface previousContainer = targetContainer;
 			// Use base class helper to find best container
 			targetContainer = FindBestOverlappingContainer(overlaps);
+
+			// Handle container change
+			if (previousContainer != targetContainer)
+			{
+				// Disconnect from previous container
+				if (previousContainer != null && previousContainer is SmelteryExtension prevSmeltery)
+				{
+					prevSmeltery.OnNodeDisconnected(this);
+				}
+
+				// Connect to new container
+				if (targetContainer != null && targetContainer is SmelteryExtension newSmeltery)
+				{
+					newSmeltery.OnNodeConnected(this);
+				}
+			}
 
 			if (DebugConfig.showDebug.Value)
 			{
