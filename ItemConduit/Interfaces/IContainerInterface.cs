@@ -12,14 +12,15 @@ namespace ItemConduit.Interfaces
     /// </summary>
     public interface IContainerInterface
 	{
+		int CalculateAcceptCapacity(ItemDrop.ItemData sourceItem, int desiredAmount);
 		bool CanAddItem(ItemDrop.ItemData item);
 		bool CanRemoveItem(ItemDrop.ItemData item);
-		bool AddItem(ItemDrop.ItemData item);
+		bool AddItem(ItemDrop.ItemData item, int amount = 0);
 		bool RemoveItem(ItemDrop.ItemData item, int amount = 1);
-		List<ItemDrop.ItemData> GetAllItems();
-		int GetEmptySlots();
+		Inventory GetInventory();
 		string GetName();
-		bool IsValid();
+
 	}
+
 }
 

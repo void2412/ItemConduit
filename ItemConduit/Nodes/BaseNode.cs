@@ -682,6 +682,7 @@ namespace ItemConduit.Nodes
 		/// <summary>
 		/// Process container connections (virtual for override in subclasses)
 		/// </summary>
+		/// TODO: Add fixes to be able to work with different types (Smeltery, ...)
 		protected virtual IEnumerator ProcessContainerConnection(Collider[] overlaps)
 		{
 			Container bestContainer = null;
