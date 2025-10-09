@@ -254,9 +254,9 @@ namespace ItemConduit.Nodes
 		/// </summary>
 		/// <param name="item">The item to insert</param>
 		/// <returns>True if insertion was successful</returns>
-		public bool InsertItem(ItemDrop.ItemData item, Inventory destInventory)
+		public bool InsertItem(ItemDrop.ItemData item, IContainerInterface destContainer)
 		{
-			bool success = destInventory.AddItem(item);
+			bool success = destContainer.AddItem(item);
 
 			if (success)
 			{

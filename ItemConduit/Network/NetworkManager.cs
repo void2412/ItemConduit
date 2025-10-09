@@ -486,10 +486,9 @@ namespace ItemConduit.Network
 							var transferItem = item.Clone();
 							transferItem.m_stack = canAccept;
 
-							if (!insertNode.InsertItem(transferItem, destInventory)) continue;
+							if (!insertNode.InsertItem(transferItem, destContainer)) continue;
 
-							// TODO: Add fixed to be able to work with different types (Smeltery, ...)
-							sourceInventory.RemoveItem(item, canAccept);
+							sourceContainer.RemoveItem(item, canAccept);
 							remainingToTransfer -= canAccept;
 
 							if (DebugConfig.showTransferLog.Value)

@@ -16,6 +16,7 @@ namespace ItemConduit.Extensions
 	{
 		private Smelter smelter;
 		public Dictionary<string, int> oreProcessedList = new Dictionary<string, int>();
+		
 		private HashSet<BaseNode> connectedNodes = new HashSet<BaseNode>();
 		public bool isConnected
 		{
