@@ -10,13 +10,11 @@ namespace ItemConduit.Extensions
 	public class StandardContainerExtension : BaseExtension, IContainerInterface
 	{
 		private Container container;
-		private Inventory inventory;
 
 		protected override void Awake()
 		{
 			base.Awake();
 			container = GetComponent<Container>();
-			inventory = container?.GetInventory();
 		}
 
 		#region IContainerInterface Implementation
@@ -26,7 +24,7 @@ namespace ItemConduit.Extensions
 			if (container == null || sourceItem == null || desiredAmount <= 0)
 				return 0;
 
-			var destInventory = inventory;
+			var destInventory = container.m_inventory;
 			if (destInventory == null) return 0;
 
 			int totalCanAccept = 0;
@@ -65,7 +63,7 @@ namespace ItemConduit.Extensions
 
 		public bool CanAddItem(ItemDrop.ItemData item)
 		{
-			return inventory?.CanAddItem(item) ?? false;
+			return container.m_inventory?.CanAddItem(item) ?? false;
 		}
 
 		public bool CanRemoveItem(ItemDrop.ItemData item)
@@ -75,7 +73,7 @@ namespace ItemConduit.Extensions
 
 		public bool AddItem(ItemDrop.ItemData item, int amount = 0)
 		{
-			if (inventory == null) return false;
+			if (container.m_inventory == null) return false;
 			if (amount <= 0 && item.m_stack <= 0) return false;
 
 			if (amount > 0)
@@ -83,12 +81,12 @@ namespace ItemConduit.Extensions
 				item.m_stack = amount;
 			}
 
-			return inventory.AddItem(item);
+			return container.m_inventory.AddItem(item);
 		}
 
 		public bool RemoveItem(ItemDrop.ItemData item, int amount = 0)
 		{
-			if (inventory == null) return false;
+			if (container.m_inventory == null) return false;
 			if (amount <= 0 && item.m_stack <= 0) return false;
 
 			if (amount > 0)
@@ -96,12 +94,12 @@ namespace ItemConduit.Extensions
 				item.m_stack = amount;
 			}
 
-			return inventory.RemoveItem(item);
+			return container.m_inventory.RemoveItem(item);
 		}
 
 		public Inventory GetInventory()
 		{
-			return inventory;
+			return container.m_inventory;
 		}
 
 		public string GetName()

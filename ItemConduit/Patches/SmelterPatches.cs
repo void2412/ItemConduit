@@ -2,7 +2,7 @@
 using ItemConduit.Debug;
 using ItemConduit.Extensions;
 using ItemConduit.Interfaces;
-using System;
+using Jotunn;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -79,20 +79,22 @@ namespace ItemConduit.Patches
 							{
 								
 								__instance.SetBakeTimer(0f);
-								__instance.RemoveOneOre();
+								
 								if (!extension.IsConnected)
 								{
+									__instance.RemoveOneOre();
 									__instance.QueueProcessed(queuedOre);
 								}
 								else
 								{
-									if (extension.oreProcessedList.ContainsKey(queuedOre))
+									Smelter.ItemConversion itemConversion = __instance.GetItemConversion(queuedOre);
+									ItemDrop ore = Object.Instantiate<GameObject>(itemConversion.m_to.gameObject, __instance.m_outputPoint.position,
+										__instance.m_outputPoint.rotation).GetComponent<ItemDrop>();
+
+									ItemDrop.ItemData itemData = ore.m_itemData;
+									if(extension.AddToInventory(itemData, 1))
 									{
-										extension.oreProcessedList[queuedOre] += 1;
-									}
-									else
-									{
-										extension.oreProcessedList.Add(queuedOre, 1);
+										__instance.RemoveOneOre();
 									}
 
 								}

@@ -481,6 +481,11 @@ namespace ItemConduit.Network
 
 							int canAccept = insertNode.CalculateAcceptCapacity(destContainer, item, remainingToTransfer);
 
+							if (DebugConfig.showTransferLog.Value)
+							{
+								Logger.LogInfo($"canAccept: {canAccept}");
+							}
+
 							if (canAccept <= 0) continue;
 
 							var transferItem = item.Clone();
