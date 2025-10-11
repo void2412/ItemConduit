@@ -225,7 +225,7 @@ namespace ItemConduit.Extensions
 			if (amount <= 0 && item.m_stack <=0) return false;
 			if (!m_inventory.CanAddItem(item)) return false;
 
-			if (amount > 0) {
+			if (amount > 0 && item.m_stack != amount) {
 				item.m_stack = amount;
 			}
 

@@ -88,10 +88,12 @@ namespace ItemConduit.Patches
 								else
 								{
 									Smelter.ItemConversion itemConversion = __instance.GetItemConversion(queuedOre);
-									ItemDrop ore = itemConversion.m_to.gameObject.GetComponent<ItemDrop>();
+									ItemDrop itemDropPrefab = itemConversion.m_to.gameObject.GetComponent<ItemDrop>();
 
-									ItemDrop.ItemData itemData = ore.m_itemData;
-									if(extension.AddToInventory(itemData, 1))
+									ItemDrop.ItemData itemData = itemDropPrefab.m_itemData.Clone();
+									itemData.m_dropPrefab = itemDropPrefab.gameObject;
+									itemData.m_stack = 1;
+									if (extension.AddToInventory(itemData, 1))
 									{
 										__instance.RemoveOneOre();
 									}
