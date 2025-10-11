@@ -20,6 +20,8 @@ namespace ItemConduit.Extensions
 		public string m_lastDataString;
 		public bool m_loading;
 		public OutputSwitch m_outputSwitch;
+		public bool autoOutput;
+		private BoxCollider m_outputCollider;
 
 		protected override void Awake()
 		{
@@ -43,10 +45,112 @@ namespace ItemConduit.Extensions
 			container = new Container();
 			container.m_inventory = new Inventory(smelter.name + "Output", Jotunn.Managers.GUIManager.Instance.GetSprite("woodpanel_playerinventory"), 1, 1);
 
-			m_outputSwitch = new OutputSwitch();
+			GameObject switchObject = new GameObject("OutputSwitch");
+
+			if (smelter.m_outputPoint != null) {
+				switchObject.transform.position = smelter.m_outputPoint.position + new Vector3(0,0,0);
+				switchObject.transform.rotation = smelter.m_outputPoint.rotation;
+				switchObject.transform.SetParent(smelter.transform);
+			}
+			else
+			{
+				switchObject.transform.SetParent(smelter.transform);
+				switchObject.transform.localPosition = new Vector3(0, 1f, 1f); // Default value if m_outputPoint = null
+			}
+
+			m_outputSwitch = switchObject.AddComponent<OutputSwitch>();
 			m_outputSwitch.m_onUse = (OutputSwitch.Callback)Delegate.Combine(m_outputSwitch.m_onUse, new OutputSwitch.Callback(OnOutputSwitch));
 			m_outputSwitch.m_onHover = new OutputSwitch.hoverCallback(OnOutputHover);
 
+			m_outputCollider = switchObject.AddComponent<BoxCollider>();
+			m_outputCollider.size = new Vector3(0.5f, 0.5f, 0.5f); // Adjust the interaction size as needed
+			m_outputCollider.isTrigger = true;
+
+			if (DebugConfig.showDebug.Value)
+			{
+				CreateColliderWireframe(switchObject, m_outputCollider);
+			}
+			m_outputCollider.enabled = this.IsConnected;
+
+		}
+		
+		protected void Update()
+		{
+			m_outputCollider.enabled = this.IsConnected;
+		}
+
+		private void CreateColliderWireframe(GameObject switchObject, BoxCollider collider)
+		{
+			// Create wireframe visualization
+			GameObject wireframe = GameObject.CreatePrimitive(PrimitiveType.Cube);
+			wireframe.name = "OutputSwitch_Wireframe";
+			wireframe.transform.SetParent(switchObject.transform);
+			wireframe.transform.localPosition = collider.center;
+			wireframe.transform.localRotation = Quaternion.identity;
+			wireframe.transform.localScale = collider.size;
+
+			// Remove the collider from the visualization
+			Destroy(wireframe.GetComponent<BoxCollider>());
+
+			// Make it wireframe-only
+			MeshRenderer renderer = wireframe.GetComponent<MeshRenderer>();
+			if (renderer != null)
+			{
+				// Create a simple colored material
+				Material wireMaterial = new Material(Shader.Find("Sprites/Default"));
+				wireMaterial.color = new Color(0f, 1f, 0f, 0.3f); // Green, semi-transparent
+				renderer.material = wireMaterial;
+			}
+
+			// Alternative: Create actual wireframe lines (more like your NodeVisualizer)
+			CreateWireframeLines(switchObject, collider);
+		}
+
+		private void CreateWireframeLines(GameObject switchObject, BoxCollider collider)
+		{
+			// Create a parent for all wireframe lines
+			GameObject wireframeParent = new GameObject("OutputSwitch_WireframeLines");
+			wireframeParent.transform.SetParent(switchObject.transform);
+			wireframeParent.transform.localPosition = Vector3.zero;
+
+			Vector3 center = collider.center;
+			Vector3 size = collider.size;
+
+			// Calculate the 8 corners of the box
+			Vector3[] corners = new Vector3[8];
+			corners[0] = center + new Vector3(-size.x, -size.y, -size.z) * 0.5f;
+			corners[1] = center + new Vector3(size.x, -size.y, -size.z) * 0.5f;
+			corners[2] = center + new Vector3(size.x, -size.y, size.z) * 0.5f;
+			corners[3] = center + new Vector3(-size.x, -size.y, size.z) * 0.5f;
+			corners[4] = center + new Vector3(-size.x, size.y, -size.z) * 0.5f;
+			corners[5] = center + new Vector3(size.x, size.y, -size.z) * 0.5f;
+			corners[6] = center + new Vector3(size.x, size.y, size.z) * 0.5f;
+			corners[7] = center + new Vector3(-size.x, size.y, size.z) * 0.5f;
+
+			// Define the 12 edges of a box
+			int[,] edges = new int[,] {
+		{0,1}, {1,2}, {2,3}, {3,0},  // Bottom edges
+        {4,5}, {5,6}, {6,7}, {7,4},  // Top edges
+        {0,4}, {1,5}, {2,6}, {3,7}   // Vertical edges
+    };
+
+			// Create line renderers for each edge
+			for (int i = 0; i < 12; i++)
+			{
+				GameObject edge = new GameObject($"Edge_{i}");
+				edge.transform.SetParent(wireframeParent.transform);
+
+				LineRenderer line = edge.AddComponent<LineRenderer>();
+				line.material = new Material(Shader.Find("Sprites/Default"));
+				line.startColor = line.endColor = new Color(0f, 1f, 1f, 0.8f); // Cyan color
+				line.startWidth = line.endWidth = 0.01f;
+				line.positionCount = 2;
+				line.useWorldSpace = false;
+
+				// Set the line positions
+				line.SetPosition(0, corners[edges[i, 0]]);
+				line.SetPosition(1, corners[edges[i, 1]]);
+			}
 		}
 
 		private bool OnOutputSwitch(Humanoid user, bool hold, bool alt)
@@ -57,7 +161,7 @@ namespace ItemConduit.Extensions
 
 		private string OnOutputHover()
 		{
-			return "Open Output Inventory";
+			return Localization.instance.Localize("[<color=yellow><b>$KEY_Use</b></color>] Open Output");
 		}
 
 		public override void OnNodeDisconnected(BaseNode node)
