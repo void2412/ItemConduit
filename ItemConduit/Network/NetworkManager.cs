@@ -476,9 +476,6 @@ namespace ItemConduit.Network
 							IContainerInterface destContainer = insertNode.GetTargetContainer();
 							if (destContainer == null) continue;
 
-							Inventory destInventory = destContainer.GetInventory();
-							if (destInventory == null) continue;
-
 							int canAccept = insertNode.CalculateAcceptCapacity(destContainer, item, Mathf.Min(remainingToTransfer, item.m_stack));
 
 							if (DebugConfig.showTransferLog.Value)

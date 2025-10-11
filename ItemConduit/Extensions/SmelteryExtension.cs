@@ -1,4 +1,5 @@
-﻿using ItemConduit.Interfaces;
+﻿using ItemConduit.Config;
+using ItemConduit.Interfaces;
 using ItemConduit.Nodes;
 using System;
 using System.Collections.Generic;
@@ -14,7 +15,7 @@ namespace ItemConduit.Extensions
 	public class SmelteryExtension : BaseExtension, IContainerInterface
 	{
 		private Smelter smelter;
-		public Inventory m_inventory = new Inventory("smelterOutput", Jotunn.Managers.GUIManager.Instance.GetSprite("woodpanel_playerinventory"),1,1);
+		public Inventory m_inventory;
 		public uint m_lastRevision;
 		public string m_lastDataString;
 		public bool m_loading;
@@ -23,6 +24,18 @@ namespace ItemConduit.Extensions
 		{
 			base.Awake();
 			smelter = GetComponentInParent<Smelter>();
+			if (smelter == null)
+			{
+				smelter = GetComponent<Smelter>();
+				if (smelter == null) smelter = GetComponentInChildren<Smelter>();
+			}
+
+			if(smelter == null)
+			{
+				Logger.LogError($"[ItemConduit] SmelteryExtension could not find Smelter component!");
+				return;
+			}
+
 			ZDO zdo = zNetView.GetZDO();
 			if (zdo == null) return;
 
@@ -114,20 +127,31 @@ namespace ItemConduit.Extensions
 
 		public int CalculateAcceptCapacity(ItemDrop.ItemData sourceItem, int desiredAmount)
 		{
-			if (sourceItem == null || desiredAmount <= 0) return 0;
-			if (!CanAddItem(sourceItem)) return 0;
+			if (sourceItem == null || desiredAmount <= 0 || smelter == null) return 0;
+			if (!CanAddItem(sourceItem))
+			{
+				if (DebugConfig.showDebug.Value)
+				{
+					Logger.LogInfo($"[SmelteryExtension] Cannot accept item - CanAddItem returned false");
+				}
+				return 0;
+			}
 
 			string type = ItemType(sourceItem);
 
-			float acceptableAmount = 0;
+			int acceptableAmount = 0;
 			if (type == "Fuel")
 			{
 				var maxFuel = smelter.m_maxFuel;
 				var currentFuel = smelter.GetFuel();
-				acceptableAmount = maxFuel - currentFuel;
-			}
+				acceptableAmount = (int)(maxFuel - currentFuel);
 
-			if (type == "Ore")
+				if (DebugConfig.showDebug.Value)
+				{
+					Logger.LogInfo($"[SmelteryExtension] Fuel capacity: {currentFuel}/{maxFuel}, can accept: {acceptableAmount}");
+				}
+			}
+			else if (type == "Ore" && smelter.m_maxOre > 0)
 			{
 				var maxOre = smelter.m_maxOre;
 				var currentOreSize = smelter.GetQueueSize();
@@ -141,9 +165,29 @@ namespace ItemConduit.Extensions
 
 		public bool CanAddItem(ItemDrop.ItemData item)
 		{
-			if (smelter == null) return false;
-			string type = ItemType(item);
-			return type == "Fuel" || type == "Ore";
+			if (smelter == null || item == null) return false;
+
+			// Debug logging to help diagnose
+			if (DebugConfig.showDebug.Value)
+			{
+				string itemName = item.m_dropPrefab?.name ?? item.m_shared?.m_name ?? "Unknown";
+				Logger.LogInfo($"[SmelteryExtension] Checking if can add item: {itemName}");
+
+				string type = ItemType(item);
+				Logger.LogInfo($"[SmelteryExtension] Item type detected: {type}");
+
+				if (type == "Invalid")
+				{
+					Logger.LogInfo($"[SmelteryExtension] Item rejected - not valid fuel or ore");
+					if (smelter.m_fuelItem != null)
+					{
+						Logger.LogInfo($"[SmelteryExtension] Expected fuel: {smelter.m_fuelItem.m_itemData.m_shared.m_name}");
+					}
+				}
+			}
+
+			string itemType = ItemType(item);
+			return itemType == "Fuel" || itemType == "Ore";
 		}
 
 		public bool CanRemoveItem(ItemDrop.ItemData item)
@@ -163,23 +207,37 @@ namespace ItemConduit.Extensions
 		{
 			if (!CanAddItem(item)) return false;
 
-			int addableAmount = CalculateAcceptCapacity(item, amount);
+
+			int actualAmount = amount > 0 ? amount : item.m_stack;
+
+			int addableAmount = CalculateAcceptCapacity(item, actualAmount);
 			if (addableAmount <= 0) return false;
 
 
 			string type = ItemType(item);
 
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"[SmelteryExtension] Adding {addableAmount}x {item.m_shared.m_name} as {type}");
+			}
+
 			if (type == "Fuel")
 			{
 				AddFuel(addableAmount);
+				return true;
 			}
 
 			if (type == "Ore")
 			{
-				AddOre(item.m_dropPrefab.name,addableAmount);
+				string oreName = item.m_dropPrefab?.name ?? "";
+				if (!string.IsNullOrEmpty(oreName))
+				{
+					AddOre(item.m_dropPrefab.name, addableAmount);
+					return true;
+				}
 			}
 
-			return true;
+			return false;
 		}
 
 		public void AddFuel(int amount)
@@ -250,21 +308,22 @@ namespace ItemConduit.Extensions
 
 		private string ItemType(ItemDrop.ItemData item)
 		{
-			if (item == null) return "Invalid";
+			if (item == null || smelter == null) return "Invalid";
 
-			// Check if it's fuel
-			if (smelter.m_fuelItem.m_itemData.m_dropPrefab.name == item.m_dropPrefab.name)
+			// Use the smelter's built-in IsItemAllowed method for ores
+			string itemName = item.m_dropPrefab?.name ?? "";
+			if (!string.IsNullOrEmpty(itemName) && smelter.IsItemAllowed(itemName))
 			{
-				return "Fuel";
+				return "Ore";
 			}
 
-			// Check if it's a valid ore for conversion
-			foreach (var conversion in smelter.m_conversion)
+			// Check if it's fuel - compare using shared name which is more reliable
+			if (smelter.m_fuelItem != null &&
+				smelter.m_fuelItem.m_itemData != null &&
+				item.m_shared != null &&
+				smelter.m_fuelItem.m_itemData.m_shared.m_name == item.m_shared.m_name)
 			{
-				if (conversion.m_from.m_itemData.m_dropPrefab.name == item.m_dropPrefab.name)
-				{
-					return "Ore";
-				}
+				return "Fuel";
 			}
 
 			return "Invalid";
