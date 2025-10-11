@@ -1,6 +1,5 @@
 ﻿using HarmonyLib;
 using ItemConduit.Debug;
-using ItemConduit.Events;
 using ItemConduit.Extensions;
 using ItemConduit.Interfaces;
 using System;
@@ -23,9 +22,6 @@ namespace ItemConduit.Patches
 				{
 					__instance.gameObject.AddComponent<SmelteryExtension>();
 				}
-
-				IContainerInterface @interface = __instance.gameObject.GetComponent<IContainerInterface>();
-				ContainerEventManager.Instance.NotifyContainerPlaced(@interface);
 			}
 		}
 
@@ -84,7 +80,7 @@ namespace ItemConduit.Patches
 								
 								__instance.SetBakeTimer(0f);
 								__instance.RemoveOneOre();
-								if (!extension.isConnected)
+								if (!extension.IsConnected)
 								{
 									__instance.QueueProcessed(queuedOre);
 								}
@@ -105,7 +101,7 @@ namespace ItemConduit.Patches
 						}
 					}
 				}
-				if (!extension.isConnected)
+				if (!extension.IsConnected)
 				{
 					if (__instance.GetQueuedOre() == "" || ((float)__instance.m_maxFuel > 0f && __instance.GetFuel() == 0f))
 					{
@@ -118,57 +114,6 @@ namespace ItemConduit.Patches
 			}
 		}
 
-
-		[HarmonyPatch(typeof(ZNetScene), "Destroy")]
-		public static class ZNetScene_Destroy_Patch
-		{
-			private static void Prefix(GameObject go)
-			{
-				if (go != null)
-				{
-					Smelter container = go.GetComponent<Smelter>();
-					if (container != null)
-					{
-						IContainerInterface @interface = container.gameObject.GetComponent<IContainerInterface>();
-						ContainerEventManager.Instance.NotifyContainerRemoved(@interface);
-					}
-				}
-			}
-		}
-
-		[HarmonyPatch(typeof(Piece), "DropResources")]
-		public static class Piece_DropResources_Patch_Container
-		{
-			private static void Prefix(Piece __instance)
-			{
-				if (__instance != null)
-				{
-					Smelter container = __instance.GetComponent<Smelter>();
-					if (container != null)
-					{
-						IContainerInterface @interface = container.gameObject.GetComponent<IContainerInterface>();
-						ContainerEventManager.Instance.NotifyContainerRemoved(@interface);
-					}
-				}
-			}
-		}
-
-		[HarmonyPatch(typeof(WearNTear), "Destroy")]
-		public static class WearNTear_Destroy_Patch
-		{
-			private static void Prefix(WearNTear __instance)
-			{
-				if (__instance != null)
-				{
-					Smelter container = __instance.GetComponent<Smelter>();
-					if (container != null)
-					{
-						IContainerInterface @interface = container.gameObject.GetComponent<IContainerInterface>();
-						ContainerEventManager.Instance.NotifyContainerRemoved(@interface);
-					}
-				}
-			}
-		}
 
 	}
 }

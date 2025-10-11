@@ -1,87 +1,42 @@
 ﻿using ItemConduit.Interfaces;
 using ItemConduit.Nodes;
-using Jotunn;
-using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Extensions
 {
+	/// <summary>
+	/// Extension for Smelter objects with node notification
+	/// </summary>
 	public class SmelteryExtension : BaseExtension, IContainerInterface
 	{
 		private Smelter smelter;
 		public Dictionary<string, int> oreProcessedList = new Dictionary<string, int>();
-		
-		private HashSet<BaseNode> connectedNodes = new HashSet<BaseNode>();
-		public bool isConnected
-		{
-			get { return connectedNodes.Count > 0; }
-		}
+
 		protected override void Awake()
 		{
 			base.Awake();
 			smelter = GetComponent<Smelter>();
 		}
 
-		public void OnNodeConnected(BaseNode node)
+		public override void OnNodeDisconnected(BaseNode node)
 		{
-			if (node != null && (node is ExtractNode || node is InsertNode))
-			{
-				connectedNodes.Add(node);
+			base.OnNodeDisconnected(node);
 
-				if (ItemConduit.Config.DebugConfig.showDebug.Value)
+			// If no more nodes are connected and we have processed ore, spawn them
+			if (!IsConnected && oreProcessedList.Count > 0)
+			{
+				foreach (var item in oreProcessedList.ToList())
 				{
-					Logger.LogInfo($"[ItemConduit] Node {node.name} connected to {GetName()}. Total connected: {connectedNodes.Count}");
+					smelter.Spawn(item.Key, item.Value);
+					oreProcessedList.Remove(item.Key);
 				}
 			}
 		}
 
-		public void OnNodeDisconnected(BaseNode node)
-		{
-			if (node != null)
-			{
-				connectedNodes.Remove(node);
-
-				if (ItemConduit.Config.DebugConfig.showDebug.Value)
-				{
-					Logger.LogInfo($"[ItemConduit] Node {node.name} disconnected from {GetName()}. Remaining connected: {connectedNodes.Count}");
-				}
-
-				// If no more nodes are connected and we have processed ore, spawn them
-				if (!isConnected && oreProcessedList.Count > 0)
-				{
-					foreach (var item in oreProcessedList.ToList())
-					{
-						smelter.Spawn(item.Key, item.Value);
-						oreProcessedList.Remove(item.Key);
-					}
-				}
-			}
-		}
-
-		private void CleanupDisconnectedNodes()
-		{
-			connectedNodes.RemoveWhere(node => node == null || !node.IsValidPlacedNode());
-		}
-
-		private void OnDestroy()
-		{
-			// Notify all connected nodes that this container is being destroyed
-			foreach (var node in connectedNodes.ToList())
-			{
-				if (node != null)
-				{
-					// The node will handle clearing its targetContainer reference
-					node.OnNearbyContainerRemoved(this, 0);
-				}
-			}
-			connectedNodes.Clear();
-		}
+		#region IContainerInterface Implementation
 
 		public int CalculateAcceptCapacity(ItemDrop.ItemData sourceItem, int desiredAmount)
 		{
@@ -108,136 +63,73 @@ namespace ItemConduit.Extensions
 
 			if (acceptableAmount <= 0) return 0;
 
-			if (desiredAmount > acceptableAmount) return desiredAmount;
-
-			return (int)acceptableAmount;
-		}
-
-		public string ItemType(ItemDrop.ItemData item)
-		{
-			string prefabName = item.m_dropPrefab.name;
-			if (smelter.IsItemAllowed(prefabName)) return "Ore";
-
-			string fuelName = smelter.m_fuelItem.m_itemData.m_dropPrefab.name;
-			if (prefabName == fuelName) return "Fuel";
-
-			return "Invalid";
+			return Mathf.Min(desiredAmount, (int)acceptableAmount);
 		}
 
 		public bool CanAddItem(ItemDrop.ItemData item)
 		{
-			string prefabName = item.m_dropPrefab.name;
-			if (smelter.IsItemAllowed(prefabName)) return true;
-
-			string fuelName = smelter.m_fuelItem.m_itemData.m_dropPrefab.name;
-			if (prefabName == fuelName) return true;
-
-			return false;
+			if (smelter == null) return false;
+			string type = ItemType(item);
+			return type == "Fuel" || type == "Ore";
 		}
 
 		public bool CanRemoveItem(ItemDrop.ItemData item)
 		{
-			if (!isConnected) return false;
-			using (List<Smelter.ItemConversion>.Enumerator enumerator = smelter.m_conversion.GetEnumerator())
-			{
-				while (enumerator.MoveNext())
-				{
-					if (enumerator.Current.m_to.gameObject.name == item.m_dropPrefab.name)
-					{
-						return true;
-					}
-				}
-			}
+			// Smelters typically don't allow direct item removal
 			return false;
 		}
 
 		public bool AddItem(ItemDrop.ItemData item, int amount = 0)
 		{
-			if (amount <= 0 || item.m_stack <= 0) return false;
-
-			if (amount > 0) { 
-				item.m_stack = amount;
-			}
-
-			string type = ItemType(item);
-			if (type == null || type == "Invalid") return false;
-
-			if (type == "Ore")
-			{
-				for (int i = 0; i < item.m_stack; i++)
-				{
-					smelter.QueueOre(item.m_dropPrefab.name);
-				}
-			}
 			
-			if (type == "Fuel")
-			{
-				float fuel = smelter.GetFuel();
-				smelter.SetFuel(fuel + item.m_stack);
-			}
 
-			return true;
+			return false;
 		}
 
 		public bool RemoveItem(ItemDrop.ItemData item, int amount = 0)
 		{
-			if (amount <= 0 && item.m_stack <= 0) return false;
-			if (item== null) return false;
-
-			if (amount > 0) item.m_stack = amount;
-
-			int removeAmount = CalculateRemoveCapacity(item, item.m_stack);
-			if (removeAmount > 0) {
-				oreProcessedList[item.m_dropPrefab.name] -= removeAmount;
-				return true;
-			}
-			
+			// Smelters don't support direct item removal
 			return false;
 		}
 
-		private int CalculateRemoveCapacity(ItemDrop.ItemData sourceItem, int desiredAmount)
-		{
-			if (desiredAmount <= 0 && sourceItem.m_stack <= 0) return 0;
-			if (sourceItem == null) return 0;
-			if (!oreProcessedList.ContainsKey(sourceItem.m_dropPrefab.name)) return 0;
-
-			if (desiredAmount > 0)
-			{
-				sourceItem.m_stack = desiredAmount;
-			}
-
-			if(oreProcessedList.TryGetValue(sourceItem.m_dropPrefab.name, out int itemAmount))
-			{
-				if (itemAmount <= desiredAmount) return itemAmount;
-				if (itemAmount > desiredAmount) return desiredAmount;
-			}
-			return 0;
-		}
 		public Inventory GetInventory()
 		{
-			Inventory inventory = new Inventory("smelterInventory", Jotunn.Managers.GUIManager.Instance.GetSprite("woodpanel_playerinventory"), oreProcessedList.Count(), 1);
-			foreach (var item in oreProcessedList)
-			{
-				Smelter.ItemConversion conversion =  smelter.GetItemConversion(item.Key);
-				ItemDrop itemDrop = conversion.m_to;
-				ItemDrop.ItemData itemData = itemDrop.m_itemData;
-				itemData.m_stack = item.Value;
-
-				inventory.AddItem(itemData);
-
-			}
-
-			return inventory;
+			// Smelters don't have a traditional inventory
+			return null;
 		}
 
 		public string GetName()
 		{
-			return smelter.m_name;
+			return smelter?.m_name ?? "Smelter";
 		}
 
-		public UnityEngine.Vector3 GetTransformPosition()
+		public Vector3 GetTransformPosition()
 		{
-			return smelter.transform.position;
+			return transform.position;
 		}
+
+		private string ItemType(ItemDrop.ItemData item)
+		{
+			if (item == null) return "Invalid";
+
+			// Check if it's fuel
+			if (smelter.m_fuelItem.m_itemData.m_dropPrefab.name == item.m_dropPrefab.name)
+			{
+				return "Fuel";
+			}
+
+			// Check if it's a valid ore for conversion
+			foreach (var conversion in smelter.m_conversion)
+			{
+				if (conversion.m_from.m_itemData.m_dropPrefab.name == item.m_dropPrefab.name)
+				{
+					return "Ore";
+				}
+			}
+
+			return "Invalid";
+		}
+
+		#endregion
 	}
 }

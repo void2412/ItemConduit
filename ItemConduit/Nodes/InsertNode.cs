@@ -117,10 +117,11 @@ namespace ItemConduit.Nodes
 
 		protected override void OnDestroy()
 		{
-			// Disconnect from container if it's a smelter
-			if (targetContainer != null && targetContainer is SmelteryExtension smeltery)
+			// Disconnect from container
+			if (targetContainer != null && targetContainer is Component component)
 			{
-				smeltery.OnNodeDisconnected(this);
+				var extension = component.GetComponent<BaseExtension>();
+				extension?.OnNodeDisconnected(this);
 			}
 
 			base.OnDestroy();
@@ -143,15 +144,17 @@ namespace ItemConduit.Nodes
 			if (previousContainer != targetContainer)
 			{
 				// Disconnect from previous container
-				if (previousContainer != null && previousContainer is SmelteryExtension prevSmeltery)
+				if (previousContainer != null && previousContainer is Component prevComponent)
 				{
-					prevSmeltery.OnNodeDisconnected(this);
+					var prevExtension = prevComponent.GetComponent<BaseExtension>();
+					prevExtension?.OnNodeDisconnected(this);
 				}
 
 				// Connect to new container
-				if (targetContainer != null && targetContainer is SmelteryExtension newSmeltery)
+				if (targetContainer != null && targetContainer is Component newComponent)
 				{
-					newSmeltery.OnNodeConnected(this);
+					var newExtension = newComponent.GetComponent<BaseExtension>();
+					newExtension?.OnNodeConnected(this);
 				}
 			}
 
@@ -159,19 +162,24 @@ namespace ItemConduit.Nodes
 			{
 				if (targetContainer != null)
 				{
-					Logger.LogWarning($"[ItemConduit] Insert node {name} connected to container: {targetContainer.GetName()}");
+					Logger.LogWarning($"[ItemConduit] {NodeType} node {name} connected to container: {targetContainer.GetName()}");
 
 					Inventory inv = targetContainer.GetInventory();
 					if (inv != null)
 					{
 						Logger.LogInfo($"[ItemConduit]   Inventory: {inv.GetWidth()}x{inv.GetHeight()} slots");
-						Logger.LogInfo($"[ItemConduit]   Empty slots: {inv.GetEmptySlots()}");
-						Logger.LogInfo($"[ItemConduit]   Items: {inv.GetAllItems().Count}");
+
+						// For InsertNode: Log empty slots
+						if (this is InsertNode)
+						{
+							Logger.LogInfo($"[ItemConduit]   Empty slots: {inv.GetEmptySlots()}");
+							Logger.LogInfo($"[ItemConduit]   Items: {inv.GetAllItems().Count}");
+						}
 					}
 				}
 				else
 				{
-					Logger.LogWarning($"[ItemConduit] Insert node {name} found NO container");
+					Logger.LogWarning($"[ItemConduit] {NodeType} node {name} found NO container");
 				}
 			}
 

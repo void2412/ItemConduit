@@ -1,26 +1,29 @@
 ﻿using ItemConduit.Interfaces;
-using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using UnityEngine;
 
 namespace ItemConduit.Extensions
 {
+	/// <summary>
+	/// Extension for standard Container objects with node notification
+	/// </summary>
 	public class StandardContainerExtension : BaseExtension, IContainerInterface
 	{
 		private Container container;
 		private Inventory inventory;
+
 		protected override void Awake()
 		{
 			base.Awake();
 			container = GetComponent<Container>();
-			inventory = container.GetInventory();
+			inventory = container?.GetInventory();
 		}
+
+		#region IContainerInterface Implementation
+
 		public int CalculateAcceptCapacity(ItemDrop.ItemData sourceItem, int desiredAmount)
 		{
-			if (container == null || sourceItem == null || desiredAmount <= 0) 
+			if (container == null || sourceItem == null || desiredAmount <= 0)
 				return 0;
 
 			var destInventory = inventory;
@@ -29,12 +32,13 @@ namespace ItemConduit.Extensions
 			int totalCanAccept = 0;
 			int maxStackSize = sourceItem.m_shared.m_maxStackSize;
 
+			// Check existing stacks that can accept more items
 			var existingStacks = destInventory.GetAllItems()
 				.Where(item => item.m_shared.m_name == sourceItem.m_shared.m_name &&
 							  item.m_quality == sourceItem.m_quality &&
 							  item.m_variant == sourceItem.m_variant &&
 							  item.m_stack < maxStackSize)
-				.OrderBy(item => item.m_gridPos.y * destInventory.GetWidth() + item.m_gridPos.x) // Order by position
+				.OrderBy(item => item.m_gridPos.y * destInventory.GetWidth() + item.m_gridPos.x)
 				.ToList();
 
 			foreach (var existingStack in existingStacks)
@@ -47,8 +51,9 @@ namespace ItemConduit.Extensions
 					return desiredAmount;
 			}
 
+			// Check empty slots
 			int emptySlots = destInventory.GetEmptySlots();
-			if(emptySlots > 0)
+			if (emptySlots > 0)
 			{
 				int itemsPerSlot = maxStackSize;
 				int canAddToEmpty = Mathf.Min(emptySlots * itemsPerSlot, desiredAmount - totalCanAccept);
@@ -60,7 +65,7 @@ namespace ItemConduit.Extensions
 
 		public bool CanAddItem(ItemDrop.ItemData item)
 		{
-			return inventory.CanAddItem(item);
+			return inventory?.CanAddItem(item) ?? false;
 		}
 
 		public bool CanRemoveItem(ItemDrop.ItemData item)
@@ -70,37 +75,45 @@ namespace ItemConduit.Extensions
 
 		public bool AddItem(ItemDrop.ItemData item, int amount = 0)
 		{
+			if (inventory == null) return false;
 			if (amount <= 0 && item.m_stack <= 0) return false;
+
 			if (amount > 0)
 			{
 				item.m_stack = amount;
 			}
+
 			return inventory.AddItem(item);
 		}
 
-		public bool RemoveItem(ItemDrop.ItemData item, int amount = 0) 
+		public bool RemoveItem(ItemDrop.ItemData item, int amount = 0)
 		{
+			if (inventory == null) return false;
 			if (amount <= 0 && item.m_stack <= 0) return false;
-			if (amount > 0) { 
+
+			if (amount > 0)
+			{
 				item.m_stack = amount;
 			}
+
 			return inventory.RemoveItem(item);
 		}
 
 		public Inventory GetInventory()
 		{
-			
 			return inventory;
 		}
 
 		public string GetName()
 		{
-			return container.m_name;
+			return container?.m_name ?? "Container";
 		}
 
-		public UnityEngine.Vector3 GetTransformPosition()
+		public Vector3 GetTransformPosition()
 		{
-			return container.transform.position;
+			return transform.position;
 		}
+
+		#endregion
 	}
 }

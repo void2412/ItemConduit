@@ -1,7 +1,6 @@
 ﻿using ItemConduit.Config;
 using ItemConduit.Core;
 using ItemConduit.Debug;
-using ItemConduit.Events;
 using ItemConduit.Extensions;
 using ItemConduit.Interfaces;
 using ItemConduit.Network;
@@ -177,10 +176,6 @@ namespace ItemConduit.Nodes
 				return;
 			}
 
-			if (CanConnectToContainers && !isGhostPiece)
-			{
-				ContainerEventManager.Instance.RegisterNode(this);
-			}
 
 			// Add a small delay to ensure everything is initialized
 			StartCoroutine(DelayedStart());
@@ -200,12 +195,6 @@ namespace ItemConduit.Nodes
 			if (isGhostPiece)
 			{
 				yield break;
-			}
-
-			if (CanConnectToContainers && !isGhostPiece)
-			{
-				ItemConduit.Events.ContainerEventManager.Instance.RegisterNode(this);
-				Logger.LogInfo($"[ItemConduit] {name} registered for container events");
 			}
 
 			// Only register on server
@@ -264,10 +253,15 @@ namespace ItemConduit.Nodes
 			// Clear container reference
 			targetContainer = null;
 
-			// Unregister from container events
-			if (CanConnectToContainers)
+			// Disconnect from container if connected
+			if (targetContainer != null)
 			{
-				ContainerEventManager.Instance.UnregisterNode(this);
+				if (targetContainer is Component containerComponent)
+				{
+					var extension = containerComponent.GetComponent<BaseExtension>();
+					extension?.OnNodeDisconnected(this);
+				}
+				targetContainer = null;
 			}
 
 			// Unregister from network manager
@@ -988,16 +982,6 @@ namespace ItemConduit.Nodes
 			// Only Extract/Insert nodes care about containers
 			if (!CanConnectToContainers) return;
 
-			if (CanConnectToContainers && !isGhostPiece)
-			{
-				ItemConduit.Events.ContainerEventManager.Instance.RegisterNode(this);
-				if (DebugConfig.showDebug.Value)
-				{
-					Logger.LogInfo($"[ItemConduit] {name} registered for container events");
-				}
-				
-			}
-
 			if (DebugConfig.showDebug.Value)
 			{
 				Logger.LogInfo($"[ItemConduit] {name} notified: container placed {distance:F1}m away");
@@ -1023,9 +1007,11 @@ namespace ItemConduit.Nodes
 			// If this was our connected container, clear it immediately
 			if (targetContainer == container)
 			{
-				if (targetContainer is SmelteryExtension smeltery)
+				// Notify the extension that we're disconnecting
+				if (targetContainer is Component containerComponent)
 				{
-					smeltery.OnNodeDisconnected(this);
+					var extension = containerComponent.GetComponent<BaseExtension>();
+					extension?.OnNodeDisconnected(this);
 				}
 
 				targetContainer = null;
@@ -1035,15 +1021,10 @@ namespace ItemConduit.Nodes
 				{
 					Logger.LogWarning($"[ItemConduit] {name} lost its connected container!");
 				}
+			}
 
-				// Try to find another container
-				StartCoroutine(DelayedContainerRefresh(0.5f));
-			}
-			else
-			{
-				// Still refresh to potentially find better containers
-				StartCoroutine(DelayedContainerRefresh(0.3f));
-			}
+			// Schedule a container detection refresh to find a new container
+			StartCoroutine(DelayedContainerRefresh(0.3f));
 		}
 
 		/// <summary>
