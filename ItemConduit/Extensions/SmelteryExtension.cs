@@ -2,6 +2,7 @@
 using ItemConduit.Interfaces;
 using ItemConduit.Nodes;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -15,7 +16,7 @@ namespace ItemConduit.Extensions
 	public class SmelteryExtension : BaseExtension, IContainerInterface
 	{
 		private Smelter smelter;
-		public Container container;
+		public Inventory m_inventory;
 		public uint m_lastRevision;
 		public string m_lastDataString;
 		public bool m_loading;
@@ -39,15 +40,20 @@ namespace ItemConduit.Extensions
 				return;
 			}
 
+			ZNetView znetView = smelter.GetComponent<ZNetView>();
+			if (znetView == null || !znetView.IsValid())
+			{
+				if (DebugConfig.showDebug.Value)
+				{
+					Logger.LogInfo($"[ItemConduit] Skipping container creation - invalid ZNetView");
+				}
+				return;
+			}
 
-			container = smelter.gameObject.AddComponent<Container>();
-			container.m_name = "Smelter Output";
-			container.m_width = 1;
-			container.m_height = 1;
-			container.m_inventory = new Inventory(smelter.name + "Output", null, 1, 1);
-			//container.GetComponent<Collider>().enabled = false;
-			container.transform.position = smelter.transform.position;
-			container.transform.rotation = smelter.transform.rotation;
+
+
+			m_inventory = new Inventory("Smelter Output", null, 1, 1);
+			
 
 
 			GameObject switchObject = new GameObject("OutputSwitch");
@@ -77,12 +83,77 @@ namespace ItemConduit.Extensions
 			}
 			m_outputCollider.enabled = this.IsConnected;
 
+			base.InvokeRepeating("CheckForChanges", 0f, 1f);
 		}
-		
+
 		protected void Update()
 		{
 			m_outputCollider.enabled = this.IsConnected;
 		}
+
+		public void Save()
+		{
+			ZPackage zpackage = new ZPackage();
+			m_inventory.Save(zpackage);
+			string @base = zpackage.GetBase64();
+			zNetView.GetZDO().Set(ZDOVars.s_items, @base);
+			m_lastRevision = zNetView.GetZDO().DataRevision;
+			m_lastDataString = @base;
+		}
+
+		public bool Load()
+		{
+			if (zNetView.GetZDO().DataRevision == m_lastRevision)
+			{
+				return false;
+			}
+
+			m_lastRevision = zNetView.GetZDO().DataRevision;
+			string @string = zNetView.GetZDO().GetString(ZDOVars.s_items, "");
+
+			if (@string == m_lastDataString)
+			{
+				m_lastDataString = @string;
+				return true;
+			}
+
+			if (string.IsNullOrEmpty(@string))
+			{
+				m_lastDataString = @string;
+				return true;
+			}
+
+			ZPackage zpackage = new ZPackage(@string);
+			m_loading = true;
+			m_inventory.Load(zpackage);
+			m_loading = false;
+			m_lastDataString = @string;
+			return true;
+
+		}
+
+		public void OnSmelterChange()
+		{
+			if (m_loading)
+			{
+				return;
+			}
+			if (!zNetView.IsOwner())
+			{
+				return;
+			}
+			Save();
+		}
+
+		public void CheckForChanges()
+		{
+			if (zNetView.IsValid()) return;
+
+			if (!Load()) return;
+
+
+		}
+
 
 		private void CreateColliderWireframe(GameObject switchObject, BoxCollider collider)
 		{
@@ -160,8 +231,39 @@ namespace ItemConduit.Extensions
 
 		private bool OnOutputSwitch(Humanoid user, bool hold, bool alt)
 		{
-			container.Interact(user, hold, alt);
+			if (m_inventory == null)
+			{
+				Logger.LogWarning("[ItemConduit] Output inventory is null!");
+				return false;
+			}
+
+			// Only show for local player
+			if (user == Player.m_localPlayer)
+			{
+				// Create a temporary container for the UI
+				Container tempContainer = gameObject.AddComponent<Container>();
+				tempContainer.m_inventory = this.m_inventory;
+				tempContainer.m_name = smelter.m_name + " Output";
+
+				// Show the inventory
+				InventoryGui.instance.Show(tempContainer, 1);
+
+				// Schedule cleanup of temp container
+				StartCoroutine(CleanupTempContainer(tempContainer));
+			}
+
 			return true;
+		}
+
+		private System.Collections.IEnumerator CleanupTempContainer(Container container)
+		{
+			// Wait a frame then destroy the temporary container component
+			yield return null;
+			yield return new WaitForSeconds(0.1f);
+			if (container != null && InventoryGui.instance.m_currentContainer != container)
+			{
+				Destroy(container);
+			}
 		}
 
 		private string OnOutputHover()
@@ -174,12 +276,12 @@ namespace ItemConduit.Extensions
 			base.OnNodeDisconnected(node);
 
 			// If no more nodes are connected and we have processed ore, spawn them
-			if (!IsConnected && container.m_inventory.GetAllItems().Count > 0)
+			if (!IsConnected && m_inventory.GetAllItems().Count > 0)
 			{
-				foreach (var item in container.m_inventory.GetAllItems())
+				foreach (var item in m_inventory.GetAllItems())
 				{
 					smelter.Spawn(item.m_dropPrefab.name, item.m_stack);
-					container.m_inventory.RemoveItem(item);
+					m_inventory.RemoveItem(item);
 				}
 			}
 		}
@@ -325,7 +427,8 @@ namespace ItemConduit.Extensions
 			if (item == null) return false;
 			if (amount <= 0 && item.m_stack <= 0) return false;
 
-			if (container.m_inventory.RemoveItem(item, amount)) {
+			if (m_inventory.RemoveItem(item, amount)) {
+				OnSmelterChange();
 				return true;
 			}
 
@@ -334,21 +437,22 @@ namespace ItemConduit.Extensions
 
 		public Inventory GetInventory()
 		{
-			return container.m_inventory;
+			return m_inventory;
 		}
 
 		public bool AddToInventory(ItemDrop.ItemData item, int amount = 0)
 		{
 			if (item == null) return false;
 			if (amount <= 0 && item.m_stack <=0) return false;
-			if (!container.m_inventory.CanAddItem(item)) return false;
+			if (!m_inventory.CanAddItem(item)) return false;
 
 			if (amount > 0 && item.m_stack != amount) {
 				item.m_stack = amount;
 			}
 
-			if (container.m_inventory.AddItem(item))
+			if (m_inventory.AddItem(item))
 			{
+				OnSmelterChange();
 				return true; 
 			}
 
