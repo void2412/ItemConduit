@@ -83,7 +83,7 @@ namespace ItemConduit.Extensions
 			{
 				return;
 			}
-			this.Save();
+			Save();
 		}
 
 		public void CheckForChanges()
@@ -205,12 +205,11 @@ namespace ItemConduit.Extensions
 		{
 			if (item == null) return false;
 			if (amount <= 0 && item.m_stack <= 0) return false;
-			if (amount > 0)
-			{
-				item.m_stack = amount;
-			}
 
-			if (m_inventory.RemoveItem(item)) return true;
+			if (m_inventory.RemoveItem(item, amount)) {
+				OnSmelterChange();
+				return true;
+			}
 
 			return false;
 		}
@@ -230,7 +229,11 @@ namespace ItemConduit.Extensions
 				item.m_stack = amount;
 			}
 
-			if (m_inventory.AddItem(item)) return true;
+			if (m_inventory.AddItem(item))
+			{
+				OnSmelterChange();
+				return true; 
+			}
 
 			return false;
 		}

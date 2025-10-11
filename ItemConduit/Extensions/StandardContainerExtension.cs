@@ -89,12 +89,7 @@ namespace ItemConduit.Extensions
 			if (container.m_inventory == null) return false;
 			if (amount <= 0 && item.m_stack <= 0) return false;
 
-			if (amount > 0)
-			{
-				item.m_stack = amount;
-			}
-
-			return container.m_inventory.RemoveItem(item);
+			return container.m_inventory.RemoveItem(item, amount);
 		}
 
 		public Inventory GetInventory()

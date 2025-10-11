@@ -88,8 +88,7 @@ namespace ItemConduit.Patches
 								else
 								{
 									Smelter.ItemConversion itemConversion = __instance.GetItemConversion(queuedOre);
-									ItemDrop ore = Object.Instantiate<GameObject>(itemConversion.m_to.gameObject, __instance.m_outputPoint.position,
-										__instance.m_outputPoint.rotation).GetComponent<ItemDrop>();
+									ItemDrop ore = itemConversion.m_to.gameObject.GetComponent<ItemDrop>();
 
 									ItemDrop.ItemData itemData = ore.m_itemData;
 									if(extension.AddToInventory(itemData, 1))

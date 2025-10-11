@@ -494,6 +494,7 @@ namespace ItemConduit.Network
 							if (!insertNode.InsertItem(transferItem, destContainer)) continue;
 
 							sourceContainer.RemoveItem(item, canAccept);
+							
 							remainingToTransfer -= canAccept;
 
 							if (DebugConfig.showTransferLog.Value)
