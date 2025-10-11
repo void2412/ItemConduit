@@ -479,7 +479,7 @@ namespace ItemConduit.Network
 							Inventory destInventory = destContainer.GetInventory();
 							if (destInventory == null) continue;
 
-							int canAccept = insertNode.CalculateAcceptCapacity(destContainer, item, remainingToTransfer);
+							int canAccept = insertNode.CalculateAcceptCapacity(destContainer, item, Mathf.Min(remainingToTransfer, item.m_stack));
 
 							if (DebugConfig.showTransferLog.Value)
 							{
