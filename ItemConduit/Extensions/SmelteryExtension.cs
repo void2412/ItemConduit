@@ -39,11 +39,16 @@ namespace ItemConduit.Extensions
 				return;
 			}
 
-			ZDO zdo = zNetView.GetZDO();
-			if (zdo == null) return;
 
-			container = new Container();
-			container.m_inventory = new Inventory(smelter.name + "Output", Jotunn.Managers.GUIManager.Instance.GetSprite("woodpanel_playerinventory"), 1, 1);
+			container = smelter.gameObject.AddComponent<Container>();
+			container.m_name = "Smelter Output";
+			container.m_width = 1;
+			container.m_height = 1;
+			container.m_inventory = new Inventory(smelter.name + "Output", null, 1, 1);
+			//container.GetComponent<Collider>().enabled = false;
+			container.transform.position = smelter.transform.position;
+			container.transform.rotation = smelter.transform.rotation;
+
 
 			GameObject switchObject = new GameObject("OutputSwitch");
 
@@ -161,7 +166,7 @@ namespace ItemConduit.Extensions
 
 		private string OnOutputHover()
 		{
-			return Localization.instance.Localize("[<color=yellow><b>$KEY_Use</b></color>] Open Output");
+			return Localization.instance.Localize("[<color=yellow><b>$KEY_Use</b></color>] Smelter Output");
 		}
 
 		public override void OnNodeDisconnected(BaseNode node)
