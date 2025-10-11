@@ -15,10 +15,11 @@ namespace ItemConduit.Extensions
 	public class SmelteryExtension : BaseExtension, IContainerInterface
 	{
 		private Smelter smelter;
-		public Inventory m_inventory;
+		public Container container;
 		public uint m_lastRevision;
 		public string m_lastDataString;
 		public bool m_loading;
+		public OutputSwitch m_outputSwitch;
 
 		protected override void Awake()
 		{
@@ -39,73 +40,24 @@ namespace ItemConduit.Extensions
 			ZDO zdo = zNetView.GetZDO();
 			if (zdo == null) return;
 
-			m_inventory = new Inventory(smelter.name + "Output", Jotunn.Managers.GUIManager.Instance.GetSprite("woodpanel_playerinventory"), 1, 1);
-			m_inventory.m_onChanged = (Action)Delegate.Combine(m_inventory.m_onChanged, new Action(OnSmelterChange));
+			container = new Container();
+			container.m_inventory = new Inventory(smelter.name + "Output", Jotunn.Managers.GUIManager.Instance.GetSprite("woodpanel_playerinventory"), 1, 1);
 
-			base.InvokeRepeating("CheckForChanges", 0f, 1f);
+			m_outputSwitch = new OutputSwitch();
+			m_outputSwitch.m_onUse = (OutputSwitch.Callback)Delegate.Combine(m_outputSwitch.m_onUse, new OutputSwitch.Callback(OnOutputSwitch));
+			m_outputSwitch.m_onHover = new OutputSwitch.hoverCallback(OnOutputHover);
+
 		}
 
-		public void Save()
+		private bool OnOutputSwitch(Humanoid user, bool hold, bool alt)
 		{
-			ZPackage zpackage = new ZPackage();
-			m_inventory.Save(zpackage);
-			string @base = zpackage.GetBase64();
-			zNetView.GetZDO().Set(ZDOVars.s_items, @base);
-			m_lastRevision = zNetView.GetZDO().DataRevision;
-			m_lastDataString = @base;
-		}
-
-		public bool Load()
-		{
-			if (zNetView.GetZDO().DataRevision == m_lastRevision)
-			{
-				return false;
-			}
-
-			m_lastRevision = zNetView.GetZDO().DataRevision;
-			string @string = zNetView.GetZDO().GetString(ZDOVars.s_items, "");
-
-			if(@string == m_lastDataString)
-			{
-				m_lastDataString = @string;
-				return true;
-			}
-
-			if (string.IsNullOrEmpty(@string))
-			{
-				m_lastDataString = @string;
-				return true;
-			}
-
-			ZPackage zpackage = new ZPackage(@string);
-			m_loading = true;
-			m_inventory.Load(zpackage);
-			m_loading = false;
-			m_lastDataString = @string;
+			container.Interact(user, hold, alt);
 			return true;
-
 		}
 
-		public void OnSmelterChange()
+		private string OnOutputHover()
 		{
-			if (m_loading)
-			{
-				return;
-			}
-			if (!zNetView.IsOwner())
-			{
-				return;
-			}
-			Save();
-		}
-
-		public void CheckForChanges()
-		{
-			if (zNetView.IsValid()) return;
-
-			if (!Load()) return;
-
-
+			return "Open Output Inventory";
 		}
 
 		public override void OnNodeDisconnected(BaseNode node)
@@ -113,12 +65,12 @@ namespace ItemConduit.Extensions
 			base.OnNodeDisconnected(node);
 
 			// If no more nodes are connected and we have processed ore, spawn them
-			if (!IsConnected && m_inventory.GetAllItems().Count > 0)
+			if (!IsConnected && container.m_inventory.GetAllItems().Count > 0)
 			{
-				foreach (var item in m_inventory.GetAllItems())
+				foreach (var item in container.m_inventory.GetAllItems())
 				{
 					smelter.Spawn(item.m_dropPrefab.name, item.m_stack);
-					m_inventory.RemoveItem(item);
+					container.m_inventory.RemoveItem(item);
 				}
 			}
 		}
@@ -264,8 +216,7 @@ namespace ItemConduit.Extensions
 			if (item == null) return false;
 			if (amount <= 0 && item.m_stack <= 0) return false;
 
-			if (m_inventory.RemoveItem(item, amount)) {
-				OnSmelterChange();
+			if (container.m_inventory.RemoveItem(item, amount)) {
 				return true;
 			}
 
@@ -274,22 +225,21 @@ namespace ItemConduit.Extensions
 
 		public Inventory GetInventory()
 		{
-			return m_inventory;
+			return container.m_inventory;
 		}
 
 		public bool AddToInventory(ItemDrop.ItemData item, int amount = 0)
 		{
 			if (item == null) return false;
 			if (amount <= 0 && item.m_stack <=0) return false;
-			if (!m_inventory.CanAddItem(item)) return false;
+			if (!container.m_inventory.CanAddItem(item)) return false;
 
 			if (amount > 0 && item.m_stack != amount) {
 				item.m_stack = amount;
 			}
 
-			if (m_inventory.AddItem(item))
+			if (container.m_inventory.AddItem(item))
 			{
-				OnSmelterChange();
 				return true; 
 			}
 
@@ -330,5 +280,46 @@ namespace ItemConduit.Extensions
 		}
 
 		#endregion
+	}
+
+	public class OutputSwitch : MonoBehaviour, Interactable, Hoverable
+	{
+		public OutputSwitch.Callback m_onUse;
+		public OutputSwitch.hoverCallback m_onHover;
+		[TextArea(3, 20)]
+		public string m_hoverText = "";
+		public string m_name = "";
+		public float m_holdRepeatInterval = -1f;
+		public float m_lastUseTime;
+
+		public delegate bool Callback(Humanoid user, bool hold, bool alt);
+		public delegate string hoverCallback();
+		
+		public bool Interact(Humanoid character, bool hold, bool alt)
+		{
+			if(hold) return false;
+
+			this.m_lastUseTime = Time.time;
+			return this.m_onUse != null && this.m_onUse(character, hold, alt);
+		}
+
+		public bool UseItem(Humanoid user, ItemDrop.ItemData item)
+		{
+			return false;
+		}
+
+		public string GetHoverText()
+		{
+			if(this.m_onHover != null)
+			{
+				return this.m_onHover();
+			}
+			return this.m_hoverText;
+		}
+
+		public string GetHoverName()
+		{
+			return m_name;
+		}
 	}
 }
