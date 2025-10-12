@@ -62,33 +62,31 @@ namespace ItemConduit.Extensions
 
 		private void SetupContainer()
 		{
-			GameObject containerObject = new GameObject("SmelterOutput");
-
-			m_container = containerObject.AddComponent<Container>();
+			m_container = smelter.gameObject.AddComponent<Container>();
+			m_container.name = "Smelter Output";
+			m_container.m_width = 1;
+			m_container .m_height = 1;
 			m_container.m_inventory = new Inventory("Smelter Output", null, 1, 1);
-			StartCoroutine(DisableContainerColliders(containerObject));
+			StartCoroutine(DisableContainerColliders());
 		}
 
-		private IEnumerator DisableContainerColliders(GameObject gameObject)
+		private IEnumerator DisableContainerColliders()
 		{
 			// Wait for Container.Awake() to complete
 			yield return null;
 
 			// Find and disable any colliders added by the Container component
-			Collider[] containerColliders = gameObject.GetComponents<Collider>();
-			foreach (var collider in containerColliders)
-			{
-				// Only disable colliders that were likely added by Container
-				// Keep any existing smelter colliders
+			Container container = smelter.GetComponent<Container>();
+			Collider[] colliders = container.GetComponentsInChildren<Collider>();
+			foreach (var collider in colliders) {
 				if (collider != m_outputCollider && collider != smelter.GetComponent<Collider>())
 				{
-					// Check if this is a trigger collider added by Container
 					if (collider.isTrigger)
 					{
 						collider.enabled = false;
 						if (DebugConfig.showDebug.Value)
 						{
-							Logger.LogInfo($"[ItemConduit] Disabled Container collider: {collider.GetType().Name}");
+							Logger.LogInfo($"Disabled Container Collider: {container.m_name}");
 						}
 					}
 				}
