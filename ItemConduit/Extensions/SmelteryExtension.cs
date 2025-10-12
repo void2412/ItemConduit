@@ -17,11 +17,7 @@ namespace ItemConduit.Extensions
 	public class SmelteryExtension : BaseExtension, IContainerInterface
 	{
 		private Smelter smelter;
-		public Inventory m_inventory;
 		public Container m_container;
-		public uint m_lastRevision;
-		public string m_lastDataString;
-		public bool m_loading;
 		public OutputSwitch m_outputSwitch;
 		public bool autoOutput;
 		private BoxCollider m_outputCollider;
@@ -137,68 +133,6 @@ namespace ItemConduit.Extensions
 			m_outputCollider.enabled = this.IsConnected;
 		}
 
-		public void Save()
-		{
-			ZPackage zpackage = new ZPackage();
-			m_inventory.Save(zpackage);
-			string @base = zpackage.GetBase64();
-			zNetView.GetZDO().Set(ZDOVars.s_items, @base);
-			m_lastRevision = zNetView.GetZDO().DataRevision;
-			m_lastDataString = @base;
-		}
-
-		public bool Load()
-		{
-			if (zNetView.GetZDO().DataRevision == m_lastRevision)
-			{
-				return false;
-			}
-
-			m_lastRevision = zNetView.GetZDO().DataRevision;
-			string @string = zNetView.GetZDO().GetString(ZDOVars.s_items, "");
-
-			if (@string == m_lastDataString)
-			{
-				m_lastDataString = @string;
-				return true;
-			}
-
-			if (string.IsNullOrEmpty(@string))
-			{
-				m_lastDataString = @string;
-				return true;
-			}
-
-			ZPackage zpackage = new ZPackage(@string);
-			m_loading = true;
-			m_inventory.Load(zpackage);
-			m_loading = false;
-			m_lastDataString = @string;
-			return true;
-
-		}
-
-		public void OnSmelterChange()
-		{
-			if (m_loading)
-			{
-				return;
-			}
-			if (!zNetView.IsOwner())
-			{
-				return;
-			}
-			Save();
-		}
-
-		public void CheckForChanges()
-		{
-			if (zNetView.IsValid()) return;
-
-			if (!Load()) return;
-
-
-		}
 
 
 		private void CreateColliderWireframe(GameObject switchObject, BoxCollider collider)
@@ -456,7 +390,6 @@ namespace ItemConduit.Extensions
 			if (amount <= 0 && item.m_stack <= 0) return false;
 
 			if (m_container.m_inventory.RemoveItem(item, amount)) {
-				OnSmelterChange();
 				return true;
 			}
 
@@ -480,7 +413,6 @@ namespace ItemConduit.Extensions
 
 			if (m_container.m_inventory.AddItem(item))
 			{
-				OnSmelterChange();
 				return true; 
 			}
 
