@@ -26,6 +26,36 @@ namespace ItemConduit.Patches
 			}
 		}
 
+		[HarmonyPatch(typeof(Container), "GetHoverText")]
+		public static class Container_GetHoverText_Patch
+		{
+			private static bool Prefix(Container __instance, ref string __result)
+			{
+				SmelteryExtension smelterExt = __instance.GetComponentInParent<SmelteryExtension>();
+				if (smelterExt != null && smelterExt.m_container == __instance)
+				{
+					__result = "";
+					return false;
+				}
+
+				return true;
+			}
+		}
+
+		[HarmonyPatch(typeof(Container), "Interact")]
+		public static class Container_Interact_Patch
+		{
+			private static bool Prefix(Container __instance)
+			{
+				SmelteryExtension smelterExt = __instance.GetComponentInParent<SmelteryExtension>();
+				if (smelterExt != null && smelterExt.m_container == __instance)
+				{
+					return false;
+				}
+
+				return true;
+			}
+		}
 	}
 
 }
