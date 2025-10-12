@@ -4,6 +4,7 @@ using ItemConduit.Nodes;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using UnityEngine;
 using Logger = Jotunn.Logger;
@@ -17,6 +18,7 @@ namespace ItemConduit.Extensions
 	{
 		private Smelter smelter;
 		public Inventory m_inventory;
+		public Container m_container;
 		public uint m_lastRevision;
 		public string m_lastDataString;
 		public bool m_loading;
@@ -50,16 +52,64 @@ namespace ItemConduit.Extensions
 				return;
 			}
 
+			SetupContainer();
+			SetupOutputSwitch();
 
 
-			m_inventory = new Inventory("Smelter Output", null, 1, 1);
-			
+			//m_inventory = new Inventory("Smelter Output", null, 1, 1);
+			//base.InvokeRepeating("CheckForChanges", 0f, 1f);
+		}
+
+		private void SetupContainer()
+		{
+			GameObject containerObject = new GameObject("SmelterOutput");
+
+			m_container = containerObject.AddComponent<Container>();
+			m_container.m_inventory = new Inventory("Smelter Output", null, 1, 1);
+			StartCoroutine(DisableContainerColliders(containerObject));
+		}
+
+		private IEnumerator DisableContainerColliders(GameObject gameObject)
+		{
+			// Wait for Container.Awake() to complete
+			yield return null;
+
+			// Find and disable any colliders added by the Container component
+			Collider[] containerColliders = gameObject.GetComponents<Collider>();
+			foreach (var collider in containerColliders)
+			{
+				// Only disable colliders that were likely added by Container
+				// Keep any existing smelter colliders
+				if (collider != m_outputCollider && collider != smelter.GetComponent<Collider>())
+				{
+					// Check if this is a trigger collider added by Container
+					if (collider.isTrigger)
+					{
+						collider.enabled = false;
+						if (DebugConfig.showDebug.Value)
+						{
+							Logger.LogInfo($"[ItemConduit] Disabled Container collider: {collider.GetType().Name}");
+						}
+					}
+				}
+			}
+
+			// Also disable the Container's default interaction
+			if (m_container != null)
+			{
+				// Set the container to not be interactable directly
+				m_container.m_checkGuardStone = false;
+			}
+		}
 
 
+		private void SetupOutputSwitch()
+		{
 			GameObject switchObject = new GameObject("OutputSwitch");
 
-			if (smelter.m_outputPoint != null) {
-				switchObject.transform.position = smelter.m_outputPoint.position + new Vector3(0,0,0);
+			if (smelter.m_outputPoint != null)
+			{
+				switchObject.transform.position = smelter.m_outputPoint.position + new Vector3(0, 0, 0);
 				switchObject.transform.rotation = smelter.m_outputPoint.rotation;
 				switchObject.transform.SetParent(smelter.transform);
 			}
@@ -82,8 +132,6 @@ namespace ItemConduit.Extensions
 				CreateColliderWireframe(switchObject, m_outputCollider);
 			}
 			m_outputCollider.enabled = this.IsConnected;
-
-			base.InvokeRepeating("CheckForChanges", 0f, 1f);
 		}
 
 		protected void Update()
@@ -231,40 +279,22 @@ namespace ItemConduit.Extensions
 
 		private bool OnOutputSwitch(Humanoid user, bool hold, bool alt)
 		{
-			if (m_inventory == null)
+			if (m_container == null || m_container.m_inventory == null)
 			{
-				Logger.LogWarning("[ItemConduit] Output inventory is null!");
+				Logger.LogWarning("[ItemConduit] Output container or inventory is null!");
 				return false;
 			}
 
 			// Only show for local player
 			if (user == Player.m_localPlayer)
 			{
-				// Create a temporary container for the UI
-				Container tempContainer = gameObject.AddComponent<Container>();
-				tempContainer.m_inventory = this.m_inventory;
-				tempContainer.m_name = smelter.m_name + " Output";
-
-				// Show the inventory
-				InventoryGui.instance.Show(tempContainer, 1);
-
-				// Schedule cleanup of temp container
-				StartCoroutine(CleanupTempContainer(tempContainer));
+				// Use the existing container directly
+				InventoryGui.instance.Show(m_container, 1);
 			}
 
 			return true;
 		}
 
-		private System.Collections.IEnumerator CleanupTempContainer(Container container)
-		{
-			// Wait a frame then destroy the temporary container component
-			yield return null;
-			yield return new WaitForSeconds(0.1f);
-			if (container != null && InventoryGui.instance.m_currentContainer != container)
-			{
-				Destroy(container);
-			}
-		}
 
 		private string OnOutputHover()
 		{
@@ -276,12 +306,12 @@ namespace ItemConduit.Extensions
 			base.OnNodeDisconnected(node);
 
 			// If no more nodes are connected and we have processed ore, spawn them
-			if (!IsConnected && m_inventory.GetAllItems().Count > 0)
+			if (!IsConnected && m_container.m_inventory.GetAllItems().Count > 0)
 			{
-				foreach (var item in m_inventory.GetAllItems())
+				foreach (var item in m_container.m_inventory.GetAllItems())
 				{
 					smelter.Spawn(item.m_dropPrefab.name, item.m_stack);
-					m_inventory.RemoveItem(item);
+					m_container.m_inventory.RemoveItem(item);
 				}
 			}
 		}
@@ -427,7 +457,7 @@ namespace ItemConduit.Extensions
 			if (item == null) return false;
 			if (amount <= 0 && item.m_stack <= 0) return false;
 
-			if (m_inventory.RemoveItem(item, amount)) {
+			if (m_container.m_inventory.RemoveItem(item, amount)) {
 				OnSmelterChange();
 				return true;
 			}
@@ -437,20 +467,20 @@ namespace ItemConduit.Extensions
 
 		public Inventory GetInventory()
 		{
-			return m_inventory;
+			return m_container.m_inventory;
 		}
 
 		public bool AddToInventory(ItemDrop.ItemData item, int amount = 0)
 		{
 			if (item == null) return false;
 			if (amount <= 0 && item.m_stack <=0) return false;
-			if (!m_inventory.CanAddItem(item)) return false;
+			if (!m_container.m_inventory.CanAddItem(item)) return false;
 
 			if (amount > 0 && item.m_stack != amount) {
 				item.m_stack = amount;
 			}
 
-			if (m_inventory.AddItem(item))
+			if (m_container.m_inventory.AddItem(item))
 			{
 				OnSmelterChange();
 				return true; 
