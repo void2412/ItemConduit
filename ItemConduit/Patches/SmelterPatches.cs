@@ -34,15 +34,19 @@ namespace ItemConduit.Patches
 				{
 					return false;
 				}
+
+				var extension = __instance.GetComponent<SmelteryExtension>();
+
 				__instance.UpdateRoof();
 				__instance.UpdateSmoke();
 				__instance.UpdateState();
+
 				if (!__instance.m_nview.IsOwner())
 				{
 					return false;
 				}
 
-				var extension = __instance.GetComponent<SmelteryExtension>();
+				
 
 				double deltaTime = __instance.GetDeltaTime();
 				float num = __instance.GetAccumulator();
@@ -59,7 +63,33 @@ namespace ItemConduit.Patches
 					string queuedOre = __instance.GetQueuedOre();
 					if ((__instance.m_maxFuel == 0 || num3 > 0f) && (__instance.m_maxOre == 0 || queuedOre != "") && __instance.m_secPerProduct > 0f && (!__instance.m_requiresRoof || __instance.m_haveRoof) && !__instance.m_blockedSmoke)
 					{
-						float num4 = 1f * num2;
+
+						if (extension.IsConnected)
+						{
+							Smelter.ItemConversion itemConversion = __instance.GetItemConversion(queuedOre);
+							ItemDrop itemDropPrefab = itemConversion.m_to.gameObject.GetComponent<ItemDrop>();
+
+							ItemDrop.ItemData itemData = itemDropPrefab.m_itemData.Clone();
+							itemData.m_dropPrefab = itemDropPrefab.gameObject;
+							itemData.m_stack = 1;
+							Inventory inventory = extension.GetInventory();
+							if (!inventory.CanAddItem(itemData, 1))
+							{
+								extension.blocking = true;
+								continue;
+							}
+							else
+							{
+								extension.blocking = false;
+							}
+								
+						}
+						else
+						{
+							extension.blocking = false;
+						}
+
+							float num4 = 1f * num2;
 						if (__instance.m_maxFuel > 0)
 						{
 							float num5 = __instance.m_secPerProduct / (float)__instance.m_fuelPerProduct;
@@ -118,5 +148,21 @@ namespace ItemConduit.Patches
 		}
 
 
+
+		[HarmonyPatch(typeof(Smelter), "UpdateState")]
+		public static class Smelter_UpdateState_Patch
+		{
+			private static bool Prefix(Smelter __instance)
+			{
+				var extension = __instance.GetComponent<SmelteryExtension>();
+				if (extension.blocking)
+				{
+					__instance.m_enabledObject.SetActive(false);
+					return false;
+				}
+
+				return true;
+			}
+		}
 	}
 }

@@ -21,6 +21,7 @@ namespace ItemConduit.Extensions
 		public OutputSwitch m_outputSwitch;
 		public bool autoOutput;
 		private BoxCollider m_outputCollider;
+		public bool blocking { get; set; } = false;
 
 		protected override void Awake()
 		{
@@ -212,9 +213,10 @@ namespace ItemConduit.Extensions
 			{
 				foreach (var item in m_container.m_inventory.GetAllItems())
 				{
-					smelter.Spawn(item.m_dropPrefab.name, item.m_stack);
-					m_container.m_inventory.RemoveItem(item);
+					ItemDrop.DropItem(item, 0, smelter.m_outputPoint.transform.position, smelter.m_outputPoint.transform.rotation);
 				}
+				m_container.m_inventory.RemoveAll();
+				blocking = false;
 			}
 		}
 
