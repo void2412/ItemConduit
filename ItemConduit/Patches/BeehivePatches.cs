@@ -48,10 +48,42 @@ namespace ItemConduit.Patches
 					}
 					else
 					{
+						
 						ItemDrop.ItemData itemData = __instance.m_honeyItem.m_itemData.Clone();
 						itemData.m_dropPrefab = __instance.m_honeyItem.gameObject;
-						itemData.m_stack = i;
-						extension.m_container.m_inventory.AddItem(itemData);
+
+						//get current honey in inventory
+						var currentHoneyInventory = extension.m_container.m_inventory.GetAllItems();
+						if (currentHoneyInventory.Count <= 0) currentHoney = 0;
+						foreach (var item in currentHoneyInventory)
+						{
+							if (item == null) continue;
+
+							if(itemData.m_dropPrefab.name == item.m_dropPrefab.name)
+							{
+								currentHoney = item.m_stack;
+								break;
+							}
+							
+						}
+
+						int futureHoney = currentHoney + i;
+
+						if (futureHoney <= __instance.m_maxHoney)
+						{
+							itemData.m_stack = i;
+							extension.m_container.m_inventory.AddItem(itemData);
+						}
+						else
+						{
+							if (currentHoney < __instance.m_maxHoney)
+							{
+								itemData.m_stack = __instance.m_maxHoney - currentHoney;
+								extension.m_container.m_inventory.AddItem(itemData);
+							}
+						}
+
+						
 					}
 
 					extension.SaveInventoryToZDO();

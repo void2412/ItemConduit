@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 using UnityEngine;
+using static ItemDrop;
 using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Extensions
@@ -147,11 +148,13 @@ namespace ItemConduit.Extensions
 					if (isHoney)
 					{
 						if (beehive == null || m_container == null) return;
-						SaveInventoryToZDO();
-						beehive.m_nview.GetZDO().Set(ZDOVars.s_level, itemData.m_stack, false);
-						m_container.m_inventory.RemoveItem(itemData, itemData.m_stack);
+						
+						beehive.m_nview?.GetZDO()?.Set(ZDOVars.s_level, itemData.m_stack, false);
+						
 					}
 				}
+				m_container.m_inventory.RemoveAll();
+				SaveInventoryToZDO();
 			}
 
 		}
