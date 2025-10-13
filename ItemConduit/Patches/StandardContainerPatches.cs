@@ -31,14 +31,13 @@ namespace ItemConduit.Patches
 		{
 			private static bool Prefix(Container __instance, ref string __result)
 			{
-				SmelteryExtension smelterExt = __instance.GetComponentInParent<SmelteryExtension>();
-				if (smelterExt != null && smelterExt.m_container == __instance)
+				if (checkExtensionContainer(__instance))
 				{
 					__result = "";
-					return false;
+					return true;
 				}
 
-				return true;
+				return false;
 			}
 		}
 
@@ -47,14 +46,27 @@ namespace ItemConduit.Patches
 		{
 			private static bool Prefix(Container __instance)
 			{
-				SmelteryExtension smelterExt = __instance.GetComponentInParent<SmelteryExtension>();
-				if (smelterExt != null && smelterExt.m_container == __instance)
-				{
-					return false;
-				}
+				if (checkExtensionContainer(__instance)) return true;
 
-				return true;
+				return false;
 			}
+		}
+
+		private static bool checkExtensionContainer(Container __instance)
+		{
+			SmelteryExtension smelterExt = __instance.GetComponentInParent<SmelteryExtension>();
+			BeehiveExtension beehiveExt = __instance.GetComponent<BeehiveExtension>();
+			if (smelterExt != null && 
+				(
+				smelterExt.m_container == __instance || 
+				beehiveExt.m_container == __instance
+				)
+				)
+			{
+				return false;
+			}
+
+			return true;
 		}
 	}
 

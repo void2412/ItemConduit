@@ -51,6 +51,11 @@ namespace ItemConduit.Extensions
 			LoadInventoryFromZDO();
 		}
 
+		protected override void OnDestroy()
+		{
+			SaveInventoryToZDO();
+			base.OnDestroy();
+		}
 		#endregion
 
 		#region Container
@@ -100,17 +105,49 @@ namespace ItemConduit.Extensions
 
 		#endregion
 
+		#region Connection Management
+
+		public override void OnNodeDisconnected(BaseNode node)
+		{
+			base.OnNodeDisconnected(node);
+			List<ItemDrop.ItemData> itemDatas = m_container.m_inventory.GetAllItems();
+			if (!IsConnected && itemDatas.Count > 0)
+			{
+				foreach(ItemDrop.ItemData itemData in itemDatas)
+				{
+					if (itemData.m_dropPrefab.name == beehive.m_honeyItem.m_itemData.m_dropPrefab.name)
+					{
+						beehive.m_nview.GetZDO().Set(ZDOVars.s_level, itemData.m_stack, false);
+					}
+				}	
+			}
+
+		}
+
+		#endregion
+
 		#region IContainerInterface Implementation
 
 		public int CalculateAcceptCapacity(ItemDrop.ItemData sourceItem, int desiredAmount) { return 0; }
 		public bool CanAddItem(ItemDrop.ItemData item) { return false; }
 		public bool CanRemoveItem(ItemDrop.ItemData item) 
-		{ 
+		{
+			if (item.m_dropPrefab.name == beehive.m_honeyItem.m_itemData.m_dropPrefab.name) return true;
+
 			return false; 
 		}
 		public bool AddItem(ItemDrop.ItemData item, int amount = 0) { return false; }
-		public bool RemoveItem(ItemDrop.ItemData item, int amount = 1)
+		public bool RemoveItem(ItemDrop.ItemData item, int amount = 0)
 		{
+			if(item==null) return false;
+			if(amount <=0 && item.m_stack <= 0) return false;
+
+			if (m_container.m_inventory.RemoveItem(item, amount))
+			{
+				SaveInventoryToZDO();
+				return true;
+			}
+
 			return false;
 		}
 
