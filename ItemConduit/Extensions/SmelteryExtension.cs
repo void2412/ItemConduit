@@ -50,6 +50,7 @@ namespace ItemConduit.Extensions
 			}
 
 			SetupContainer();
+			LoadInventoryFromZDO();
 			SetupOutputSwitch();
 
 
@@ -104,7 +105,45 @@ namespace ItemConduit.Extensions
 			m_outputCollider.enabled = this.IsConnected;
 		}
 
+		protected override void OnDestroy()
+		{
+			SaveInventoryToZDO();
+			base.OnDestroy();
+		}
 
+		private void SaveInventoryToZDO()
+		{
+			if (smelter == null || m_container == null) return;
+
+			ZNetView znetView = smelter.GetComponent<ZNetView>();
+			if (znetView == null || !znetView.IsValid()) return;
+
+			ZDO zdo = znetView.GetZDO();
+			if (zdo == null) return;
+
+			// Save inventory as a ZPackage
+			ZPackage pkg = new ZPackage();
+			m_container.m_inventory.Save(pkg);
+			zdo.Set("ItemConduit_SmelterInventory", pkg.GetBase64());
+		}
+
+		private void LoadInventoryFromZDO()
+		{
+			if (smelter == null || m_container == null) return;
+
+			ZNetView znetView = smelter.GetComponent<ZNetView>();
+			if (znetView == null || !znetView.IsValid()) return;
+
+			ZDO zdo = znetView.GetZDO();
+			if (zdo == null) return;
+
+			string data = zdo.GetString("ItemConduit_SmelterInventory", "");
+			if (!string.IsNullOrEmpty(data))
+			{
+				ZPackage pkg = new ZPackage(data);
+				m_container.m_inventory.Load(pkg);
+			}
+		}
 
 		private void CreateColliderWireframe(GameObject switchObject, BoxCollider collider)
 		{
@@ -362,6 +401,7 @@ namespace ItemConduit.Extensions
 			if (amount <= 0 && item.m_stack <= 0) return false;
 
 			if (m_container.m_inventory.RemoveItem(item, amount)) {
+				SaveInventoryToZDO();
 				return true;
 			}
 
@@ -385,6 +425,7 @@ namespace ItemConduit.Extensions
 
 			if (m_container.m_inventory.AddItem(item))
 			{
+				SaveInventoryToZDO();
 				return true; 
 			}
 
