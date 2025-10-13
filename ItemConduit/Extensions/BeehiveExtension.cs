@@ -17,6 +17,8 @@ namespace ItemConduit.Extensions
 		private Beehive beehive;
 		public Container m_container;
 
+
+		#region Unity Life Cycle
 		protected override void Awake()
 		{
 			base.Awake();
@@ -49,13 +51,17 @@ namespace ItemConduit.Extensions
 			LoadInventoryFromZDO();
 		}
 
+		#endregion
+
+		#region Container
+
 		private void SetupContainer()
 		{
 			m_container = beehive.gameObject.AddComponent<Container>();
 			m_container.m_width = 1;
 			m_container.m_height = 1;
-			m_container.m_inventory = new Inventory("Smelter Output", null, 1, 1);
-			m_container.name = "Smelter Output";
+			m_container.m_inventory = new Inventory("Beehive Output", null, 1, 1);
+			m_container.name = "Beehive Output";
 		}
 
 		private void SaveInventoryToZDO()
@@ -91,6 +97,29 @@ namespace ItemConduit.Extensions
 				m_container.m_inventory.Load(pkg);
 			}
 		}
+
+		#endregion
+
+		#region IContainerInterface Implementation
+
+		public int CalculateAcceptCapacity(ItemDrop.ItemData sourceItem, int desiredAmount) { return 0; }
+		public bool CanAddItem(ItemDrop.ItemData item) { return false; }
+		public bool CanRemoveItem(ItemDrop.ItemData item) 
+		{ 
+			return false; 
+		}
+		public bool AddItem(ItemDrop.ItemData item, int amount = 0) { return false; }
+		public bool RemoveItem(ItemDrop.ItemData item, int amount = 1)
+		{
+			return false;
+		}
+
+		public Inventory GetInventory() { return m_container.m_inventory; }
+		public string GetName() { return beehive?.m_name ?? "Beehive"; }
+
+		public Vector3 GetTransformPosition() { return beehive?.transform.position ?? transform.position; }
+
+		#endregion
 
 	}
 }

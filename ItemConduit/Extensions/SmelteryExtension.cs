@@ -376,7 +376,7 @@ namespace ItemConduit.Extensions
 
 		public Vector3 GetTransformPosition()
 		{
-			return transform.position;
+			return smelter?.transform.position ?? transform.position;
 		}
 
 		private string ItemType(ItemDrop.ItemData item)
