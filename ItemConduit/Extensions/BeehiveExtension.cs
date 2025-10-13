@@ -56,6 +56,27 @@ namespace ItemConduit.Extensions
 			SaveInventoryToZDO();
 			base.OnDestroy();
 		}
+
+		private void Update()
+		{
+			if (beehive == null) return;
+			if (!IsConnected) return;
+
+			int currentHoney = beehive.GetHoneyLevel();
+			if (currentHoney > 0)
+			{
+				currentHoney += 1;
+				currentHoney = Mathf.Clamp(currentHoney, 0, beehive.m_maxHoney);
+				beehive.m_nview.GetZDO().Set(ZDOVars.s_level, 0, false);
+
+				ItemDrop.ItemData itemData = beehive.m_honeyItem.m_itemData.Clone();
+				itemData.m_dropPrefab = beehive.m_honeyItem.m_itemData.m_dropPrefab;
+				itemData.m_stack = currentHoney;
+				m_container.m_inventory.AddItem(itemData);
+				SaveInventoryToZDO();
+			}
+		}
+
 		#endregion
 
 		#region Container
@@ -69,7 +90,7 @@ namespace ItemConduit.Extensions
 			m_container.name = "Beehive Output";
 		}
 
-		private void SaveInventoryToZDO()
+		public void SaveInventoryToZDO()
 		{
 			if (beehive == null || m_container == null) return;
 
@@ -85,7 +106,7 @@ namespace ItemConduit.Extensions
 			zdo.Set("ItemConduit_SmelterInventory", pkg.GetBase64());
 		}
 
-		private void LoadInventoryFromZDO()
+		public void LoadInventoryFromZDO()
 		{
 			if (beehive == null || m_container == null) return;
 
@@ -118,6 +139,9 @@ namespace ItemConduit.Extensions
 					if (itemData.m_dropPrefab.name == beehive.m_honeyItem.m_itemData.m_dropPrefab.name)
 					{
 						beehive.m_nview.GetZDO().Set(ZDOVars.s_level, itemData.m_stack, false);
+						Logger.LogInfo($"Set Honey Level back to: {itemData.m_stack}");
+						m_container.m_inventory.RemoveAll();
+						SaveInventoryToZDO();
 					}
 				}	
 			}

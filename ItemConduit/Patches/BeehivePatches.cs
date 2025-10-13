@@ -51,6 +51,7 @@ namespace ItemConduit.Patches
 						extension.m_container.m_inventory.AddItem(itemData);
 					}
 
+					extension.SaveInventoryToZDO();
 					return false;
 				}
 
@@ -67,6 +68,24 @@ namespace ItemConduit.Patches
 				if (extension.IsConnected)
 				{
 					__result = Localization.instance.Localize("[<color=yellow><b>$KEY_Use</b></color>] Beehive Output");
+					return false;
+				}
+
+				return true;
+			}
+		}
+
+		[HarmonyPatch(typeof(Beehive), "Interact")]
+		public static class Beehive_Interact_Patch
+		{
+			private static bool Prefix(Beehive __instance)
+			{
+				var beehiveExt = __instance.GetComponent<BeehiveExtension>();
+				if (beehiveExt == null) return true;
+
+				if (beehiveExt.IsConnected) 
+				{
+					InventoryGui.instance.Show(beehiveExt.m_container, 1);
 					return false;
 				}
 
