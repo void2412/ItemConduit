@@ -115,12 +115,12 @@ namespace ItemConduit.Patches
 		{
 			private static bool Prefix(Beehive __instance)
 			{
-				var beehiveExt = __instance.GetComponent<BeehiveExtension>();
-				if (beehiveExt == null) return true;
+				var extension = __instance.GetComponent<BeehiveExtension>();
+				if (extension == null) return true;
 
-				if (beehiveExt.IsConnected) 
+				if (extension.IsConnected) 
 				{
-					InventoryGui.instance.Show(beehiveExt.m_container, 1);
+					InventoryGui.instance.Show(extension.m_container, 1);
 					return false;
 				}
 

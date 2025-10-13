@@ -97,7 +97,7 @@ namespace ItemConduit.Extensions
 			// Save inventory as a ZPackage
 			ZPackage pkg = new ZPackage();
 			m_container.m_inventory.Save(pkg);
-			zdo.Set("ItemConduit_SmelterInventory", pkg.GetBase64());
+			zdo.Set("ItemConduit_Inventory", pkg.GetBase64());
 		}
 
 		private void LoadInventoryFromZDO()
@@ -110,7 +110,7 @@ namespace ItemConduit.Extensions
 			ZDO zdo = znetView.GetZDO();
 			if (zdo == null) return;
 
-			string data = zdo.GetString("ItemConduit_SmelterInventory", "");
+			string data = zdo.GetString("ItemConduit_Inventory", "");
 			if (!string.IsNullOrEmpty(data))
 			{
 				ZPackage pkg = new ZPackage(data);
@@ -190,6 +190,7 @@ namespace ItemConduit.Extensions
 				}
 				m_container.m_inventory.RemoveAll();
 				blocking = false;
+				SaveInventoryToZDO();
 			}
 		}
 
@@ -346,7 +347,7 @@ namespace ItemConduit.Extensions
 
 		public Inventory GetInventory()
 		{
-			return m_container.m_inventory;
+			return m_container?.m_inventory;
 		}
 
 		public bool AddToInventory(ItemDrop.ItemData item, int amount = 0)

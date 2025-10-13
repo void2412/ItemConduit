@@ -34,7 +34,7 @@ namespace ItemConduit.Extensions
 				}
 				else
 				{
-					Logger.LogError($"[ItemConduit] SmelteryExtension could not find Smelter component!");
+					Logger.LogError($"[ItemConduit] SapCollectorExtention could not find SapCollector component!");
 					return;
 				}
 			}
