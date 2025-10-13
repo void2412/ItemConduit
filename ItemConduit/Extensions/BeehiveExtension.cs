@@ -33,7 +33,7 @@ namespace ItemConduit.Extensions
 				}
 				else
 				{
-					Logger.LogError($"[ItemConduit] SmelteryExtension could not find Smelter component!");
+					Logger.LogError($"[ItemConduit] BeehiveExtension could not find Beehive component!");
 					return;
 				}
 			}
@@ -101,7 +101,7 @@ namespace ItemConduit.Extensions
 			// Save inventory as a ZPackage
 			ZPackage pkg = new ZPackage();
 			m_container.m_inventory.Save(pkg);
-			zdo.Set("ItemConduit_SmelterInventory", pkg.GetBase64());
+			zdo.Set("ItemConduit_BeehiveInventory", pkg.GetBase64());
 		}
 
 		public void LoadInventoryFromZDO()
@@ -114,7 +114,7 @@ namespace ItemConduit.Extensions
 			ZDO zdo = znetView.GetZDO();
 			if (zdo == null) return;
 
-			string data = zdo.GetString("ItemConduit_SmelterInventory", "");
+			string data = zdo.GetString("ItemConduit_BeehiveInventory", "");
 			if (!string.IsNullOrEmpty(data))
 			{
 				ZPackage pkg = new ZPackage(data);
@@ -150,7 +150,11 @@ namespace ItemConduit.Extensions
 						if (beehive == null || m_container == null) return;
 						
 						beehive.m_nview?.GetZDO()?.Set(ZDOVars.s_level, itemData.m_stack, false);
-						
+					}
+					else
+					{
+						if (beehive == null || m_container == null) return;
+						ItemDrop.DropItem(itemData, 0, beehive.m_spawnPoint.position, beehive.m_spawnPoint.rotation);
 					}
 				}
 				m_container.m_inventory.RemoveAll();
