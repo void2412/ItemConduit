@@ -56,6 +56,25 @@ namespace ItemConduit.Extensions
 
 		}
 
+		protected void Update()
+		{
+			if (IsConnected && fermenter.GetStatus() == Fermenter.Status.Ready)
+			{
+				Fermenter.ItemConversion itemConversion = fermenter.GetItemConversion(fermenter.m_delayedTapItem);
+				ItemDrop itemDropPrefab = itemConversion.m_to;
+				ItemDrop.ItemData itemData = itemDropPrefab.m_itemData.Clone();
+				itemData.m_dropPrefab = itemDropPrefab.gameObject;
+				itemData.m_stack = itemConversion.m_producedItems;
+
+				if (AddToInventory(itemData))
+				{
+					fermenter.m_nview.GetZDO().Set(ZDOVars.s_content, "");
+					fermenter.m_nview.GetZDO().Set(ZDOVars.s_startTime, 0, false);
+				}
+			}
+			
+		}
+
 		protected override void OnDestroy()
 		{
 			SaveInventoryToZDO();
