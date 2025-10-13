@@ -140,7 +140,6 @@ namespace ItemConduit.Extensions
 			m_outputSwitch = switchObject.AddComponent<OutputSwitch>();
 			m_outputSwitch.m_onUse = (OutputSwitch.Callback)Delegate.Combine(m_outputSwitch.m_onUse, new OutputSwitch.Callback(OnOutputSwitch));
 			m_outputSwitch.m_onHover = new OutputSwitch.hoverCallback(OnOutputHover);
-
 			m_outputCollider = switchObject.AddComponent<BoxCollider>();
 			m_outputCollider.size = new Vector3(0.5f, 0.5f, 0.5f); // Adjust the interaction size as needed
 			m_outputCollider.isTrigger = true;

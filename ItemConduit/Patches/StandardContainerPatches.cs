@@ -1,6 +1,7 @@
 ﻿using HarmonyLib;
 using ItemConduit.Debug;
 using ItemConduit.Extensions;
+using System.Runtime.Remoting.Messaging;
 using UnityEngine;
 
 namespace ItemConduit.Patches
@@ -31,13 +32,13 @@ namespace ItemConduit.Patches
 		{
 			private static bool Prefix(Container __instance, ref string __result)
 			{
-				if (checkExtensionContainer(__instance))
+				if (isExtensionContainer(__instance))
 				{
 					__result = "";
-					return true;
+					return false;
 				}
 
-				return false;
+				return true;
 			}
 		}
 
@@ -46,28 +47,21 @@ namespace ItemConduit.Patches
 		{
 			private static bool Prefix(Container __instance)
 			{
-				if (checkExtensionContainer(__instance)) return true;
+				if (isExtensionContainer(__instance)) return false;
 
-				return false;
+				return true;
 			}
+
 		}
 
-		private static bool checkExtensionContainer(Container __instance)
+		private static bool isExtensionContainer(Container __instance)
 		{
 			SmelteryExtension smelterExt = __instance.GetComponentInParent<SmelteryExtension>();
-			BeehiveExtension beehiveExt = __instance.GetComponent<BeehiveExtension>();
-			if (smelterExt != null && 
-				(
-				smelterExt.m_container == __instance || 
-				beehiveExt.m_container == __instance
-				)
-				)
-			{
-				return false;
-			}
+			BeehiveExtension beehiveExt = __instance.GetComponentInParent<BeehiveExtension>();
 
-			return true;
+
+			return (smelterExt != null && smelterExt.m_container == __instance) ||
+		   (beehiveExt != null && beehiveExt.m_container == __instance);
 		}
 	}
-
 }
