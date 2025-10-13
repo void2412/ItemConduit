@@ -8,6 +8,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Patches
 {
@@ -28,7 +29,7 @@ namespace ItemConduit.Patches
 		[HarmonyPatch(typeof(Beehive), "IncreseLevel")]
 		public static class Beehive_IncreseLevel_Patch
 		{
-			private static bool Prefix(Beehive __instance) 
+			private static bool Prefix(Beehive __instance, int i) 
 			{
 				var extension = __instance.GetComponent<BeehiveExtension>();
 				if (extension.IsConnected)
@@ -36,18 +37,20 @@ namespace ItemConduit.Patches
 					int currentHoney = __instance.GetHoneyLevel();
 					if (currentHoney > 0)
 					{
-						currentHoney += 1;
+						currentHoney += i;
 						currentHoney = Mathf.Clamp(currentHoney, 0, __instance.m_maxHoney);
 						__instance.m_nview.GetZDO().Set(ZDOVars.s_level, 0, false);
 
 						ItemDrop.ItemData itemData = __instance.m_honeyItem.m_itemData.Clone();
+						itemData.m_dropPrefab = __instance.m_honeyItem.gameObject;
 						itemData.m_stack = currentHoney;
 						extension.m_container.m_inventory.AddItem(itemData);
 					}
 					else
 					{
 						ItemDrop.ItemData itemData = __instance.m_honeyItem.m_itemData.Clone();
-						itemData.m_stack = 1;
+						itemData.m_dropPrefab = __instance.m_honeyItem.gameObject;
+						itemData.m_stack = i;
 						extension.m_container.m_inventory.AddItem(itemData);
 					}
 

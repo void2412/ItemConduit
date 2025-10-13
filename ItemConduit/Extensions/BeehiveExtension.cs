@@ -65,12 +65,9 @@ namespace ItemConduit.Extensions
 			int currentHoney = beehive.GetHoneyLevel();
 			if (currentHoney > 0)
 			{
-				currentHoney += 1;
-				currentHoney = Mathf.Clamp(currentHoney, 0, beehive.m_maxHoney);
 				beehive.m_nview.GetZDO().Set(ZDOVars.s_level, 0, false);
-
 				ItemDrop.ItemData itemData = beehive.m_honeyItem.m_itemData.Clone();
-				itemData.m_dropPrefab = beehive.m_honeyItem.m_itemData.m_dropPrefab;
+				itemData.m_dropPrefab = beehive.m_honeyItem.gameObject;
 				itemData.m_stack = currentHoney;
 				m_container.m_inventory.AddItem(itemData);
 				SaveInventoryToZDO();
@@ -134,16 +131,27 @@ namespace ItemConduit.Extensions
 			List<ItemDrop.ItemData> itemDatas = m_container.m_inventory.GetAllItems();
 			if (!IsConnected && itemDatas.Count > 0)
 			{
-				foreach(ItemDrop.ItemData itemData in itemDatas)
+				foreach (ItemDrop.ItemData itemData in itemDatas)
 				{
-					if (itemData.m_dropPrefab.name == beehive.m_honeyItem.m_itemData.m_dropPrefab.name)
+					// More defensive check
+					bool isHoney = false;
+					if (itemData.m_dropPrefab != null && beehive.m_honeyItem != null)
 					{
-						beehive.m_nview.GetZDO().Set(ZDOVars.s_level, itemData.m_stack, false);
-						Logger.LogInfo($"Set Honey Level back to: {itemData.m_stack}");
-						m_container.m_inventory.RemoveAll();
-						SaveInventoryToZDO();
+						isHoney = itemData.m_dropPrefab.name == beehive.m_honeyItem.gameObject.name;
 					}
-				}	
+					else if (itemData.m_shared != null && beehive.m_honeyItem?.m_itemData?.m_shared != null)
+					{
+						isHoney = itemData.m_shared.m_name == beehive.m_honeyItem.m_itemData.m_shared.m_name;
+					}
+
+					if (isHoney)
+					{
+						if (beehive == null || m_container == null) return;
+						SaveInventoryToZDO();
+						beehive.m_nview.GetZDO().Set(ZDOVars.s_level, itemData.m_stack, false);
+						m_container.m_inventory.RemoveItem(itemData, itemData.m_stack);
+					}
+				}
 			}
 
 		}
@@ -156,7 +164,16 @@ namespace ItemConduit.Extensions
 		public bool CanAddItem(ItemDrop.ItemData item) { return false; }
 		public bool CanRemoveItem(ItemDrop.ItemData item) 
 		{
-			if (item.m_dropPrefab.name == beehive.m_honeyItem.m_itemData.m_dropPrefab.name) return true;
+			if (item?.m_dropPrefab != null && beehive?.m_honeyItem != null)
+			{
+				return item.m_dropPrefab.name == beehive.m_honeyItem.gameObject.name;
+			}
+
+			// Fallback to checking shared name
+			if (item?.m_shared != null && beehive?.m_honeyItem?.m_itemData?.m_shared != null)
+			{
+				return item.m_shared.m_name == beehive.m_honeyItem.m_itemData.m_shared.m_name;
+			}
 
 			return false; 
 		}
