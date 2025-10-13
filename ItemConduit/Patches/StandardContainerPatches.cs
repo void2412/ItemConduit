@@ -58,10 +58,13 @@ namespace ItemConduit.Patches
 		{
 			SmelteryExtension smelterExt = __instance.GetComponentInParent<SmelteryExtension>();
 			BeehiveExtension beehiveExt = __instance.GetComponentInParent<BeehiveExtension>();
-
+			SapCollectorExtention sapExt = __instance.GetComponentInParent<SapCollectorExtention>();
+			FermenterExtension fermenterExt = __instance.GetComponentInParent<FermenterExtension>();
 
 			return (smelterExt != null && smelterExt.m_container == __instance) ||
-		   (beehiveExt != null && beehiveExt.m_container == __instance);
+		   (beehiveExt != null && beehiveExt.m_container == __instance) ||
+		   (sapExt != null && sapExt.m_container == __instance) ||
+		   (fermenterExt != null && fermenterExt.m_container == __instance);
 		}
 	}
 }

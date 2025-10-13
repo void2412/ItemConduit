@@ -26,18 +26,19 @@ namespace ItemConduit.Extensions
 		{
 			base.Awake();
 			fermenter = GetComponentInParent<Fermenter>();
-			if ( fermenter == null)
+			if (fermenter == null)
 			{
 				fermenter = GetComponent<Fermenter>();
 				if ( fermenter == null)
 				{
 					fermenter = GetComponentInChildren<Fermenter>();
 				}
-				else
-				{
-					Logger.LogError($"ItemConduit] FermenterExtension could not find Fermenter component!");
-					return;
-				}
+			}
+
+			if(fermenter == null)
+			{
+				Logger.LogError($"ItemConduit] FermenterExtension could not find Fermenter component!");
+				return;
 			}
 
 			ZNetView zNetView = fermenter.GetComponent<ZNetView>();
@@ -54,6 +55,11 @@ namespace ItemConduit.Extensions
 			LoadInventoryFromZDO();
 		}
 
+		protected override void OnDestroy()
+		{
+			SaveInventoryToZDO();
+			base.OnDestroy();
+		}
 		#endregion
 
 		#region Container

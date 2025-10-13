@@ -32,11 +32,13 @@ namespace ItemConduit.Extensions
 				{
 					sapCollector = GetComponentInChildren<SapCollector>();
 				}
-				else
-				{
-					Logger.LogError($"[ItemConduit] SapCollectorExtention could not find SapCollector component!");
-					return;
-				}
+					
+			}
+
+			if (sapCollector == null) 
+			{
+				Logger.LogError($"[ItemConduit] SapCollectorExtention could not find SapCollector component!");
+				return;
 			}
 
 			ZNetView znetView = sapCollector.GetComponent<ZNetView>();

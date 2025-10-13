@@ -31,11 +31,12 @@ namespace ItemConduit.Extensions
 				{
 					beehive = GetComponentInChildren<Beehive>();
 				}
-				else
-				{
-					Logger.LogError($"[ItemConduit] BeehiveExtension could not find Beehive component!");
-					return;
-				}
+			}
+
+			if (beehive == null) 
+			{
+				Logger.LogError($"[ItemConduit] BeehiveExtension could not find Beehive component!");
+				return;
 			}
 
 			ZNetView znetView = beehive.GetComponent<ZNetView>();
