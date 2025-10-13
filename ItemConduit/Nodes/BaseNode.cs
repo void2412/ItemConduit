@@ -383,15 +383,12 @@ namespace ItemConduit.Nodes
 				halfExtents = Vector3.Scale(localBounds.extents, transform.lossyScale);
 				rotation = transform.rotation;
 			}
-
-			
-
 			// Perform ORIENTED overlap check (this properly handles rotation!)
 			Collider[] overlaps = Physics.OverlapBox(
 				center,
 				halfExtents,
 				rotation,  // This rotation is now properly applied!
-				LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small")
+				LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small", "Default")
 			);
 
 			
@@ -702,41 +699,150 @@ namespace ItemConduit.Nodes
 			{
 				if (col == null || col.transform == transform) continue;
 
-				// Try multiple ways to find container
-				IContainerInterface containerInterface = col.GetComponent<IContainerInterface>()
-					?? col.GetComponentInParent<IContainerInterface>()
-					?? col.GetComponentInChildren<IContainerInterface>();
+				if (DebugConfig.showDebug.Value)
+				{
+					Logger.LogInfo($"[ItemConduit] Checking collider: {col.name} on GameObject: {col.gameObject.name}");
+					Logger.LogInfo($"[ItemConduit]   Layer: {LayerMask.LayerToName(col.gameObject.layer)}");
+					Logger.LogInfo($"[ItemConduit]   Parent: {(col.transform.parent != null ? col.transform.parent.name : "null")}");
+				}
+
+				// Try multiple ways to find container interface
+				IContainerInterface containerInterface = null;
+
+				// Method 1: Direct component on collider's GameObject
+				containerInterface = col.GetComponent<IContainerInterface>();
+				if (DebugConfig.showDebug.Value && containerInterface != null)
+				{
+					Logger.LogInfo($"[ItemConduit]   Found IContainerInterface via GetComponent");
+				}
+
+				// Method 2: Search up the hierarchy (handles child colliders like Barrel)
+				if (containerInterface == null)
+				{
+					containerInterface = col.GetComponentInParent<IContainerInterface>();
+					if (DebugConfig.showDebug.Value && containerInterface != null)
+					{
+						Logger.LogInfo($"[ItemConduit]   Found IContainerInterface via GetComponentInParent");
+					}
+				}
+
+				// Method 3: Search down the hierarchy
+				if (containerInterface == null)
+				{
+					containerInterface = col.GetComponentInChildren<IContainerInterface>();
+					if (DebugConfig.showDebug.Value && containerInterface != null)
+					{
+						Logger.LogInfo($"[ItemConduit]   Found IContainerInterface via GetComponentInChildren");
+					}
+				}
+
+				// Method 4: For special cases like Fermenter with Barrel child
+				// Search for specific components if we found nothing
+				if (containerInterface == null)
+				{
+					// Try to find Fermenter/Beehive/Smelter/etc components and get their extensions
+					Transform searchRoot = col.transform;
+
+					// Search current and parent GameObjects
+					for (int i = 0; i < 3 && searchRoot != null; i++) // Search up to 3 levels
+					{
+						// Check for FermenterExtension
+						var fermenterExt = searchRoot.GetComponent<FermenterExtension>();
+						if (fermenterExt != null)
+						{
+							containerInterface = fermenterExt;
+							if (DebugConfig.showDebug.Value)
+							{
+								Logger.LogInfo($"[ItemConduit]   Found FermenterExtension on {searchRoot.name} (level {i})");
+							}
+							break;
+						}
+
+						// Check for other extension types
+						var beehiveExt = searchRoot.GetComponent<BeehiveExtension>();
+						if (beehiveExt != null)
+						{
+							containerInterface = beehiveExt;
+							if (DebugConfig.showDebug.Value)
+							{
+								Logger.LogInfo($"[ItemConduit]   Found BeehiveExtension on {searchRoot.name} (level {i})");
+							}
+							break;
+						}
+
+						var smelterExt = searchRoot.GetComponent<SmelteryExtension>();
+						if (smelterExt != null)
+						{
+							containerInterface = smelterExt;
+							if (DebugConfig.showDebug.Value)
+							{
+								Logger.LogInfo($"[ItemConduit]   Found SmelteryExtension on {searchRoot.name} (level {i})");
+							}
+							break;
+						}
+
+						// Check for StandardContainerExtension
+						var standardExt = searchRoot.GetComponent<StandardContainerExtension>();
+						if (standardExt != null)
+						{
+							containerInterface = standardExt;
+							if (DebugConfig.showDebug.Value)
+							{
+								Logger.LogInfo($"[ItemConduit]   Found StandardContainerExtension on {searchRoot.name} (level {i})");
+							}
+							break;
+						}
+
+						searchRoot = searchRoot.parent;
+					}
+				}
 
 				if (containerInterface != null)
 				{
-					// Get the container's collider
-					Collider containerCollider = col.GetComponent<Collider>()
-						?? col.GetComponentInChildren<Collider>();
-
-					if (containerCollider != null)
+					// Verify the container has a valid inventory
+					Inventory inv = containerInterface.GetInventory();
+					if (inv == null)
 					{
-						// Check for actual intersection using oriented bounds
-						if (myCollider.bounds.Intersects(containerCollider.bounds))
+						if (DebugConfig.showDebug.Value)
 						{
-							float distance = Vector3.Distance(transform.position, col.transform.position);
-
-							if (DebugConfig.showDebug.Value)
-							{
-								Logger.LogInfo($"[ItemConduit] Found overlapping container: {col.name} ({containerInterface.GetName()}) at distance {distance:F2}m");
-
-								Inventory inv = containerInterface.GetInventory();
-								if (inv != null)
-								{
-									Logger.LogInfo($"[ItemConduit]   Inventory: {inv.GetWidth()}x{inv.GetHeight()} slots, {inv.GetAllItems().Count} items");
-								}
-							}
-
-							if (distance < closestDistance)
-							{
-								closestDistance = distance;
-								bestContainer = containerInterface;
-							}
+							Logger.LogWarning($"[ItemConduit]   Container {containerInterface.GetName()} has null inventory, skipping");
 						}
+						continue;
+					}
+
+					// Get the container's collider (use the one we found, or search for others)
+					Collider containerCollider = col;
+
+					// Check for actual intersection using bounds
+					if (myCollider.bounds.Intersects(containerCollider.bounds))
+					{
+						float distance = Vector3.Distance(transform.position, containerInterface.GetTransformPosition());
+
+						if (DebugConfig.showDebug.Value)
+						{
+							Logger.LogInfo($"[ItemConduit]   ✓ VALID overlapping container: {containerInterface.GetName()} at distance {distance:F2}m");
+							Logger.LogInfo($"[ItemConduit]     Inventory: {inv.GetWidth()}x{inv.GetHeight()} slots, {inv.GetAllItems().Count} items");
+						}
+
+						if (distance < closestDistance)
+						{
+							closestDistance = distance;
+							bestContainer = containerInterface;
+						}
+					}
+					else
+					{
+						if (DebugConfig.showDebug.Value)
+						{
+							Logger.LogWarning($"[ItemConduit]   ✗ Bounds don't intersect for {containerInterface.GetName()}");
+						}
+					}
+				}
+				else
+				{
+					if (DebugConfig.showDebug.Value)
+					{
+						Logger.LogInfo($"[ItemConduit]   No IContainerInterface found for {col.name}");
 					}
 				}
 			}
@@ -748,6 +854,11 @@ namespace ItemConduit.Nodes
 				if (Physics.Raycast(transform.position, Vector3.down, out hit, 2f,
 					LayerMask.GetMask("piece", "piece_nonsolid", "Default_small")))
 				{
+					if (DebugConfig.showDebug.Value)
+					{
+						Logger.LogInfo($"[ItemConduit] Raycast found: {hit.collider.name}");
+					}
+
 					IContainerInterface container = hit.collider.GetComponent<IContainerInterface>()
 						?? hit.collider.GetComponentInParent<IContainerInterface>();
 
@@ -757,15 +868,20 @@ namespace ItemConduit.Nodes
 
 						if (DebugConfig.showDebug.Value)
 						{
-							Logger.LogInfo($"[ItemConduit] Found container below node: {container.GetName()}");
+							Logger.LogInfo($"[ItemConduit] Found container below node via raycast: {container.GetName()}");
 						}
 					}
 				}
 			}
 
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] Final result: {(bestContainer != null ? bestContainer.GetName() : "NONE")}");
+			}
+
 			return bestContainer;
 		}
-		
+
 		#endregion
 
 		#region Connection Management

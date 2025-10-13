@@ -53,6 +53,7 @@ namespace ItemConduit.Extensions
 
 			SetupContainer();
 			LoadInventoryFromZDO();
+
 		}
 
 		protected override void OnDestroy()
