@@ -60,7 +60,7 @@ namespace ItemConduit.Extensions
 		{
 			if (IsConnected && fermenter.GetStatus() == Fermenter.Status.Ready)
 			{
-				Fermenter.ItemConversion itemConversion = fermenter.GetItemConversion(fermenter.m_delayedTapItem);
+				Fermenter.ItemConversion itemConversion = fermenter.GetItemConversion(fermenter.GetContent());
 				ItemDrop itemDropPrefab = itemConversion.m_to;
 				ItemDrop.ItemData itemData = itemDropPrefab.m_itemData.Clone();
 				itemData.m_dropPrefab = itemDropPrefab.gameObject;
