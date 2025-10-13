@@ -62,7 +62,7 @@ namespace ItemConduit.Extensions
 
 		protected void Update()
 		{
-			m_outputCollider.enabled = this.IsConnected;
+			if (m_container != null) m_outputCollider.enabled = this.IsConnected;
 		}
 
 		protected override void OnDestroy()
