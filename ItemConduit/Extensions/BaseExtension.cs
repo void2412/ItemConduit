@@ -65,7 +65,7 @@ namespace ItemConduit.Extensions
 			m_container = component.gameObject.AddComponent<Container>();
 			m_container.m_width = width;
 			m_container.m_height = height;
-			m_container.m_inventory = new Inventory($"{component.GetType().ToString()} Output", null, 1, 1);
+			m_container.m_inventory = new Inventory($"{component.GetType().ToString()} Output", null, width, height);
 			m_container.name = $"{component.GetType().ToString()} Output";
 		}
 
