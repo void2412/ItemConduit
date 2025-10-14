@@ -76,7 +76,7 @@ namespace ItemConduit.Extensions
 		{
 			if (item == null || component == null) return false;
 
-			return item.m_dropPrefab.name == component.m_fuelItem.m_itemData.m_dropPrefab.name;
+			return item?.m_dropPrefab?.name == component?.m_fuelItem?.m_itemData?.m_dropPrefab?.name;
 
 		}
 		public bool CanRemoveItem(ItemDrop.ItemData item)
