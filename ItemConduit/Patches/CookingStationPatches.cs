@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using UnityEngine;
 
 namespace ItemConduit.Patches
 {
@@ -41,7 +42,7 @@ namespace ItemConduit.Patches
 					if (string.IsNullOrEmpty(itemName)) continue;
 					
 					CookingStation.ItemConversion itemConversion = __instance.GetItemConversion(itemName);
-					if(itemConversion == null) continue;
+					if(itemConversion == null && status != CookingStation.Status.Burnt) continue;
 
 					if (status == CookingStation.Status.Done)
 					{
@@ -77,5 +78,41 @@ namespace ItemConduit.Patches
 			}
 		}
 
+
+		[HarmonyPatch(typeof(CookingStation), "Interact")]
+		public static class CookingStation_Interact_Patch
+		{
+			private static bool Prefix(CookingStation __instance, Humanoid user, bool hold)
+			{
+				var extension = __instance.GetComponent<CookingStationExtension>();
+				if (extension == null || !extension.IsConnected) return true;
+
+				// Check if Shift is being held
+				bool shiftHeld = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+
+				if (shiftHeld && !hold && extension.IsConnected)
+				{
+					// Open the container inventory when Shift+E is pressed
+					InventoryGui.instance.Show(extension.m_container, 1);
+					return false; // Prevent normal cooking station interaction
+				}
+
+				// Allow normal cooking station interaction when Shift is not held
+				return true;
+			}
+		}
+
+		[HarmonyPatch(typeof(CookingStation), "GetHoverText")]
+		public static class CookingStation_GetHoverText_Patch
+		{
+			private static void Postfix(CookingStation __instance, ref string __result)
+			{
+				var extension = __instance.GetComponent<CookingStationExtension>();
+				if (extension == null || !extension.IsConnected) return;
+
+				// Always show the Shift+E option when connected
+				__result += Localization.instance.Localize("\n[<color=yellow><b>Shift + $KEY_Use</b></color>] Open Output Inventory");
+			}
+		}
 	}
 }

@@ -64,9 +64,9 @@ namespace ItemConduit.Extensions
 		private void SetupContainer()
 		{
 			m_container = cookingStation.gameObject.AddComponent<Container>();
-			m_container.m_width = 1;
-			m_container.m_height = 1;
-			m_container.m_inventory = new Inventory("Cooking Station Output", null, 1, 1);
+			m_container.m_width = 3;
+			m_container.m_height = 2;
+			m_container.m_inventory = new Inventory("Cooking Station Output", null, 3, 2);
 			m_container.name = "Cooking Station Output";
 		}
 
@@ -109,8 +109,13 @@ namespace ItemConduit.Extensions
 		#region Connection Management
 		public override void OnNodeConnected(BaseNode node)
 		{
-			GetFreeSlotList();
 			base.OnNodeConnected(node);
+			GetFreeSlotList();
+			
+			if (cookingStation != null && IsConnected)
+			{
+				cookingStation.UpdateCooking();
+			}
 		}
 		public override void OnNodeDisconnected(BaseNode node)
 		{
@@ -151,13 +156,14 @@ namespace ItemConduit.Extensions
 		{
 			if (item == null) return 0;
 			if (freeSlotList.Count == 0) return 0;
-			if(amount <= 0 && item.m_stack <= 0) return 0;
 
-			if(amount >0) item.m_stack = amount;
+			// Determine the actual amount to check
+			int checkAmount = (amount > 0) ? amount : item.m_stack;
 
-			int acceptableAmount = 0;
+			if (checkAmount <= 0) return 0;
 
-			acceptableAmount = Math.Min(item.m_stack, freeSlotList.Count);
+			// Return the minimum of requested amount and available slots
+			int acceptableAmount = Math.Min(checkAmount, freeSlotList.Count);
 
 			return acceptableAmount;
 		}
@@ -205,20 +211,33 @@ namespace ItemConduit.Extensions
 			return false;
 		}
 
+
 		public bool AddItem(ItemDrop.ItemData item, int amount = 0)
 		{
-			if(!CanAddItem(item)) return false;
-			int addableAmount = CalculateAcceptCapacity(item, amount);
-			Logger.LogInfo($"addable amount: {addableAmount}");
+			if (!CanAddItem(item)) return false;
+
+			// Determine how many to add
+			int amountToAdd = (amount > 0) ? amount : item.m_stack;
+
+			int addableAmount = CalculateAcceptCapacity(item, amountToAdd);
 			if (addableAmount <= 0) return false;
 
+			// Create a list of slots to use (don't modify collection during iteration)
+			List<int> slotsToUse = freeSlotList.Take(addableAmount).ToList();
 
-			foreach (var slotNumber in freeSlotList)
+			// Add items to cooking slots
+			foreach (var slotNumber in slotsToUse)
 			{
 				cookingStation.SetSlot(slotNumber, item.m_dropPrefab.name, 0f, CookingStation.Status.NotDone);
+			}
+
+			// Remove used slots from freeSlotList (after iteration)
+			foreach (var slotNumber in slotsToUse)
+			{
 				freeSlotList.Remove(slotNumber);
 			}
 
+			// DO NOT modify item.m_stack - NetworkManager handles this!
 			return true;
 		}
 
@@ -233,7 +252,7 @@ namespace ItemConduit.Extensions
 				item.m_stack = amount;
 			}
 
-			if (m_container.m_inventory.CanAddItem(item))
+			if (m_container.m_inventory.AddItem(item))
 			{
 				SaveInventoryToZDO();
 				return true;
