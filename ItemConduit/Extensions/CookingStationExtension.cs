@@ -18,7 +18,7 @@ namespace ItemConduit.Extensions
 	{
 		private CookingStation cookingStation;
 		public Container m_container;
-		public List<int> freeSlotList = new List<int>();
+		public HashSet<int> freeSlotList = new HashSet<int>();
 		#region Unity Life Cycle
 		protected override void Awake()
 		{
@@ -209,14 +209,14 @@ namespace ItemConduit.Extensions
 		{
 			if(!CanAddItem(item)) return false;
 			int addableAmount = CalculateAcceptCapacity(item, amount);
+			Logger.LogInfo($"addable amount: {addableAmount}");
 			if (addableAmount <= 0) return false;
 
 
-			for (int i = 0; i < addableAmount; i++)
+			foreach (var slotNumber in freeSlotList)
 			{
-				int slotNumber = freeSlotList[i];
 				cookingStation.SetSlot(slotNumber, item.m_dropPrefab.name, 0f, CookingStation.Status.NotDone);
-				freeSlotList.RemoveAt(i);
+				freeSlotList.Remove(slotNumber);
 			}
 
 			return true;

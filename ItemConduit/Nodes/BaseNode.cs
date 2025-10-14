@@ -388,7 +388,7 @@ namespace ItemConduit.Nodes
 				center,
 				halfExtents,
 				rotation,  // This rotation is now properly applied!
-				LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small", "Default")
+				LayerMask.GetMask("piece", "piece_nonsolid", "item", "Default_small", "Default", "blocker")
 			);
 
 			
