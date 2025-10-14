@@ -13,16 +13,9 @@ namespace ItemConduit.Extensions
 {
 	public class FirePlaceExtention : BaseExtension<Fireplace>, IContainerInterface
 	{
-		private int lastFuel = 0;
-		private int lastInventoryItemCount = 0;
-		private int lastInventoryStack = 0;
 
 		#region Unity Life Cycle
 
-		protected void Update()
-		{
-			
-		}
 
 
 		#endregion
@@ -88,7 +81,7 @@ namespace ItemConduit.Extensions
 		}
 		public bool CanRemoveItem(ItemDrop.ItemData item)
 		{
-			return true;
+			return false;
 		}
 		public bool AddItem(ItemDrop.ItemData item, int amount = 0)
 		{
@@ -110,41 +103,10 @@ namespace ItemConduit.Extensions
 		}
 		public bool RemoveItem(ItemDrop.ItemData item, int amount = 1)
 		{
-			if (item == null || m_container == null || component == null) return false;
-			int actualAmount = amount > 0 ? amount : item.m_stack;
-			if (actualAmount <= 0) return false;
-
-			if (m_container.m_inventory.RemoveItem(item, actualAmount))
-			{
-				// Update fireplace fuel when removing from inventory
-				float currentFuel = component.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel, 0f);
-				float newFuel = Mathf.Max(0, currentFuel - actualAmount);
-				component.m_nview.GetZDO().Set(ZDOVars.s_fuel, newFuel);
-				component.UpdateState();
-
-				lastFuel = (int)newFuel;
-				SaveInventoryToZDO();
-				return true;
-			}
-
 			return false;
 		}
 		public bool AddToInventory(ItemDrop.ItemData item, int amount = 1)
 		{
-			if (item == null || m_container == null) return false;
-			int actualAmount = amount > 0 ? amount : item.m_stack;
-			if (actualAmount <= 0) return false;
-			if (!m_container.m_inventory.CanAddItem(item)) return false;
-
-			var cloneItem = item.Clone();
-			cloneItem.m_stack = actualAmount;
-
-			if (m_container.m_inventory.AddItem(cloneItem))
-			{
-				SaveInventoryToZDO();
-				return true;
-			}
-
 			return false;
 
 		}
