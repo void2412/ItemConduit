@@ -21,137 +21,9 @@ namespace ItemConduit.Extensions
 
 		protected void Update()
 		{
-			if (!IsConnected) return;
-
-			float currentFuel = component.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel, 0f);
-
-			// Sync fireplace fuel TO inventory (existing logic)
-			if ((int)currentFuel != lastFuel)
-			{
-				SyncFuelToInventory((int)currentFuel);
-				lastFuel = (int)currentFuel;
-			}
-
-			// NEW: Sync inventory changes BACK to fireplace fuel
-			SyncInventoryToFuel();
+			
 		}
 
-		private void SyncFuelToInventory(int fuelAmount)
-		{
-			if (m_container == null || component.m_fuelItem == null) return;
-
-			ItemDrop itemDropPrefab = component.m_fuelItem.gameObject.GetComponent<ItemDrop>();
-			ItemDrop.ItemData itemData = itemDropPrefab.m_itemData.Clone();
-			itemData.m_dropPrefab = itemDropPrefab.gameObject;
-			itemData.m_stack = fuelAmount;
-
-			m_container.m_inventory.RemoveAll();
-			m_container.m_inventory.AddItem(itemData);
-
-			// Update tracking variables
-			lastInventoryItemCount = m_container.m_inventory.GetAllItems().Count;
-			lastInventoryStack = fuelAmount;
-		}
-
-		private void SyncInventoryToFuel()
-		{
-			if (m_container == null || m_container.m_inventory == null) return;
-
-			List<ItemDrop.ItemData> items = m_container.m_inventory.GetAllItems();
-			int currentItemCount = items.Count;
-
-			// Check if inventory changed (item added/removed or stack size changed)
-			bool inventoryChanged = false;
-			int totalFuelInInventory = 0;
-
-			foreach (var item in items)
-			{
-				if (item != null && IsFuelItem(item))
-				{
-					totalFuelInInventory += item.m_stack;
-				}
-			}
-
-			// Detect if inventory changed
-			if (currentItemCount != lastInventoryItemCount || totalFuelInInventory != lastInventoryStack)
-			{
-				inventoryChanged = true;
-			}
-
-			if (inventoryChanged)
-			{
-				// Update fireplace fuel based on inventory
-				UpdateFireplaceFuelFromInventory(items);
-
-				// Update tracking
-				lastInventoryItemCount = currentItemCount;
-				lastInventoryStack = totalFuelInInventory;
-				lastFuel = totalFuelInInventory;
-			}
-		}
-
-		private void UpdateFireplaceFuelFromInventory(List<ItemDrop.ItemData> items)
-		{
-			if (component == null) return;
-
-			int totalFuel = 0;
-			List<ItemDrop.ItemData> nonFuelItems = new List<ItemDrop.ItemData>();
-
-			// Calculate total fuel and identify non-fuel items
-			foreach (var item in items)
-			{
-				if (item != null && IsFuelItem(item))
-				{
-					totalFuel += item.m_stack;
-				}
-				else if (item != null)
-				{
-					nonFuelItems.Add(item);
-				}
-			}
-
-			// Clamp to max fuel
-			if (totalFuel > component.m_maxFuel)
-			{
-				totalFuel = (int)component.m_maxFuel;
-			}
-
-			// Update fireplace fuel
-			component.m_nview.GetZDO().Set(ZDOVars.s_fuel, (float)totalFuel);
-			component.UpdateState();
-
-			// Drop any non-fuel items
-			foreach (var nonFuelItem in nonFuelItems)
-			{
-				ItemDrop.DropItem(nonFuelItem, 0, component.transform.position, component.transform.rotation);
-			}
-
-			// Clean up and rebuild inventory to match actual fuel
-			m_container.m_inventory.RemoveAll();
-			if (totalFuel > 0)
-			{
-				ItemDrop itemDropPrefab = component.m_fuelItem.gameObject.GetComponent<ItemDrop>();
-				ItemDrop.ItemData itemData = itemDropPrefab.m_itemData.Clone();
-				itemData.m_dropPrefab = itemDropPrefab.gameObject;
-				itemData.m_stack = totalFuel;
-				m_container.m_inventory.AddItem(itemData);
-			}
-
-			SaveInventoryToZDO();
-		}
-
-		private bool IsFuelItem(ItemDrop.ItemData item)
-		{
-			// Comprehensive null checks for the entire chain
-			if (item == null) return false;
-			if (component == null) return false;
-			if (component.m_fuelItem == null) return false;
-			if (component.m_fuelItem.m_itemData == null) return false;
-			if (component.m_fuelItem.m_itemData.m_dropPrefab == null) return false;
-			if (item.m_dropPrefab == null) return false;
-
-			return item.m_dropPrefab.name == component.m_fuelItem.m_itemData.m_dropPrefab.name;
-		}
 
 		#endregion
 
@@ -209,7 +81,7 @@ namespace ItemConduit.Extensions
 		}
 		public bool CanAddItem(ItemDrop.ItemData item)
 		{
-			if (item == null || component) return false;
+			if (item == null || component == null) return false;
 
 			return item.m_dropPrefab.name == component.m_fuelItem.m_itemData.m_dropPrefab.name;
 
@@ -230,19 +102,27 @@ namespace ItemConduit.Extensions
 			int addableAmount = CalculateAcceptCapacity(item, actualAmount);
 			if (actualAmount <= 0) return false;
 
-			component.m_nview.GetZDO().Set(ZDOVars.s_fuel + addableAmount, 0f);
+			float currentFuel = component.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel, 0f);
+			component.m_nview.GetZDO().Set(ZDOVars.s_fuel, currentFuel + addableAmount);
 			component.m_fuelAddedEffects.Create(base.transform.position, base.transform.rotation, null, 1f, -1);
 			component.UpdateState();
 			return true;
 		}
 		public bool RemoveItem(ItemDrop.ItemData item, int amount = 1)
 		{
-			if (item == null || m_container == null) return false;
+			if (item == null || m_container == null || component == null) return false;
 			int actualAmount = amount > 0 ? amount : item.m_stack;
-			if(actualAmount <= 0) return false;
+			if (actualAmount <= 0) return false;
 
-			if(m_container.m_inventory.RemoveItem(item, amount))
+			if (m_container.m_inventory.RemoveItem(item, actualAmount))
 			{
+				// Update fireplace fuel when removing from inventory
+				float currentFuel = component.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel, 0f);
+				float newFuel = Mathf.Max(0, currentFuel - actualAmount);
+				component.m_nview.GetZDO().Set(ZDOVars.s_fuel, newFuel);
+				component.UpdateState();
+
+				lastFuel = (int)newFuel;
 				SaveInventoryToZDO();
 				return true;
 			}
