@@ -18,7 +18,7 @@ namespace ItemConduit.Extensions
 	{
 		private CookingStation cookingStation;
 		public Container m_container;
-
+		public List<int> freeSlotList = new List<int>();
 		#region Unity Life Cycle
 		protected override void Awake()
 		{
@@ -49,7 +49,7 @@ namespace ItemConduit.Extensions
 
 			SetupContainer();
 			LoadInventoryFromZDO();
-
+			GetFreeSlotList();
 		}
 
 		protected override void OnDestroy()
@@ -107,6 +107,11 @@ namespace ItemConduit.Extensions
 		#endregion
 
 		#region Connection Management
+		public override void OnNodeConnected(BaseNode node)
+		{
+			GetFreeSlotList();
+			base.OnNodeConnected(node);
+		}
 		public override void OnNodeDisconnected(BaseNode node)
 		{
 			base.OnNodeDisconnected(node);
@@ -125,34 +130,130 @@ namespace ItemConduit.Extensions
 
 		#region IContainerInterface Implementation
 
+		public void GetFreeSlotList()
+		{
+			if (m_container == null) return;
+
+			for (int i = 0; i < cookingStation.m_slots.Length; i++)
+			{
+				CookingStation.Status status;
+				string itemName;
+				float cookedTime;
+				cookingStation.GetSlot(i, out itemName, out cookedTime, out status);
+				if(string.IsNullOrEmpty(itemName))
+				{
+					freeSlotList.Add(i);
+				}
+			}
+		}
+
 		public int CalculateAcceptCapacity(ItemDrop.ItemData item, int amount)
 		{
-			return 0;
+			if (item == null) return 0;
+			if (freeSlotList.Count == 0) return 0;
+			if(amount <= 0 && item.m_stack <= 0) return 0;
+
+			if(amount >0) item.m_stack = amount;
+
+			int acceptableAmount = 0;
+
+			acceptableAmount = Math.Min(item.m_stack, freeSlotList.Count);
+
+			return acceptableAmount;
 		}
 
 		public bool CanAddItem(ItemDrop.ItemData item)
 		{
-			return false;
+			if (item == null) return false;
+			if (!cookingStation.IsItemAllowed(item)) return false;
+
+			return true;
 		}
 
 		public bool CanRemoveItem(ItemDrop.ItemData item) 
 		{
+			if (item == null) return false;
+			if (!IsItemAllowedRemove(item)) return false;
+
+			return true;
+		}
+
+		private bool IsItemAllowedRemove(ItemDrop.ItemData item)
+		{
+			if (item == null) return false;
+			if(cookingStation == null) return false;
+
+			string itemName = item.m_dropPrefab.name;
+
+			string burntItemName = cookingStation?.m_overCookedItem?.m_itemData?.m_dropPrefab?.name;
+			if (burntItemName != null && itemName == burntItemName)
+			{
+				return true;
+			}
+
+			using (List<CookingStation.ItemConversion>.Enumerator enumerator = cookingStation.m_conversion.GetEnumerator())
+			{
+				while (enumerator.MoveNext())
+				{
+					if (enumerator.Current.m_to.gameObject.name == itemName)
+					{
+						return true;
+					}
+				}
+			}
+
 			return false;
 		}
 
 		public bool AddItem(ItemDrop.ItemData item, int amount = 0)
 		{
-			return false;
+			if(!CanAddItem(item)) return false;
+			int addableAmount = CalculateAcceptCapacity(item, amount);
+			if (addableAmount <= 0) return false;
+
+
+			for (int i = 0; i < addableAmount; i++)
+			{
+				int slotNumber = freeSlotList[i];
+				cookingStation.SetSlot(slotNumber, item.m_dropPrefab.name, 0f, CookingStation.Status.NotDone);
+				freeSlotList.RemoveAt(i);
+			}
+
+			return true;
 		}
 
 		public bool AddToInventory(ItemData item, int amount = 0)
 		{
+			if (item == null) return false;
+			if (amount <= 0 && item.m_stack <= 0) return false;
+			if (!m_container.m_inventory.CanAddItem(item)) return false;
+
+			if (amount > 0 && item.m_stack != amount)
+			{
+				item.m_stack = amount;
+			}
+
+			if (m_container.m_inventory.CanAddItem(item))
+			{
+				SaveInventoryToZDO();
+				return true;
+			}
+
 			return false;
 		}
 
 		public bool RemoveItem(ItemDrop.ItemData item, int amount = 0) 
 		{
-			return false;		
+			if (item == null) return false;
+			if (amount <= 0 && item.m_stack <= 0) return false;
+
+			if (m_container.m_inventory.RemoveItem(item, amount))
+			{
+				SaveInventoryToZDO();
+				return true;
+			}
+
+			return false;
 		}
 
 		public Inventory GetInventory() { return m_container?.m_inventory; }
