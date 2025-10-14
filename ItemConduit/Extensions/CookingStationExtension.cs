@@ -14,94 +14,16 @@ using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Extensions
 {
-	public class CookingStationExtension : BaseExtension, IContainerInterface
+	public class CookingStationExtension : BaseExtension<CookingStation>, IContainerInterface
 	{
-		private CookingStation cookingStation;
-		public Container m_container;
 		public HashSet<int> freeSlotList = new HashSet<int>();
 		#region Unity Life Cycle
 		protected override void Awake()
 		{
+			m_width = 3;
+			m_height = 2;
 			base.Awake();
-
-			cookingStation = GetComponentInParent<CookingStation>();
-			if (cookingStation == null)
-			{
-				cookingStation = GetComponent<CookingStation>();
-				if (cookingStation == null) cookingStation = GetComponentInChildren<CookingStation>();
-			}
-
-			if (cookingStation == null)
-			{
-				Logger.LogError($"[ItemConduit] SmelteryExtension could not find Cooking Station component!");
-				return;
-			}
-
-			ZNetView znetView = cookingStation.GetComponent<ZNetView>();
-			if (znetView == null || !znetView.IsValid())
-			{
-				if (DebugConfig.showDebug.Value)
-				{
-					Logger.LogInfo($"[ItemConduit] Skipping container creation - invalid ZNetView");
-				}
-				return;
-			}
-
-			SetupContainer();
-			LoadInventoryFromZDO();
 			GetFreeSlotList();
-		}
-
-		protected override void OnDestroy()
-		{
-			SaveInventoryToZDO();
-			base.OnDestroy();
-		}
-		#endregion
-
-		#region Container
-
-		private void SetupContainer()
-		{
-			m_container = cookingStation.gameObject.AddComponent<Container>();
-			m_container.m_width = 3;
-			m_container.m_height = 2;
-			m_container.m_inventory = new Inventory("Cooking Station Output", null, 3, 2);
-			m_container.name = "Cooking Station Output";
-		}
-
-		private void SaveInventoryToZDO()
-		{
-			if (cookingStation == null || m_container == null) return;
-
-			ZNetView znetView = cookingStation.GetComponent<ZNetView>();
-			if (znetView == null || !znetView.IsValid()) return;
-
-			ZDO zdo = znetView.GetZDO();
-			if (zdo == null) return;
-
-			// Save inventory as a ZPackage
-			ZPackage pkg = new ZPackage();
-			m_container.m_inventory.Save(pkg);
-			zdo.Set("ItemConduit_Inventory", pkg.GetBase64());
-		}
-
-		private void LoadInventoryFromZDO()
-		{
-			if (cookingStation == null || m_container == null) return;
-
-			ZNetView znetView = cookingStation.GetComponent<ZNetView>();
-			if (znetView == null || !znetView.IsValid()) return;
-
-			ZDO zdo = znetView.GetZDO();
-			if (zdo == null) return;
-
-			string data = zdo.GetString("ItemConduit_Inventory", "");
-			if (!string.IsNullOrEmpty(data))
-			{
-				ZPackage pkg = new ZPackage(data);
-				m_container.m_inventory.Load(pkg);
-			}
 		}
 
 		#endregion
@@ -112,24 +34,24 @@ namespace ItemConduit.Extensions
 			base.OnNodeConnected(node);
 			GetFreeSlotList();
 			
-			if (cookingStation != null && IsConnected)
+			if (component != null && IsConnected)
 			{
-				cookingStation.UpdateCooking();
+				component.UpdateCooking();
 			}
 		}
 		public override void OnNodeDisconnected(BaseNode node)
 		{
-			base.OnNodeDisconnected(node);
+			
 			List<ItemDrop.ItemData> itemDatas = m_container.m_inventory.GetAllItems();
 			if (!IsConnected && itemDatas.Count > 0)
 			{
 				foreach(var item in itemDatas)
 				{
-					ItemDrop.DropItem(item, 0, cookingStation.m_slots[0].position, cookingStation.m_slots[0].rotation);
+					ItemDrop.DropItem(item, 0, component.m_slots[0].position, component.m_slots[0].rotation);
 				}
 				m_container.m_inventory.RemoveAll();
-				SaveInventoryToZDO();
 			}
+			base.OnNodeDisconnected(node);
 		}
 		#endregion
 
@@ -139,12 +61,12 @@ namespace ItemConduit.Extensions
 		{
 			if (m_container == null) return;
 
-			for (int i = 0; i < cookingStation.m_slots.Length; i++)
+			for (int i = 0; i < component.m_slots.Length; i++)
 			{
 				CookingStation.Status status;
 				string itemName;
 				float cookedTime;
-				cookingStation.GetSlot(i, out itemName, out cookedTime, out status);
+				component.GetSlot(i, out itemName, out cookedTime, out status);
 				if(string.IsNullOrEmpty(itemName))
 				{
 					freeSlotList.Add(i);
@@ -171,7 +93,7 @@ namespace ItemConduit.Extensions
 		public bool CanAddItem(ItemDrop.ItemData item)
 		{
 			if (item == null) return false;
-			if (!cookingStation.IsItemAllowed(item)) return false;
+			if (!component.IsItemAllowed(item)) return false;
 
 			return true;
 		}
@@ -187,17 +109,17 @@ namespace ItemConduit.Extensions
 		private bool IsItemAllowedRemove(ItemDrop.ItemData item)
 		{
 			if (item == null) return false;
-			if(cookingStation == null) return false;
+			if(component == null) return false;
 
 			string itemName = item.m_dropPrefab.name;
 
-			string burntItemName = cookingStation?.m_overCookedItem?.m_itemData?.m_dropPrefab?.name;
+			string burntItemName = component?.m_overCookedItem?.m_itemData?.m_dropPrefab?.name;
 			if (burntItemName != null && itemName == burntItemName)
 			{
 				return true;
 			}
 
-			using (List<CookingStation.ItemConversion>.Enumerator enumerator = cookingStation.m_conversion.GetEnumerator())
+			using (List<CookingStation.ItemConversion>.Enumerator enumerator = component.m_conversion.GetEnumerator())
 			{
 				while (enumerator.MoveNext())
 				{
@@ -228,7 +150,7 @@ namespace ItemConduit.Extensions
 			// Add items to cooking slots
 			foreach (var slotNumber in slotsToUse)
 			{
-				cookingStation.SetSlot(slotNumber, item.m_dropPrefab.name, 0f, CookingStation.Status.NotDone);
+				component.SetSlot(slotNumber, item.m_dropPrefab.name, 0f, CookingStation.Status.NotDone);
 			}
 
 			// Remove used slots from freeSlotList (after iteration)
@@ -277,9 +199,9 @@ namespace ItemConduit.Extensions
 
 		public Inventory GetInventory() { return m_container?.m_inventory; }
 
-		public string GetName() { return cookingStation?.m_name ?? "Cooking Station"; }
+		public string GetName() { return component?.m_name ?? "Cooking Station"; }
 
-		public Vector3 GetTransformPosition() { return cookingStation?.transform.position ?? transform.position; }
+		public Vector3 GetTransformPosition() { return component?.transform.position ?? transform.position; }
 
 
 		#endregion

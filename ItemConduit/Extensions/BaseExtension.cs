@@ -2,6 +2,7 @@
 using ItemConduit.Interfaces;
 using ItemConduit.Nodes;
 using ItemConduit.Utils;
+using Jotunn.Configs;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -14,18 +15,97 @@ namespace ItemConduit.Extensions
 	/// <summary>
 	/// Base class for all container extensions with node notification capabilities
 	/// </summary>
-	public class BaseExtension : MonoBehaviour
+	public class BaseExtension<T> : ExtensionNodeManagement where T : MonoBehaviour
 	{
 		protected ZNetView zNetView;
-		protected HashSet<BaseNode> connectedNodes = new HashSet<BaseNode>();
+		
+		public Container m_container;
+		protected T component;
+		public int m_width = 1;
+		public int m_height = 1;
 
 		public bool IsConnected => connectedNodes.Count > 0;
 
 		protected virtual void Awake()
 		{
-			zNetView = GetComponentInParent<ZNetView>();
+			component = GetComponentInParent<T>();
+			if (component == null)
+			{
+				component = GetComponent<T>();
+				if (component == null)
+				{
+					component = GetComponentInChildren<T>();
+				}
+			}
+
+			if (component == null)
+			{
+				Logger.LogError($"[ItemConduit] Extension could not find {component.GetType().ToString()} component!");
+				return;
+			}
+
+			zNetView = component.GetComponent<ZNetView>();
+			if (zNetView == null || !zNetView.IsValid())
+			{
+				if (DebugConfig.showDebug.Value)
+				{
+					Logger.LogInfo($"[ItemConduit] Skipping container creation - invalid ZNetView");
+				}
+				return;
+			}
+
+			SetupContainer(m_width, m_height);
+			LoadInventoryFromZDO();
 		}
 
+		#region Container
+
+		protected void SetupContainer(int width, int height)
+		{
+			m_container = component.gameObject.AddComponent<Container>();
+			m_container.m_width = width;
+			m_container.m_height = height;
+			m_container.m_inventory = new Inventory($"{component.GetType().ToString()} Output", null, 1, 1);
+			m_container.name = $"{component.GetType().ToString()} Output";
+		}
+
+		public void SaveInventoryToZDO()
+		{
+			if (component == null || m_container == null) return;
+
+			ZNetView znetView = component.GetComponent<ZNetView>();
+			if (znetView == null || !znetView.IsValid()) return;
+
+			ZDO zdo = znetView.GetZDO();
+			if (zdo == null) return;
+
+			// Save inventory as a ZPackage
+			ZPackage pkg = new ZPackage();
+			m_container.m_inventory.Save(pkg);
+			zdo.Set("ItemConduit_Inventory", pkg.GetBase64());
+		}
+
+		public void LoadInventoryFromZDO()
+		{
+			if (component == null || m_container == null) return;
+
+			ZNetView znetView = component.GetComponent<ZNetView>();
+			if (znetView == null || !znetView.IsValid()) return;
+
+			ZDO zdo = znetView.GetZDO();
+			if (zdo == null) return;
+
+			string data = zdo.GetString("ItemConduit_Inventory", "");
+			if (!string.IsNullOrEmpty(data))
+			{
+				ZPackage pkg = new ZPackage(data);
+				m_container.m_inventory.Load(pkg);
+			}
+		}
+
+		#endregion
+
+		#region Unity Life Cycle
 		protected virtual void Start()
 		{
 			// Start detection after a delay to let physics settle
@@ -34,17 +114,38 @@ namespace ItemConduit.Extensions
 
 		protected virtual void OnDestroy()
 		{
+			SaveInventoryToZDO();
 			// Notify all connected nodes that this container is being destroyed
 			NotifyNearbyNodesOnRemoval();
 			connectedNodes.Clear();
 		}
+
+		#endregion
+
+		#region Node Management
+
+		public override void OnNodeDisconnected(BaseNode node)
+		{
+			SaveInventoryToZDO();
+			base.OnNodeDisconnected(node);
+		}
+
+		#endregion
+
+
+	}
+
+	public class ExtensionNodeManagement : MonoBehaviour
+	{
+		protected HashSet<BaseNode> connectedNodes = new HashSet<BaseNode>();
+
 
 		#region Node Detection and Notification
 
 		/// <summary>
 		/// Detect and notify nearby nodes after placement
 		/// </summary>
-		private IEnumerator DelayedNodeDetection()
+		protected IEnumerator DelayedNodeDetection()
 		{
 			// Wait for physics to settle
 			float delay = ContainerEventConfig.containerEventDelay?.Value ?? 0.5f;
@@ -71,7 +172,7 @@ namespace ItemConduit.Extensions
 			}
 
 			// Find all Extract and Insert nodes within range
-			BaseNode[] allNodes = FindObjectsOfType<BaseNode>();
+			BaseNode[] allNodes = FindObjectsByType<BaseNode>(FindObjectsSortMode.None);
 			int nodesNotified = 0;
 
 			foreach (var node in allNodes)
@@ -135,7 +236,7 @@ namespace ItemConduit.Extensions
 			}
 
 			// Also check for any other nodes that might be affected
-			BaseNode[] allNodes = FindObjectsOfType<BaseNode>();
+			BaseNode[] allNodes = FindObjectsByType<BaseNode>(FindObjectsSortMode.None);
 
 			foreach (var node in allNodes)
 			{
@@ -192,6 +293,7 @@ namespace ItemConduit.Extensions
 				{
 					Logger.LogInfo($"[ItemConduit] Node {node.name} disconnected from container. Remaining connected: {connectedNodes.Count}");
 				}
+
 			}
 		}
 

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace ItemConduit.Extensions
 {
-	internal class FirePlaceExtention
+	public class FirePlaceExtention
 	{
 	}
 }

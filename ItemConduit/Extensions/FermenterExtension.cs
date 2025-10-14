@@ -15,52 +15,23 @@ using Logger = Jotunn.Logger;
 
 namespace ItemConduit.Extensions
 {
-	public class FermenterExtension : BaseExtension, IContainerInterface
+	public class FermenterExtension : BaseExtension<Fermenter>, IContainerInterface
 	{
-		private Fermenter fermenter;
-		public Container m_container;
 
 		#region Unity Life Cycle
 
 		protected override void Awake()
 		{
+			m_height = 2;
+			m_width = 3;
 			base.Awake();
-			fermenter = GetComponentInParent<Fermenter>();
-			if (fermenter == null)
-			{
-				fermenter = GetComponent<Fermenter>();
-				if ( fermenter == null)
-				{
-					fermenter = GetComponentInChildren<Fermenter>();
-				}
-			}
-
-			if(fermenter == null)
-			{
-				Logger.LogError($"ItemConduit] FermenterExtension could not find Fermenter component!");
-				return;
-			}
-
-			ZNetView zNetView = fermenter.GetComponent<ZNetView>();
-			if(zNetView == null || !zNetView.IsValid())
-			{
-				if (DebugConfig.showDebug.Value)
-				{
-					Logger.LogInfo($"[ItemConduit] Skipping container creation - invalid ZNetView");
-				}
-				return;
-			}
-
-			SetupContainer();
-			LoadInventoryFromZDO();
-
 		}
 
 		protected void Update()
 		{
-			if (IsConnected && fermenter.GetStatus() == Fermenter.Status.Ready)
+			if (IsConnected && component.GetStatus() == Fermenter.Status.Ready)
 			{
-				Fermenter.ItemConversion itemConversion = fermenter.GetItemConversion(fermenter.GetContent());
+				Fermenter.ItemConversion itemConversion = component.GetItemConversion(component.GetContent());
 				ItemDrop itemDropPrefab = itemConversion.m_to;
 				ItemDrop.ItemData itemData = itemDropPrefab.m_itemData.Clone();
 				itemData.m_dropPrefab = itemDropPrefab.gameObject;
@@ -68,63 +39,11 @@ namespace ItemConduit.Extensions
 
 				if (AddToInventory(itemData))
 				{
-					fermenter.m_nview.GetZDO().Set(ZDOVars.s_content, "");
-					fermenter.m_nview.GetZDO().Set(ZDOVars.s_startTime, 0, false);
+					component.m_nview.GetZDO().Set(ZDOVars.s_content, "");
+					component.m_nview.GetZDO().Set(ZDOVars.s_startTime, 0, false);
 				}
 			}
 			
-		}
-
-		protected override void OnDestroy()
-		{
-			SaveInventoryToZDO();
-			base.OnDestroy();
-		}
-		#endregion
-
-		#region Container
-
-		private void SetupContainer()
-		{
-			m_container = fermenter.gameObject.AddComponent<Container>();
-			m_container.m_width = 3;
-			m_container.m_height = 2;
-			m_container.m_inventory = new Inventory("Fermenter Output", null, 3, 2);
-			m_container.name = "Fermenter Output";
-		}
-
-		public void SaveInventoryToZDO()
-		{
-			if (fermenter == null || m_container == null) return;
-
-			ZNetView znetView = fermenter.GetComponent<ZNetView>();
-			if (znetView == null || !znetView.IsValid()) return;
-
-			ZDO zdo = znetView.GetZDO();
-			if (zdo == null) return;
-
-			// Save inventory as a ZPackage
-			ZPackage pkg = new ZPackage();
-			m_container.m_inventory.Save(pkg);
-			zdo.Set("ItemConduit_Inventory", pkg.GetBase64());
-		}
-
-		public void LoadInventoryFromZDO()
-		{
-			if (fermenter == null || m_container == null) return;
-
-			ZNetView znetView = fermenter.GetComponent<ZNetView>();
-			if (znetView == null || !znetView.IsValid()) return;
-
-			ZDO zdo = znetView.GetZDO();
-			if (zdo == null) return;
-
-			string data = zdo.GetString("ItemConduit_Inventory", "");
-			if (!string.IsNullOrEmpty(data))
-			{
-				ZPackage pkg = new ZPackage(data);
-				m_container.m_inventory.Load(pkg);
-			}
 		}
 
 		#endregion
@@ -133,18 +52,17 @@ namespace ItemConduit.Extensions
 
 		public override void OnNodeDisconnected(BaseNode node)
 		{
-			base.OnNodeDisconnected(node);
+			
 			List<ItemDrop.ItemData> itemDatas = m_container.m_inventory.GetAllItems();
 			if (!IsConnected && itemDatas.Count > 0)
 			{
 				foreach(var item in itemDatas)
 				{
-					ItemDrop.DropItem(item, 0, fermenter.m_outputPoint.position, fermenter.m_outputPoint.rotation);
+					ItemDrop.DropItem(item, 0, component.m_outputPoint.position, component.m_outputPoint.rotation);
 				}
 				m_container.m_inventory.RemoveAll();
-				SaveInventoryToZDO();
 			}
-
+			base.OnNodeDisconnected(node);
 		}
 
 		#endregion
@@ -160,16 +78,16 @@ namespace ItemConduit.Extensions
 
 		public bool CanAddItem(ItemDrop.ItemData item)
 		{
-			if (item == null || fermenter == null || m_container == null) return false;
+			if (item == null || component == null || m_container == null) return false;
 
-			if (fermenter.GetStatus() == Fermenter.Status.Fermenting) return false;
+			if (component.GetStatus() == Fermenter.Status.Fermenting) return false;
 
-			return fermenter.IsItemAllowed(item);
+			return component.IsItemAllowed(item);
 		}
 
 		public bool CanRemoveItem(ItemDrop.ItemData item)
 		{
-			List<Fermenter.ItemConversion> itemConversions = fermenter.m_conversion;
+			List<Fermenter.ItemConversion> itemConversions = component.m_conversion;
 			foreach (var itemConversion in itemConversions)
 			{
 				if(itemConversion.m_to.m_itemData.m_dropPrefab.name == item.m_dropPrefab.name)
@@ -188,7 +106,7 @@ namespace ItemConduit.Extensions
 			int addableAmount = CalculateAcceptCapacity(item, amount);
 			if (addableAmount <= 0) return false;
 
-			fermenter.m_nview.InvokeRPC("RPC_AddItem", new object[] { item.m_dropPrefab.name });
+			component.m_nview.InvokeRPC("RPC_AddItem", new object[] { item.m_dropPrefab.name });
 			return true;
 		}
 
@@ -230,12 +148,12 @@ namespace ItemConduit.Extensions
 
 		public string GetName()
 		{
-			return fermenter?.m_name ?? "Fermenter";
+			return component?.m_name ?? "Fermenter";
 		}
 
 		public Vector3 GetTransformPosition()
 		{
-			return fermenter?.transform.position ?? transform.position;
+			return component?.transform.position ?? transform.position;
 		}
 
 		#endregion

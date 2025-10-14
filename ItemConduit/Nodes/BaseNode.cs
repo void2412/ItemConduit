@@ -258,7 +258,7 @@ namespace ItemConduit.Nodes
 			{
 				if (targetContainer is Component containerComponent)
 				{
-					var extension = containerComponent.GetComponent<BaseExtension>();
+					var extension = containerComponent.GetComponent<ExtensionNodeManagement>();
 					extension?.OnNodeDisconnected(this);
 				}
 				targetContainer = null;
@@ -1126,7 +1126,7 @@ namespace ItemConduit.Nodes
 				// Notify the extension that we're disconnecting
 				if (targetContainer is Component containerComponent)
 				{
-					var extension = containerComponent.GetComponent<BaseExtension>();
+					var extension = containerComponent.GetComponent<ExtensionNodeManagement>();
 					extension?.OnNodeDisconnected(this);
 				}
 

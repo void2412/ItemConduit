@@ -14,10 +14,8 @@ namespace ItemConduit.Extensions
 	/// <summary>
 	/// Extension for Smelter objects with node notification
 	/// </summary>
-	public class SmelteryExtension : BaseExtension, IContainerInterface
+	public class SmelteryExtension : BaseExtension<Smelter>, IContainerInterface
 	{
-		private Smelter smelter;
-		public Container m_container;
 		public OutputSwitch m_outputSwitch;
 		public bool autoOutput;
 		private BoxCollider m_outputCollider;
@@ -28,94 +26,12 @@ namespace ItemConduit.Extensions
 		protected override void Awake()
 		{
 			base.Awake();
-			smelter = GetComponentInParent<Smelter>();
-			if (smelter == null)
-			{
-				smelter = GetComponent<Smelter>();
-				if (smelter == null) smelter = GetComponentInChildren<Smelter>();
-			}
-
-			if(smelter == null)
-			{
-				Logger.LogError($"[ItemConduit] SmelteryExtension could not find Smelter component!");
-				return;
-			}
-
-			ZNetView znetView = smelter.GetComponent<ZNetView>();
-			if (znetView == null || !znetView.IsValid())
-			{
-				if (DebugConfig.showDebug.Value)
-				{
-					Logger.LogInfo($"[ItemConduit] Skipping container creation - invalid ZNetView");
-				}
-				return;
-			}
-
-			SetupContainer();
-			LoadInventoryFromZDO();
 			SetupOutputSwitch();
-
-
-			//m_inventory = new Inventory("Smelter Output", null, 1, 1);
-			//base.InvokeRepeating("CheckForChanges", 0f, 1f);
 		}
 
 		protected void Update()
 		{
 			if (m_container != null) m_outputCollider.enabled = this.IsConnected;
-		}
-
-		protected override void OnDestroy()
-		{
-			SaveInventoryToZDO();
-			base.OnDestroy();
-		}
-
-		#endregion
-
-		#region Container
-
-		private void SetupContainer()
-		{
-			m_container = smelter.gameObject.AddComponent<Container>();
-			m_container.m_width = 1;
-			m_container .m_height = 1;
-			m_container.m_inventory = new Inventory("Smelter Output", null, 1, 1);
-			m_container.name = "Smelter Output";
-		}
-
-		private void SaveInventoryToZDO()
-		{
-			if (smelter == null || m_container == null) return;
-
-			ZNetView znetView = smelter.GetComponent<ZNetView>();
-			if (znetView == null || !znetView.IsValid()) return;
-
-			ZDO zdo = znetView.GetZDO();
-			if (zdo == null) return;
-
-			// Save inventory as a ZPackage
-			ZPackage pkg = new ZPackage();
-			m_container.m_inventory.Save(pkg);
-			zdo.Set("ItemConduit_Inventory", pkg.GetBase64());
-		}
-
-		private void LoadInventoryFromZDO()
-		{
-			if (smelter == null || m_container == null) return;
-
-			ZNetView znetView = smelter.GetComponent<ZNetView>();
-			if (znetView == null || !znetView.IsValid()) return;
-
-			ZDO zdo = znetView.GetZDO();
-			if (zdo == null) return;
-
-			string data = zdo.GetString("ItemConduit_Inventory", "");
-			if (!string.IsNullOrEmpty(data))
-			{
-				ZPackage pkg = new ZPackage(data);
-				m_container.m_inventory.Load(pkg);
-			}
 		}
 
 		#endregion
@@ -125,15 +41,15 @@ namespace ItemConduit.Extensions
 		{
 			GameObject switchObject = new GameObject("OutputSwitch");
 
-			if (smelter.m_outputPoint != null)
+			if (component.m_outputPoint != null)
 			{
-				switchObject.transform.position = smelter.m_outputPoint.position + new Vector3(0, 0, 0);
-				switchObject.transform.rotation = smelter.m_outputPoint.rotation;
-				switchObject.transform.SetParent(smelter.transform);
+				switchObject.transform.position = component.m_outputPoint.position + new Vector3(0, 0, 0);
+				switchObject.transform.rotation = component.m_outputPoint.rotation;
+				switchObject.transform.SetParent(component.transform);
 			}
 			else
 			{
-				switchObject.transform.SetParent(smelter.transform);
+				switchObject.transform.SetParent(component.transform);
 				switchObject.transform.localPosition = new Vector3(0, 1f, 1f); // Default value if m_outputPoint = null
 			}
 
@@ -179,19 +95,17 @@ namespace ItemConduit.Extensions
 
 		public override void OnNodeDisconnected(BaseNode node)
 		{
-			base.OnNodeDisconnected(node);
-
 			// If no more nodes are connected and we have processed ore, spawn them
 			if (!IsConnected && m_container.m_inventory.GetAllItems().Count > 0)
 			{
 				foreach (var item in m_container.m_inventory.GetAllItems())
 				{
-					ItemDrop.DropItem(item, 0, smelter.m_outputPoint.transform.position, smelter.m_outputPoint.transform.rotation);
+					ItemDrop.DropItem(item, 0, component.m_outputPoint.transform.position, component.m_outputPoint.transform.rotation);
 				}
 				m_container.m_inventory.RemoveAll();
 				blocking = false;
-				SaveInventoryToZDO();
 			}
+			base.OnNodeDisconnected(node);
 		}
 
 		#endregion
@@ -200,7 +114,7 @@ namespace ItemConduit.Extensions
 
 		public int CalculateAcceptCapacity(ItemDrop.ItemData sourceItem, int desiredAmount)
 		{
-			if (sourceItem == null || desiredAmount <= 0 || smelter == null) return 0;
+			if (sourceItem == null || desiredAmount <= 0 || component == null) return 0;
 			if (!CanAddItem(sourceItem))
 			{
 				if (DebugConfig.showDebug.Value)
@@ -215,8 +129,8 @@ namespace ItemConduit.Extensions
 			int acceptableAmount = 0;
 			if (type == "Fuel")
 			{
-				var maxFuel = smelter.m_maxFuel;
-				var currentFuel = smelter.GetFuel();
+				var maxFuel = component.m_maxFuel;
+				var currentFuel = component.GetFuel();
 				acceptableAmount = (int)(maxFuel - currentFuel);
 
 				if (DebugConfig.showDebug.Value)
@@ -224,10 +138,10 @@ namespace ItemConduit.Extensions
 					Logger.LogInfo($"[SmelteryExtension] Fuel capacity: {currentFuel}/{maxFuel}, can accept: {acceptableAmount}");
 				}
 			}
-			else if (type == "Ore" && smelter.m_maxOre > 0)
+			else if (type == "Ore" && component.m_maxOre > 0)
 			{
-				var maxOre = smelter.m_maxOre;
-				var currentOreSize = smelter.GetQueueSize();
+				var maxOre = component.m_maxOre;
+				var currentOreSize = component.GetQueueSize();
 				acceptableAmount = maxOre - currentOreSize;
 			}
 
@@ -238,7 +152,7 @@ namespace ItemConduit.Extensions
 
 		public bool CanAddItem(ItemDrop.ItemData item)
 		{
-			if (smelter == null || item == null) return false;
+			if (component == null || item == null) return false;
 
 			// Debug logging to help diagnose
 			if (DebugConfig.showDebug.Value)
@@ -252,9 +166,9 @@ namespace ItemConduit.Extensions
 				if (type == "Invalid")
 				{
 					Logger.LogInfo($"[SmelteryExtension] Item rejected - not valid fuel or ore");
-					if (smelter.m_fuelItem != null)
+					if (component.m_fuelItem != null)
 					{
-						Logger.LogInfo($"[SmelteryExtension] Expected fuel: {smelter.m_fuelItem.m_itemData.m_shared.m_name}");
+						Logger.LogInfo($"[SmelteryExtension] Expected fuel: {component.m_fuelItem.m_itemData.m_shared.m_name}");
 					}
 				}
 			}
@@ -265,7 +179,7 @@ namespace ItemConduit.Extensions
 
 		public bool CanRemoveItem(ItemDrop.ItemData item)
 		{
-			List<Smelter.ItemConversion> itemConversions = smelter.m_conversion;
+			List<Smelter.ItemConversion> itemConversions = component.m_conversion;
 			foreach (var itemConversion in itemConversions) {
 				if (itemConversion.m_to.m_itemData.m_dropPrefab.name == item.m_dropPrefab.name)
 				{
@@ -317,18 +231,18 @@ namespace ItemConduit.Extensions
 		{
 			for (int i = 0; i < amount; i++) 
 			{
-				float currentFuel = smelter.GetFuel();
-				smelter.SetFuel(currentFuel + 1);
+				float currentFuel = component.GetFuel();
+				component.SetFuel(currentFuel + 1);
 			}
 		}
 
 		public void AddOre(string name,int amount)
 		{
-			if(!smelter.IsItemAllowed(name)) return;
+			if(!component.IsItemAllowed(name)) return;
 
 			for (int i = 0;i < amount; i++)
 			{
-				smelter.QueueOre(name);
+				component.QueueOre(name);
 			}
 		}
 
@@ -371,30 +285,30 @@ namespace ItemConduit.Extensions
 
 		public string GetName()
 		{
-			return smelter?.m_name ?? "Smelter";
+			return component?.m_name ?? "Smelter";
 		}
 
 		public Vector3 GetTransformPosition()
 		{
-			return smelter?.transform.position ?? transform.position;
+			return component?.transform.position ?? transform.position;
 		}
 
 		private string ItemType(ItemDrop.ItemData item)
 		{
-			if (item == null || smelter == null) return "Invalid";
+			if (item == null || component == null) return "Invalid";
 
 			// Use the smelter's built-in IsItemAllowed method for ores
 			string itemName = item.m_dropPrefab?.name ?? "";
-			if (!string.IsNullOrEmpty(itemName) && smelter.IsItemAllowed(itemName))
+			if (!string.IsNullOrEmpty(itemName) && component.IsItemAllowed(itemName))
 			{
 				return "Ore";
 			}
 
 			// Check if it's fuel - compare using shared name which is more reliable
-			if (smelter.m_fuelItem != null &&
-				smelter.m_fuelItem.m_itemData != null &&
+			if (component.m_fuelItem != null &&
+				component.m_fuelItem.m_itemData != null &&
 				item.m_shared != null &&
-				smelter.m_fuelItem.m_itemData.m_shared.m_name == item.m_shared.m_name)
+				component.m_fuelItem.m_itemData.m_shared.m_name == item.m_shared.m_name)
 			{
 				return "Fuel";
 			}

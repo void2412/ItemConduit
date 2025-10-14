@@ -110,7 +110,7 @@ namespace ItemConduit.Nodes
 			// Disconnect from container
 			if (targetContainer != null && targetContainer is Component component)
 			{
-				var extension = component.GetComponent<BaseExtension>();
+				var extension = component.GetComponent<ExtensionNodeManagement>();
 				extension?.OnNodeDisconnected(this);
 			}
 			base.OnDestroy();
@@ -135,14 +135,14 @@ namespace ItemConduit.Nodes
 				// Disconnect from previous container
 				if (previousContainer != null && previousContainer is Component prevComponent)
 				{
-					var prevExtension = prevComponent.GetComponent<BaseExtension>();
+					var prevExtension = prevComponent.GetComponent<ExtensionNodeManagement>();
 					prevExtension?.OnNodeDisconnected(this);
 				}
 
 				// Connect to new container
 				if (targetContainer != null && targetContainer is Component newComponent)
 				{
-					var newExtension = newComponent.GetComponent<BaseExtension>();
+					var newExtension = newComponent.GetComponent<ExtensionNodeManagement>();
 					newExtension?.OnNodeConnected(this);
 				}
 			}

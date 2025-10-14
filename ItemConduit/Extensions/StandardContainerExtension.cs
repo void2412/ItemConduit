@@ -7,13 +7,12 @@ namespace ItemConduit.Extensions
 	/// <summary>
 	/// Extension for standard Container objects with node notification
 	/// </summary>
-	public class StandardContainerExtension : BaseExtension, IContainerInterface
+	public class StandardContainerExtension : BaseExtension<Container>, IContainerInterface
 	{
 		private Container container;
 
 		protected override void Awake()
 		{
-			base.Awake();
 			container = GetComponent<Container>();
 		}
 

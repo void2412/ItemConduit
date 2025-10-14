@@ -115,7 +115,7 @@ namespace ItemConduit.Patches
 
 			private static void UpdateAllNodeVisualizations()
 			{
-				var allNodes = UnityEngine.Object.FindObjectsOfType<BaseNode>();
+				var allNodes = UnityEngine.Object.FindObjectsByType<BaseNode>(FindObjectsSortMode.None);
 				foreach (var node in allNodes)
 				{
 					if (node.TryGetComponent<BoundsVisualizer>(out var viz))
