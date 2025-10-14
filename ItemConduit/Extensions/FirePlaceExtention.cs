@@ -14,23 +14,143 @@ namespace ItemConduit.Extensions
 	public class FirePlaceExtention : BaseExtension<Fireplace>, IContainerInterface
 	{
 		private int lastFuel = 0;
+		private int lastInventoryItemCount = 0;
+		private int lastInventoryStack = 0;
 
 		#region Unity Life Cycle
 
 		protected void Update()
 		{
 			if (!IsConnected) return;
+
 			float currentFuel = component.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel, 0f);
-			if ((int)currentFuel - lastFuel != 0)
+
+			// Sync fireplace fuel TO inventory (existing logic)
+			if ((int)currentFuel != lastFuel)
+			{
+				SyncFuelToInventory((int)currentFuel);
+				lastFuel = (int)currentFuel;
+			}
+
+			// NEW: Sync inventory changes BACK to fireplace fuel
+			SyncInventoryToFuel();
+		}
+
+		private void SyncFuelToInventory(int fuelAmount)
+		{
+			if (m_container == null || component.m_fuelItem == null) return;
+
+			ItemDrop itemDropPrefab = component.m_fuelItem.gameObject.GetComponent<ItemDrop>();
+			ItemDrop.ItemData itemData = itemDropPrefab.m_itemData.Clone();
+			itemData.m_dropPrefab = itemDropPrefab.gameObject;
+			itemData.m_stack = fuelAmount;
+
+			m_container.m_inventory.RemoveAll();
+			m_container.m_inventory.AddItem(itemData);
+
+			// Update tracking variables
+			lastInventoryItemCount = m_container.m_inventory.GetAllItems().Count;
+			lastInventoryStack = fuelAmount;
+		}
+
+		private void SyncInventoryToFuel()
+		{
+			if (m_container == null || m_container.m_inventory == null) return;
+
+			List<ItemDrop.ItemData> items = m_container.m_inventory.GetAllItems();
+			int currentItemCount = items.Count;
+
+			// Check if inventory changed (item added/removed or stack size changed)
+			bool inventoryChanged = false;
+			int totalFuelInInventory = 0;
+
+			foreach (var item in items)
+			{
+				if (item != null && IsFuelItem(item))
+				{
+					totalFuelInInventory += item.m_stack;
+				}
+			}
+
+			// Detect if inventory changed
+			if (currentItemCount != lastInventoryItemCount || totalFuelInInventory != lastInventoryStack)
+			{
+				inventoryChanged = true;
+			}
+
+			if (inventoryChanged)
+			{
+				// Update fireplace fuel based on inventory
+				UpdateFireplaceFuelFromInventory(items);
+
+				// Update tracking
+				lastInventoryItemCount = currentItemCount;
+				lastInventoryStack = totalFuelInInventory;
+				lastFuel = totalFuelInInventory;
+			}
+		}
+
+		private void UpdateFireplaceFuelFromInventory(List<ItemDrop.ItemData> items)
+		{
+			if (component == null) return;
+
+			int totalFuel = 0;
+			List<ItemDrop.ItemData> nonFuelItems = new List<ItemDrop.ItemData>();
+
+			// Calculate total fuel and identify non-fuel items
+			foreach (var item in items)
+			{
+				if (item != null && IsFuelItem(item))
+				{
+					totalFuel += item.m_stack;
+				}
+				else if (item != null)
+				{
+					nonFuelItems.Add(item);
+				}
+			}
+
+			// Clamp to max fuel
+			if (totalFuel > component.m_maxFuel)
+			{
+				totalFuel = (int)component.m_maxFuel;
+			}
+
+			// Update fireplace fuel
+			component.m_nview.GetZDO().Set(ZDOVars.s_fuel, (float)totalFuel);
+			component.UpdateState();
+
+			// Drop any non-fuel items
+			foreach (var nonFuelItem in nonFuelItems)
+			{
+				ItemDrop.DropItem(nonFuelItem, 0, component.transform.position, component.transform.rotation);
+			}
+
+			// Clean up and rebuild inventory to match actual fuel
+			m_container.m_inventory.RemoveAll();
+			if (totalFuel > 0)
 			{
 				ItemDrop itemDropPrefab = component.m_fuelItem.gameObject.GetComponent<ItemDrop>();
 				ItemDrop.ItemData itemData = itemDropPrefab.m_itemData.Clone();
 				itemData.m_dropPrefab = itemDropPrefab.gameObject;
-				itemData.m_stack = Mathf.FloorToInt(currentFuel);
-				m_container.m_inventory.RemoveAll();
+				itemData.m_stack = totalFuel;
 				m_container.m_inventory.AddItem(itemData);
-				lastFuel = (int)currentFuel;
 			}
+
+			SaveInventoryToZDO();
+		}
+
+		private bool IsFuelItem(ItemDrop.ItemData item)
+		{
+			// Comprehensive null checks for the entire chain
+			if (item == null) return false;
+			if (component == null) return false;
+			if (component.m_fuelItem == null) return false;
+			if (component.m_fuelItem.m_itemData == null) return false;
+			if (component.m_fuelItem.m_itemData.m_dropPrefab == null) return false;
+			if (item.m_dropPrefab == null) return false;
+
+			return item.m_dropPrefab.name == component.m_fuelItem.m_itemData.m_dropPrefab.name;
 		}
 
 		#endregion

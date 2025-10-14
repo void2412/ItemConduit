@@ -55,7 +55,7 @@ namespace ItemConduit.Patches
 				if (extension == null || !extension.IsConnected) return;
 
 				// Always show the Shift+E option when connected
-				__result += Localization.instance.Localize("\n[<color=yellow><b>Shift + $KEY_Use</b></color>] Open Output Inventory");
+				__result += Localization.instance.Localize("\n[<color=yellow><b>Shift + $KEY_Use</b></color>] Open Inventory");
 			}
 		}
 	}
