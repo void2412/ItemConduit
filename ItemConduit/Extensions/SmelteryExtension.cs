@@ -306,9 +306,8 @@ namespace ItemConduit.Extensions
 
 			// Check if it's fuel - compare using shared name which is more reliable
 			if (component.m_fuelItem != null &&
-				component.m_fuelItem.m_itemData != null &&
-				item.m_shared != null &&
-				component.m_fuelItem.m_itemData.m_shared.m_name == item.m_shared.m_name)
+				component.m_fuelItem.gameObject != null &&
+				component.m_fuelItem.gameObject.name == item.m_dropPrefab.name)
 			{
 				return "Fuel";
 			}

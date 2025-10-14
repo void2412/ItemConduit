@@ -20,42 +20,6 @@ namespace ItemConduit.Extensions
 
 		#endregion
 
-		#region Connection Manament
-
-		public override void OnNodeDisconnected(BaseNode node)
-		{
-			List<ItemDrop.ItemData> itemDatas = m_container.m_inventory.GetAllItems();
-			if (!IsConnected && itemDatas.Count > 0)
-			{
-				foreach (ItemDrop.ItemData itemData in itemDatas) 
-				{
-					bool isFuel = false;
-
-					if (itemData.m_dropPrefab != null && component.m_fuelItem != null)
-					{
-						isFuel = itemData.m_dropPrefab.name == component.m_fuelItem.gameObject.name;
-					}
-
-					if (isFuel) 
-					{
-						if (component == null || m_container == null) return;
-
-						component.m_nview?.GetZDO()?.Set(ZDOVars.s_fuel, itemData.m_stack);
-					}
-					else
-					{
-						if (component == null || m_container == null) return;
-						ItemDrop.DropItem(itemData, 0, component.transform.position, component.transform.rotation);
-					}
-				}
-
-				m_container.m_inventory.RemoveAll();
-			}
-
-			base.OnNodeDisconnected(node);
-		}
-		#endregion
-
 		#region IContainerInterface Implementation
 		public int CalculateAcceptCapacity(ItemDrop.ItemData sourceItem, int desiredAmount)
 		{
@@ -69,14 +33,14 @@ namespace ItemConduit.Extensions
 
 			int addableAmount = (int)(maxFuel - currentFuel);
 			if (addableAmount < 0) addableAmount = 0;
-			return addableAmount;
+			return Mathf.Min(addableAmount, actualAmount);
 
 		}
 		public bool CanAddItem(ItemDrop.ItemData item)
 		{
 			if (item == null || component == null) return false;
 
-			return item?.m_dropPrefab?.name == component?.m_fuelItem?.m_itemData?.m_dropPrefab?.name;
+			return item?.m_dropPrefab?.name == component?.m_fuelItem?.gameObject?.name;
 
 		}
 		public bool CanRemoveItem(ItemDrop.ItemData item)
@@ -93,7 +57,7 @@ namespace ItemConduit.Extensions
 			if (actualAmount <= 0) return false;
 
 			int addableAmount = CalculateAcceptCapacity(item, actualAmount);
-			if (actualAmount <= 0) return false;
+			if (addableAmount <= 0) return false;
 
 			float currentFuel = component.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel, 0f);
 			component.m_nview.GetZDO().Set(ZDOVars.s_fuel, currentFuel + addableAmount);
