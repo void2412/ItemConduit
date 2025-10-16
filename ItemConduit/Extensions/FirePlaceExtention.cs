@@ -29,8 +29,9 @@ namespace ItemConduit.Extensions
 
 		protected override void Start()
 		{
-			base.Start();
+			
 			EnsureContainerInitialized();
+			base.Start();
 		}
 
 		#endregion
@@ -120,7 +121,7 @@ namespace ItemConduit.Extensions
 				m_container.m_inventory.RemoveItem(itemData,delta);
 			}
 			else if (delta < 0) {
-
+				itemData.m_stack = Math.Abs(delta);
 				m_container.m_inventory.AddItem(itemData);
 			}
 
@@ -269,10 +270,10 @@ namespace ItemConduit.Extensions
 			if (item == null || component == null) return false;
 			if (!IsFuelItem(item)) return false;
 
-			int actualAmount = amount > 0 ? amount : item.m_stack;
+			if (amount <= 0) return false;
 
 			// Just remove from inventory - OnItemRemoved will handle sync automatically!
-			return m_container.m_inventory.RemoveItem(item, actualAmount);
+			return m_container.m_inventory.RemoveItem(item, amount);
 		}
 		public Inventory GetInventory()
 		{

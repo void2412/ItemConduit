@@ -21,7 +21,7 @@ namespace ItemConduit.Extensions
 		protected ZNetView zNetView;
 		
 		public Container m_container;
-		protected T component;
+		public T component;
 		public int m_width = 1;
 		public int m_height = 1;
 

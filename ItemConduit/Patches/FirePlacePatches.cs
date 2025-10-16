@@ -2,10 +2,12 @@
 using ItemConduit.Extensions;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using UnityEngine;
+using static TMPro.SpriteAssetUtilities.TexturePacker_JsonArray;
 
 namespace ItemConduit.Patches
 {
@@ -26,8 +28,7 @@ namespace ItemConduit.Patches
 		[HarmonyPatch(typeof(Fireplace), "UpdateFireplace")]
 		public static class Fireplace_UpdateFireplace_Patch
 		{
-			private static float lastSyncTime = 0f;
-			private const float SYNC_INTERVAL = 0.1f; // Sync every 1 second to avoid spam
+			private static int lastFuelInt = 0;
 
 			private static void Postfix(Fireplace __instance)
 			{
@@ -35,13 +36,15 @@ namespace ItemConduit.Patches
 				var extension = __instance.GetComponent<FirePlaceExtention>();
 				if (extension == null) return;
 
-				// Throttle sync to avoid excessive updates
-				float currentTime = Time.time;
-				if (currentTime - lastSyncTime < SYNC_INTERVAL) return;
-				lastSyncTime = currentTime;
+				var currentFuelInt = Mathf.FloorToInt(__instance.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel, 0f));
+				if(currentFuelInt != lastFuelInt)
+				{
+					// Sync the internal fuel state to inventory after burning
+					extension.SyncFireplaceToInventory();
+					lastFuelInt = currentFuelInt;
+				}
 
-				// Sync the internal fuel state to inventory after burning
-				extension.SyncFireplaceToInventory();
+				
 			}
 		}
 
@@ -121,10 +124,14 @@ namespace ItemConduit.Patches
 				// Check if we can add more fuel
 				if (!hold && extension.m_container != null && extension.m_container.m_inventory != null)
 				{
-					// Check if inventory is full (no empty slots)
-					int emptySlots = extension.m_container.m_inventory.GetEmptySlots();
 
-					if (emptySlots <= 0)
+					ItemDrop.ItemData itemData = extension.component.m_fuelItem.m_itemData.Clone();
+					itemData.m_dropPrefab = extension.component.m_fuelItem.gameObject;
+					itemData.m_stack = 1;
+
+					bool canAdd = extension.m_container.m_inventory.CanAddItem(itemData);
+
+					if (!canAdd)
 					{
 						// Check if there are non-fuel items taking up space
 						var allItems = extension.m_container.m_inventory.GetAllItems();
