@@ -27,10 +27,11 @@ namespace ItemConduit.Patches
 		public static class Fireplace_UpdateFireplace_Patch
 		{
 			private static float lastSyncTime = 0f;
-			private const float SYNC_INTERVAL = 1f; // Sync every 1 second to avoid spam
+			private const float SYNC_INTERVAL = 0.1f; // Sync every 1 second to avoid spam
 
 			private static void Postfix(Fireplace __instance)
 			{
+				if (__instance.m_infiniteFuel) return;
 				var extension = __instance.GetComponent<FirePlaceExtention>();
 				if (extension == null) return;
 

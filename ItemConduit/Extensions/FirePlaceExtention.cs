@@ -104,18 +104,23 @@ namespace ItemConduit.Extensions
 			// Clear all fuel items
 			var allItems = m_container.m_inventory.GetAllItems();
 			var fuelItems = allItems.Where(item => IsFuelItem(item)).ToList();
-
+			int totalFuel = 0;
 			foreach (var item in fuelItems)
 			{
-				m_container.m_inventory.RemoveItem(item);
+				totalFuel += item.m_stack;
 			}
 
+			int delta = totalFuel - fuelToShow;
+			ItemDrop.ItemData itemData = component.m_fuelItem.m_itemData.Clone();
+			itemData.m_dropPrefab = component.m_fuelItem.gameObject;
+			itemData.m_stack = delta;
 			// Add current fuel amount
-			if (fuelToShow > 0)
+			if (delta > 0)
 			{
-				ItemDrop.ItemData itemData = component.m_fuelItem.m_itemData.Clone();
-				itemData.m_dropPrefab = component.m_fuelItem.gameObject;
-				itemData.m_stack = fuelToShow;
+				m_container.m_inventory.RemoveItem(itemData,delta);
+			}
+			else if (delta < 0) {
+
 				m_container.m_inventory.AddItem(itemData);
 			}
 
