@@ -10,13 +10,13 @@ namespace ItemConduit.Patches
 	public static class InventoryPatches
 	{
 		// Separate dictionaries for add and remove callbacks
-		private static Dictionary<Inventory, Action<ItemDrop.ItemData>> onAddCallbacks = new Dictionary<Inventory, Action<ItemDrop.ItemData>>();
+		private static Dictionary<Inventory, Action<ItemDrop.ItemData, int>> onAddCallbacks = new Dictionary<Inventory, Action<ItemDrop.ItemData, int>>();
 		private static Dictionary<Inventory, Action<ItemDrop.ItemData, int>> onRemoveCallbacks = new Dictionary<Inventory, Action<ItemDrop.ItemData, int>>();
 
 		/// <summary>
 		/// Register callbacks for when items are added/removed from a specific inventory
 		/// </summary>
-		public static void RegisterInventory(Inventory inventory, Action<ItemDrop.ItemData> onAdd, Action<ItemDrop.ItemData, int> onRemove)
+		public static void RegisterInventory(Inventory inventory, Action<ItemDrop.ItemData, int> onAdd, Action<ItemDrop.ItemData, int> onRemove)
 		{
 			if (inventory == null) return;
 
@@ -34,7 +34,7 @@ namespace ItemConduit.Patches
 		/// <summary>
 		/// Register only add callback
 		/// </summary>
-		public static void RegisterInventoryAdd(Inventory inventory, Action<ItemDrop.ItemData> onAdd)
+		public static void RegisterInventoryAdd(Inventory inventory, Action<ItemDrop.ItemData, int> onAdd)
 		{
 			if (inventory != null && onAdd != null)
 			{
@@ -72,11 +72,17 @@ namespace ItemConduit.Patches
 		[HarmonyPatch(typeof(Inventory), nameof(Inventory.AddItem), new Type[] { typeof(ItemDrop.ItemData) })]
 		public static class Inventory_AddItem_Patch
 		{
+			private static int amountToAdd = 0;
+			private static bool Prefix(Inventory __instance, ItemDrop.ItemData item)
+			{
+				amountToAdd = item.m_stack;
+				return true;
+			}
 			private static void Postfix(Inventory __instance, ItemDrop.ItemData item, bool __result)
 			{
-				if (__result && onAddCallbacks.TryGetValue(__instance, out Action<ItemDrop.ItemData> callback))
+				if (__result && amountToAdd > 0 && onAddCallbacks.TryGetValue(__instance, out Action<ItemDrop.ItemData, int> callback))
 				{
-					callback?.Invoke(item);
+					callback?.Invoke(item, amountToAdd);
 				}
 			}
 		}
@@ -84,11 +90,55 @@ namespace ItemConduit.Patches
 		[HarmonyPatch(typeof(Inventory), nameof(Inventory.AddItem), new Type[] { typeof(ItemDrop.ItemData), typeof(int), typeof(int), typeof(int) })]
 		public static class Inventory_AddItem_Position_Patch
 		{
-			private static void Postfix(Inventory __instance, ItemDrop.ItemData item, bool __result)
+			private static int amountToAdd = 0;
+			private static bool Prefix(Inventory __instance, ItemDrop.ItemData item, int amount, int x, int y, bool __result)
 			{
-				if (__result && onAddCallbacks.TryGetValue(__instance, out Action<ItemDrop.ItemData> callback))
+				amount = Mathf.Min(amount, item.m_stack);
+				if (x < 0 || y < 0 || x >= __instance.m_width || y >= __instance.m_height)
 				{
-					callback?.Invoke(item);
+					return false;
+				}
+				ItemDrop.ItemData itemAt = __instance.GetItemAt(x, y);
+				bool flag;
+				if (itemAt != null)
+				{
+					if (itemAt.m_shared.m_name != item.m_shared.m_name || itemAt.m_worldLevel != item.m_worldLevel || (itemAt.m_shared.m_maxQuality > 1 && itemAt.m_quality != item.m_quality))
+					{
+						return false;
+					}
+					int num = itemAt.m_shared.m_maxStackSize - itemAt.m_stack;
+					if (num <= 0)
+					{
+						return false;
+					}
+					int num2 = Mathf.Min(num, amount);
+					itemAt.m_stack += num2;
+					amountToAdd = num2;
+					item.m_stack -= num2;
+					flag = num2 == amount;
+					ZLog.Log("Added to stack" + itemAt.m_stack.ToString() + " " + item.m_stack.ToString());
+				}
+				else
+				{
+					ItemDrop.ItemData itemData = item.Clone();
+					itemData.m_stack = amount;
+					amountToAdd = amount;
+					itemData.m_gridPos = new Vector2i(x, y);
+					__instance.m_inventory.Add(itemData);
+					item.m_stack -= amount;
+					flag = true;
+				}
+				__instance.Changed();
+				__result = flag;
+
+				return false;
+			}
+
+			private static void Postfix(Inventory __instance, ItemDrop.ItemData item, int amount, int x, int y, bool __result)
+			{
+				if (__result && amountToAdd > 0 && onAddCallbacks.TryGetValue(__instance, out Action<ItemDrop.ItemData, int> callback))
+				{
+					callback?.Invoke(item, amountToAdd);
 				}
 			}
 		}
@@ -96,11 +146,17 @@ namespace ItemConduit.Patches
 		[HarmonyPatch(typeof(Inventory), nameof(Inventory.AddItem), new Type[] { typeof(ItemDrop.ItemData), typeof(Vector2i) })]
 		public static class Inventory_AddItem_Vector_Patch
 		{
+			private static int amountToAdd = 0;
+			private static bool Prefix(Inventory __instance, ItemDrop.ItemData item, Vector2i pos)
+			{
+				amountToAdd = item.m_stack;
+				return true;
+			}
 			private static void Postfix(Inventory __instance, ItemDrop.ItemData item, Vector2i pos, bool __result)
 			{
-				if (__result && onAddCallbacks.TryGetValue(__instance, out Action<ItemDrop.ItemData> callback))
+				if (__result && amountToAdd > 0 && onAddCallbacks.TryGetValue(__instance, out Action<ItemDrop.ItemData, int> callback))
 				{
-					callback?.Invoke(item);
+					callback?.Invoke(item, amountToAdd);
 				}
 			}
 		}

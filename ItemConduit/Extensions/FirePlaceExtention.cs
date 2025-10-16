@@ -38,9 +38,9 @@ namespace ItemConduit.Extensions
 
 		#region Inventory Callbacks - Automatic Sync
 
-		protected override void OnItemAdded(ItemDrop.ItemData item)
+		protected override void OnItemAdded(ItemDrop.ItemData item, int amount)
 		{
-			base.OnItemAdded(item);  // Saves to ZDO
+			base.OnItemAdded(item, amount);  // Saves to ZDO
 
 			// Prevent circular sync
 			if (isSyncing) return;
@@ -50,14 +50,14 @@ namespace ItemConduit.Extensions
 
 			// Add fuel to fireplace's internal counter
 			float currentFuel = component.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel, 0f);
-			float newFuel = currentFuel + item.m_stack;
+			float newFuel = currentFuel + amount;
 
 			component.m_nview.GetZDO().Set(ZDOVars.s_fuel, newFuel);
 			component.UpdateState();
 
 			if (DebugConfig.showDebug.Value)
 			{
-				Logger.LogInfo($"[FirePlaceExtention] Added {item.m_stack} fuel. Total: {newFuel}");
+				Logger.LogInfo($"[FirePlaceExtention] Added {amount} fuel. Total: {newFuel}");
 			}
 		}
 

@@ -140,7 +140,7 @@ namespace ItemConduit.Extensions
 		/// <summary>
 		/// Called when an item is added to this extension's inventory
 		/// </summary>
-		protected virtual void OnItemAdded(ItemDrop.ItemData item)
+		protected virtual void OnItemAdded(ItemDrop.ItemData item, int amount)
 		{
 			if (DebugConfig.showDebug.Value)
 			{
