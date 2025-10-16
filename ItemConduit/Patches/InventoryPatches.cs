@@ -161,7 +161,7 @@ namespace ItemConduit.Patches
 					{
 						int num = Mathf.Min(itemData.m_stack, amount);
 						var cloneItemData = itemData.Clone();
-						itemData.m_stack = num;
+						cloneItemData.m_stack = num;
 						capturedItems.Add(cloneItemData);
 						itemData.m_stack -= num;
 						amount -= num;
