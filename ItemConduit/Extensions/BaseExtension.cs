@@ -1,6 +1,7 @@
 ﻿using ItemConduit.Config;
 using ItemConduit.Interfaces;
 using ItemConduit.Nodes;
+using ItemConduit.Patches;
 using ItemConduit.Utils;
 using Jotunn.Configs;
 using System;
@@ -26,37 +27,8 @@ namespace ItemConduit.Extensions
 
 		public bool IsConnected => connectedNodes.Count > 0;
 
-		protected virtual void Awake()
-		{
-			component = GetComponentInParent<T>();
-			if (component == null)
-			{
-				component = GetComponent<T>();
-				if (component == null)
-				{
-					component = GetComponentInChildren<T>();
-				}
-			}
+		
 
-			if (component == null)
-			{
-				Logger.LogError($"[ItemConduit] Extension could not find {component.GetType().ToString()} component!");
-				return;
-			}
-
-			zNetView = component.GetComponent<ZNetView>();
-			if (zNetView == null || !zNetView.IsValid())
-			{
-				if (DebugConfig.showDebug.Value)
-				{
-					Logger.LogInfo($"[ItemConduit] Skipping container creation - invalid ZNetView");
-				}
-				return;
-			}
-
-			SetupContainer(m_width, m_height);
-			LoadInventoryFromZDO();
-		}
 
 		#region Container
 
@@ -106,18 +78,89 @@ namespace ItemConduit.Extensions
 		#endregion
 
 		#region Unity Life Cycle
+
+		protected virtual void Awake()
+		{
+			component = GetComponentInParent<T>();
+			if (component == null)
+			{
+				component = GetComponent<T>();
+				if (component == null)
+				{
+					component = GetComponentInChildren<T>();
+				}
+			}
+
+			if (component == null)
+			{
+				Logger.LogError($"[ItemConduit] Extension could not find {component.GetType().ToString()} component!");
+				return;
+			}
+
+			zNetView = component.GetComponent<ZNetView>();
+			if (zNetView == null || !zNetView.IsValid())
+			{
+				if (DebugConfig.showDebug.Value)
+				{
+					Logger.LogInfo($"[ItemConduit] Skipping container creation - invalid ZNetView");
+				}
+				return;
+			}
+
+			SetupContainer(m_width, m_height);
+			LoadInventoryFromZDO();
+		}
 		protected virtual void Start()
 		{
 			// Start detection after a delay to let physics settle
 			StartCoroutine(DelayedNodeDetection());
+
+			if(m_container != null &&  m_container.m_inventory != null)
+			{
+				InventoryPatches.RegisterInventory(
+			m_container.m_inventory,
+			OnItemAdded,
+			OnItemRemoved
+		);
+			}
 		}
 
 		protected virtual void OnDestroy()
 		{
+			if (m_container != null && m_container.m_inventory != null)
+			{
+				InventoryPatches.UnregisterInventory(m_container.m_inventory);
+			}
 			SaveInventoryToZDO();
 			// Notify all connected nodes that this container is being destroyed
 			NotifyNearbyNodesOnRemoval();
 			connectedNodes.Clear();
+		}
+
+		/// <summary>
+		/// Called when an item is added to this extension's inventory
+		/// </summary>
+		protected virtual void OnItemAdded(ItemDrop.ItemData item)
+		{
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] Item added to {GetType().Name}: {item.m_shared.m_name} x{item.m_stack}");
+			}
+
+			SaveInventoryToZDO();
+		}
+
+		/// <summary>
+		/// Called when an item is removed from this extension's inventory
+		/// </summary>
+		protected virtual void OnItemRemoved(ItemDrop.ItemData item, int amount)
+		{
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] Item removed from {GetType().Name}: {item.m_shared.m_name} x{amount}");
+			}
+
+			SaveInventoryToZDO();
 		}
 
 		#endregion
