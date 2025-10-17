@@ -39,9 +39,9 @@ namespace ItemConduit.Extensions
 			if (actualAmount <= 0) return 0;
 
 			float currentFuel = component.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel, 0f);
-			int addableAmount = Mathf.FloorToInt(component.m_maxFuel - currentFuel);
+			int addableAmount = (int)(component.m_maxFuel - currentFuel);
 
-			return addableAmount;
+			return Math.Min(addableAmount, desiredAmount);
 
 		}
 		public bool CanAddItem(ItemDrop.ItemData item)
@@ -68,7 +68,11 @@ namespace ItemConduit.Extensions
 			int addableAmount = CalculateAcceptCapacity(item, actualAmount);
 			if (addableAmount <= 0) return false;
 
-			component.AddFuel(addableAmount);
+			float num = component.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel, 0f);
+			num = Mathf.Clamp(num + addableAmount, 0f, component.m_maxFuel);
+			component.m_nview.GetZDO().Set(ZDOVars.s_fuel, num);
+			component.m_fuelAddedEffects.Create(base.transform.position, base.transform.rotation, null, 1f, -1);
+			component.UpdateState();
 			return true;
 		}
 		public bool RemoveItem(ItemDrop.ItemData item, int amount = 0)
