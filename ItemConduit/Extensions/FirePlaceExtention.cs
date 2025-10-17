@@ -35,7 +35,7 @@ namespace ItemConduit.Extensions
 		{
 			if (sourceItem == null || component == null) return 0;
 
-			int actualAmount = Math.Min(desiredAmount, sourceItem.m_stack);
+			int actualAmount = desiredAmount > 0 ? desiredAmount : sourceItem.m_stack;
 			if (actualAmount <= 0) return 0;
 
 			float currentFuel = component.m_nview.GetZDO().GetFloat(ZDOVars.s_fuel, 0f);
@@ -62,7 +62,7 @@ namespace ItemConduit.Extensions
 			if(!CanAddItem(item)) return false;
 			if (component.m_infiniteFuel) return false;
 
-			int actualAmount = Math.Min(amount, item.m_stack);
+			int actualAmount = amount > 0 ? amount : item.m_stack;
 			if (actualAmount <= 0) return false;
 
 			int addableAmount = CalculateAcceptCapacity(item, actualAmount);
@@ -77,7 +77,7 @@ namespace ItemConduit.Extensions
 		}
 		public Inventory GetInventory()
 		{
-			return null;
+			return m_container.m_inventory;
 		}
 		public string GetName()
 		{
