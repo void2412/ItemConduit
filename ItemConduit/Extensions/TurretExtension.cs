@@ -16,10 +16,10 @@ namespace ItemConduit.Extensions
 
 		private bool IsAmmoItem(ItemDrop.ItemData item)
 		{
-			if (item == null || component == null || component.m_defaultAmmo == null)
+			if (item == null || component == null)
 				return false;
 
-			return component.IsItemAllowed(item.m_shared.m_name);
+			return component.IsItemAllowed(item.m_dropPrefab.name);
 		}
 		
 		private bool IsEmpty()
@@ -40,6 +40,7 @@ namespace ItemConduit.Extensions
 		public int CalculateAcceptCapacity(ItemDrop.ItemData sourceItem, int desiredAmount)
 		{
 			if (sourceItem == null || component == null) return 0;
+			if (!CanAddItem(sourceItem)) return 0;
 
 			int actualAmount = desiredAmount > 0 ? desiredAmount : sourceItem.m_stack;
 			if (actualAmount <= 0) return 0;
@@ -63,7 +64,7 @@ namespace ItemConduit.Extensions
 			}
 
 
-			return true;
+			return false;
 		}
 
 		public bool CanRemoveItem(ItemDrop.ItemData item)
@@ -80,9 +81,22 @@ namespace ItemConduit.Extensions
 			int actualAmount = amount > 0 ? amount : item.m_stack;
 			if (actualAmount <= 0) return false;
 
+
+
 			int addableAmount = CalculateAcceptCapacity(item, actualAmount);
 			if (addableAmount <= 0) return false;
 
+			if (!IsAmmoTypeLoaded(item.m_dropPrefab.name))
+			{
+				if (!IsEmpty())
+				{
+					return false;
+				}
+				else
+				{
+					component.m_nview.GetZDO().Set(ZDOVars.s_ammoType, item.m_dropPrefab.name);
+				}
+			}
 			int currentAmmo = component.m_nview.GetZDO().GetInt(ZDOVars.s_ammo, 0);
 			int newAmmo = Mathf.Clamp(currentAmmo + addableAmount, 0, component.m_maxAmmo);
 			component.m_nview.GetZDO().Set(ZDOVars.s_ammo, newAmmo);

@@ -477,7 +477,6 @@ namespace ItemConduit.Network
 							IContainerInterface destContainer = insertNode.GetTargetContainer();
 							if (destContainer == null) continue;
 
-							if (!destContainer.CanAddItem(item)) continue;
 
 							int canAccept = insertNode.CalculateAcceptCapacity(destContainer, item, Mathf.Min(remainingToTransfer, item.m_stack));
 
