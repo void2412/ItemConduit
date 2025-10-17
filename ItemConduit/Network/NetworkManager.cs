@@ -443,7 +443,8 @@ namespace ItemConduit.Network
 					// Find matching insert nodes (same channel)
 					var matchingInserts = network.InsertNodes
 						.Where(n => n != null && n.IsActive &&
-								   (n.ChannelId == extractNode.ChannelId))
+								   (n.ChannelId == extractNode.ChannelId) &&
+								   (n.GetTargetContainer() != extractNode.GetTargetContainer()))
 						.OrderByDescending(n => n.Priority)
 						.ThenBy(n => Vector3.Distance(extractNode.transform.position, n.transform.position))
 						.ToList();
@@ -471,10 +472,12 @@ namespace ItemConduit.Network
 
 							if (!insertNode.CanAcceptItem(item)) break;
 
-
+							
 						
 							IContainerInterface destContainer = insertNode.GetTargetContainer();
 							if (destContainer == null) continue;
+
+							if (!destContainer.CanAddItem(item)) continue;
 
 							int canAccept = insertNode.CalculateAcceptCapacity(destContainer, item, Mathf.Min(remainingToTransfer, item.m_stack));
 

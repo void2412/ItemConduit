@@ -19,7 +19,7 @@ namespace ItemConduit.Extensions
 			if (item == null || component == null || component.m_defaultAmmo == null)
 				return false;
 
-			return component.IsItemAllowed(item.m_dropPrefab.name);
+			return component.IsItemAllowed(item.m_shared.m_name);
 		}
 		
 		private bool IsEmpty()
