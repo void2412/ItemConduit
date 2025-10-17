@@ -115,22 +115,10 @@ namespace ItemConduit.Extensions
 			// Start detection after a delay to let physics settle
 			StartCoroutine(DelayedNodeDetection());
 
-			if(m_container != null &&  m_container.m_inventory != null)
-			{
-				InventoryPatches.RegisterInventory(
-			m_container.m_inventory,
-			OnItemAdded,
-			OnItemRemoved
-		);
-			}
 		}
 
 		protected virtual void OnDestroy()
 		{
-			if (m_container != null && m_container.m_inventory != null)
-			{
-				InventoryPatches.UnregisterInventory(m_container.m_inventory);
-			}
 			SaveInventoryToZDO();
 			// Notify all connected nodes that this container is being destroyed
 			NotifyNearbyNodesOnRemoval();
