@@ -1,33 +1,37 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
-using ItemConduit.Nodes;
 using ItemConduit.Config;
 using Jotunn.GUI;
 using Jotunn.Managers;
+using System.Collections.Generic;
+using System.Linq;
 using Logger = Jotunn.Logger;
-// Use alias to distinguish between our GUIController and Jötunn's GUIManager
 using JotunnGUI = Jotunn.Managers.GUIManager;
 
 namespace ItemConduit.GUI
 {
 	/// <summary>
-	/// Base class for all node GUI windows with Jötunn integration
-	/// Matches ValheimHopper's GUI style and approach
+	/// Base class for all node GUI windows with Jötunn integration and common UI helpers
 	/// </summary>
 	public abstract class BaseNodeGUI : MonoBehaviour
 	{
 		#region Fields
 
-		// UI Panel components
 		protected GameObject uiRoot;
 		protected GameObject panel;
 		protected RectTransform panelRect;
-
-		// Panel state
 		protected bool isVisible = false;
 
-		// Color scheme from ValheimHopper
 		protected static readonly Color WhiteShade = new Color(219f / 255f, 219f / 255f, 219f / 255f);
+
+		// Constants for item grid
+		protected const int GRID_COLUMNS = 8;
+		protected const int GRID_ROWS = 7;
+		protected const int ITEM_SLOT_SIZE = 70;
+
+		// Item management
+		protected List<ItemDrop.ItemData> allItems = new List<ItemDrop.ItemData>();
+		protected List<ItemDrop.ItemData> filteredItems = new List<ItemDrop.ItemData>();
 
 		#endregion
 
@@ -35,29 +39,28 @@ namespace ItemConduit.GUI
 
 		protected virtual void Awake()
 		{
-			// Keep the GUI object alive across scenes
 			DontDestroyOnLoad(gameObject);
 		}
 
+		protected virtual void Update()
+		{
+			if (isVisible && Input.GetKeyDown(KeyCode.Escape))
+			{
+				Hide();
+			}
+		}
 
 		#endregion
 
 		#region Initialization
 
-		/// <summary>
-		/// Initialize the UI with Jötunn integration
-		/// </summary>
 		protected virtual void InitializeBaseNodeUI()
 		{
 			CreateJotunnPanel();
 		}
 
-		/// <summary>
-		/// Create panel using Jötunn's GUI system
-		/// </summary>
 		protected virtual void CreateJotunnPanel()
 		{
-			// Create UI root as child of Jötunn's CustomGUIFront (like ValheimHopper)
 			uiRoot = new GameObject("ItemConduitUI");
 			uiRoot.transform.SetParent(JotunnGUI.CustomGUIFront.transform, false);
 
@@ -72,14 +75,10 @@ namespace ItemConduit.GUI
 			uiRoot.AddComponent<GraphicRaycaster>();
 			uiRoot.AddComponent<CanvasGroup>();
 
-			// Create the main panel
 			panel = CreateStyledPanel();
 			panel.transform.SetParent(uiRoot.transform, false);
-
-			// Add drag functionality (like ValheimHopper)
 			panel.AddComponent<DragWindowCntrl>();
 
-			// Position panel in center of screen
 			panelRect = panel.GetComponent<RectTransform>();
 			panelRect.anchorMin = new Vector2(0.5f, 0.5f);
 			panelRect.anchorMax = new Vector2(0.5f, 0.5f);
@@ -87,119 +86,297 @@ namespace ItemConduit.GUI
 			panelRect.anchoredPosition = Vector2.zero;
 			panelRect.sizeDelta = GetPanelSize();
 
-			// Initially hidden
 			uiRoot.SetActive(false);
 		}
 
-		/// <summary>
-		/// Create styled panel with background
-		/// </summary>
 		protected GameObject CreateStyledPanel()
 		{
 			GameObject panel = new GameObject("Panel");
 			RectTransform rect = panel.AddComponent<RectTransform>();
 
-			// Add background image
 			Image background = panel.AddComponent<Image>();
 			background.color = GUIManager.Instance.ValheimOrange;
-			//background.sprite = GetPanelSprite();
-			//background.type = Image.Type.Sliced;
-
-			// Add border
-			//CreateBorder(panel);
 
 			return panel;
 		}
 
-		/// <summary>
-		/// Create border frame around panel
-		/// </summary>
-		protected GameObject CreateBorder(GameObject parent)
+		#endregion
+
+		#region Show/Hide
+
+		public virtual void Show()
 		{
-			GameObject border = new GameObject("Border");
-			border.transform.SetParent(parent.transform, false);
+			if (uiRoot != null)
+			{
+				uiRoot.SetActive(true);
+				isVisible = true;
 
-			Image borderImage = border.AddComponent<Image>();
-			borderImage.color = new Color(0.5f, 0.35f, 0.15f, 1f);
-			borderImage.sprite = GetBorderSprite();
-			borderImage.type = Image.Type.Sliced;
-			borderImage.fillCenter = false;
-
-			RectTransform borderRect = border.GetComponent<RectTransform>();
-			borderRect.anchorMin = Vector2.zero;
-			borderRect.anchorMax = Vector2.one;
-			borderRect.offsetMin = new Vector2(-10, -10);
-			borderRect.offsetMax = new Vector2(10, 10);
-
-			return border;
+				// Only register with GUIController - don't call GUIManager.BlockInput
+				GUIController.Instance.RegisterGUI(this);
+			}
 		}
 
-		/// <summary>
-		/// Get panel sprite from Valheim UI or create fallback
-		/// </summary>
-		protected Sprite GetPanelSprite()
+		public virtual void Hide()
 		{
-			if (InventoryGui.instance != null)
+			if (uiRoot != null)
 			{
-				Image[] images = InventoryGui.instance.GetComponentsInChildren<Image>();
-				foreach (var img in images)
-				{
-					if (img.sprite != null && img.name.ToLower().Contains("bkg"))
-					{
-						return img.sprite;
-					}
-				}
-			}
+				uiRoot.SetActive(false);
+				isVisible = false;
 
-			// Fallback sprite
-			Texture2D tex = new Texture2D(32, 32);
-			Color fillColor = new Color(0.15f, 0.12f, 0.1f);
-			for (int i = 0; i < 32; i++)
-			{
-				for (int j = 0; j < 32; j++)
-				{
-					tex.SetPixel(i, j, fillColor);
-				}
+				// Only unregister from GUIController
+				GUIController.Instance.UnregisterGUI(this);
 			}
-			tex.Apply();
-			return Sprite.Create(tex, new Rect(0, 0, 32, 32), Vector2.one * 0.5f, 100f, 1, SpriteMeshType.FullRect, new Vector4(8, 8, 8, 8));
 		}
 
-		/// <summary>
-		/// Get border sprite from Valheim UI or fallback to panel sprite
-		/// </summary>
-		protected Sprite GetBorderSprite()
+		public bool IsVisible()
 		{
-			if (InventoryGui.instance != null)
-			{
-				Image[] images = InventoryGui.instance.GetComponentsInChildren<Image>();
-				foreach (var img in images)
-				{
-					if (img.sprite != null && img.name.ToLower().Contains("border"))
-					{
-						return img.sprite;
-					}
-				}
-			}
-			return GetPanelSprite();
+			return isVisible;
 		}
 
 		#endregion
 
-		#region Jötunn Styling
+		#region UI Helper Methods - Common to all Node GUIs
 
-		/// <summary>
-		/// Apply Jötunn styling to all components (like ValheimHopper does)
-		/// </summary>
+		protected GameObject CreateStandardInputField(Transform parent, string placeholder)
+		{
+			GameObject inputObj = new GameObject("InputField");
+			inputObj.transform.SetParent(parent, false);
+
+			Image bg = inputObj.AddComponent<Image>();
+			bg.color = new Color(0, 0, 0, 0.5f);
+
+			InputField input = inputObj.AddComponent<InputField>();
+			input.transition = Selectable.Transition.ColorTint;
+
+			// Text
+			GameObject textArea = new GameObject("Text");
+			textArea.transform.SetParent(inputObj.transform, false);
+			RectTransform textRect = textArea.AddComponent<RectTransform>();
+			textRect.anchorMin = Vector2.zero;
+			textRect.anchorMax = Vector2.one;
+			textRect.sizeDelta = new Vector2(-10, 0);
+
+			Text text = textArea.AddComponent<Text>();
+			text.supportRichText = false;
+			text.alignment = TextAnchor.MiddleLeft;
+			text.color = Color.white;
+			input.textComponent = text;
+
+			// Placeholder
+			GameObject placeholderObj = new GameObject("Placeholder");
+			placeholderObj.transform.SetParent(inputObj.transform, false);
+			RectTransform placeholderRect = placeholderObj.AddComponent<RectTransform>();
+			placeholderRect.anchorMin = Vector2.zero;
+			placeholderRect.anchorMax = Vector2.one;
+			placeholderRect.sizeDelta = new Vector2(-10, 0);
+
+			Text placeholderText = placeholderObj.AddComponent<Text>();
+			placeholderText.text = placeholder;
+			placeholderText.fontStyle = FontStyle.Italic;
+			placeholderText.color = new Color(0.5f, 0.5f, 0.5f);
+			placeholderText.alignment = TextAnchor.MiddleLeft;
+			input.placeholder = placeholderText;
+
+			LayoutElement layout = inputObj.AddComponent<LayoutElement>();
+			layout.preferredHeight = 30;
+			layout.flexibleWidth = 1;
+
+			return inputObj;
+		}
+
+		protected GameObject CreateStandardToggle(Transform parent, string label, bool defaultValue)
+		{
+			GameObject toggleObj = new GameObject("Toggle");
+			toggleObj.transform.SetParent(parent, false);
+
+			Toggle toggle = toggleObj.AddComponent<Toggle>();
+			toggle.isOn = defaultValue;
+
+			// Background
+			GameObject bg = new GameObject("Background");
+			bg.transform.SetParent(toggleObj.transform, false);
+			RectTransform bgRect = bg.AddComponent<RectTransform>();
+			bgRect.sizeDelta = new Vector2(20, 20);
+			Image bgImage = bg.AddComponent<Image>();
+			bgImage.color = new Color(0.2f, 0.2f, 0.2f);
+
+			// Checkmark
+			GameObject checkmark = new GameObject("Checkmark");
+			checkmark.transform.SetParent(bg.transform, false);
+			RectTransform checkRect = checkmark.AddComponent<RectTransform>();
+			checkRect.anchorMin = Vector2.zero;
+			checkRect.anchorMax = Vector2.one;
+			checkRect.sizeDelta = new Vector2(-4, -4);
+			Image checkImage = checkmark.AddComponent<Image>();
+			checkImage.color = new Color(0.2f, 0.8f, 0.2f);
+
+			toggle.targetGraphic = bgImage;
+			toggle.graphic = checkImage;
+
+			// Label
+			GameObject labelObj = new GameObject("Label");
+			labelObj.transform.SetParent(toggleObj.transform, false);
+			Text labelText = labelObj.AddComponent<Text>();
+			labelText.text = label;
+			labelText.alignment = TextAnchor.MiddleLeft;
+			RectTransform labelRect = labelObj.GetComponent<RectTransform>();
+			labelRect.anchorMin = new Vector2(0, 0);
+			labelRect.anchorMax = new Vector2(1, 1);
+			labelRect.offsetMin = new Vector2(25, 0);
+			labelRect.offsetMax = Vector2.zero;
+
+			HorizontalLayoutGroup hLayout = toggleObj.AddComponent<HorizontalLayoutGroup>();
+			hLayout.spacing = 5;
+			hLayout.childForceExpandWidth = false;
+			hLayout.childAlignment = TextAnchor.MiddleLeft;
+
+			LayoutElement layout = toggleObj.AddComponent<LayoutElement>();
+			layout.preferredHeight = 30;
+
+			return toggleObj;
+		}
+
+		protected Button CreateStandardButton(Transform parent, string text, float width)
+		{
+			GameObject buttonObj = new GameObject("Button_" + text);
+			buttonObj.transform.SetParent(parent, false);
+
+			Image bg = buttonObj.AddComponent<Image>();
+			bg.color = new Color(0.3f, 0.25f, 0.2f);
+
+			Button button = buttonObj.AddComponent<Button>();
+			button.targetGraphic = bg;
+
+			GameObject textObj = new GameObject("Text");
+			textObj.transform.SetParent(buttonObj.transform, false);
+			RectTransform textRect = textObj.AddComponent<RectTransform>();
+			textRect.anchorMin = Vector2.zero;
+			textRect.anchorMax = Vector2.one;
+			textRect.sizeDelta = Vector2.zero;
+
+			Text buttonText = textObj.AddComponent<Text>();
+			buttonText.text = text;
+			buttonText.alignment = TextAnchor.MiddleCenter;
+			buttonText.color = Color.white;
+
+			LayoutElement layout = buttonObj.AddComponent<LayoutElement>();
+			layout.preferredWidth = width;
+			layout.preferredHeight = 40;
+
+			return button;
+		}
+
+		protected void CreateSpacer(Transform parent, float height)
+		{
+			GameObject spacer = new GameObject("Spacer");
+			spacer.transform.SetParent(parent, false);
+
+			LayoutElement layoutElement = spacer.AddComponent<LayoutElement>();
+			layoutElement.preferredHeight = height;
+		}
+
+		protected GameObject CreateHorizontalGroup(Transform parent)
+		{
+			GameObject group = new GameObject("HorizontalGroup");
+			group.transform.SetParent(parent, false);
+
+			HorizontalLayoutGroup layout = group.AddComponent<HorizontalLayoutGroup>();
+			layout.spacing = 10;
+			layout.childForceExpandWidth = false;
+			layout.childForceExpandHeight = false;
+			layout.childAlignment = TextAnchor.MiddleCenter;
+
+			LayoutElement layoutElement = group.AddComponent<LayoutElement>();
+			layoutElement.preferredHeight = 30;
+
+			return group;
+		}
+
+		#endregion
+
+		#region Item Management - Common Logic
+
+		protected void LoadItemDatabase()
+		{
+			allItems.Clear();
+
+			if (ObjectDB.instance == null) return;
+
+			foreach (GameObject prefab in ObjectDB.instance.m_items)
+			{
+				ItemDrop itemDrop = prefab.GetComponent<ItemDrop>();
+				if (itemDrop != null && itemDrop.m_itemData != null)
+				{
+					// Only add items that have valid icons
+					try
+					{
+						Sprite icon = itemDrop.m_itemData.GetIcon();
+						if (icon != null)
+						{
+							allItems.Add(itemDrop.m_itemData);
+						}
+					}
+					catch
+					{
+						// Skip items with invalid icon data
+						if (DebugConfig.showDebug.Value)
+						{
+							Logger.LogWarning($"[ItemConduit] Skipping item with invalid icon: {prefab.name}");
+						}
+					}
+				}
+			}
+		}
+
+		protected bool MatchesCategory(ItemDrop.ItemData item, string category)
+		{
+			if (category == "All") return true;
+
+			ItemDrop.ItemData.ItemType itemType = item.m_shared.m_itemType;
+
+			switch (category)
+			{
+				case "Weapons":
+					return itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon ||
+						   itemType == ItemDrop.ItemData.ItemType.TwoHandedWeapon ||
+						   itemType == ItemDrop.ItemData.ItemType.TwoHandedWeaponLeft ||
+						   itemType == ItemDrop.ItemData.ItemType.Bow ||
+						   itemType == ItemDrop.ItemData.ItemType.Torch;
+				case "Armors":
+					return itemType == ItemDrop.ItemData.ItemType.Helmet ||
+						   itemType == ItemDrop.ItemData.ItemType.Chest ||
+						   itemType == ItemDrop.ItemData.ItemType.Legs ||
+						   itemType == ItemDrop.ItemData.ItemType.Shoulder ||
+						   itemType == ItemDrop.ItemData.ItemType.Hands ||
+						   itemType == ItemDrop.ItemData.ItemType.Shield;
+				case "Foods":
+					return itemType == ItemDrop.ItemData.ItemType.Consumable && item.m_shared.m_food > 0;
+				case "Materials":
+					return itemType == ItemDrop.ItemData.ItemType.Material;
+				case "Consumables":
+					return itemType == ItemDrop.ItemData.ItemType.Consumable;
+				case "Tools":
+					return itemType == ItemDrop.ItemData.ItemType.Tool;
+				case "Trophies":
+					return itemType == ItemDrop.ItemData.ItemType.Trophy;
+				case "Misc":
+					return itemType == ItemDrop.ItemData.ItemType.Misc;
+				default:
+					return false;
+			}
+		}
+
+		#endregion
+
+		#region Styling
+
 		protected void ApplyJotunnStyling(GameObject root)
 		{
 			// Apply text styling
 			foreach (Text text in root.GetComponentsInChildren<Text>())
 			{
-				// Check if this is a title by name (no tags needed)
 				if (text.name == "Title" || text.name.Contains("Title"))
 				{
-					// Title style: Bold font, Valheim Orange color, size 20
 					JotunnGUI.Instance.ApplyTextStyle(
 						text,
 						JotunnGUI.Instance.AveriaSerifBold,
@@ -209,7 +386,6 @@ namespace ItemConduit.GUI
 				}
 				else if (text.name.Contains("Header"))
 				{
-					// Section header style
 					JotunnGUI.Instance.ApplyTextStyle(
 						text,
 						JotunnGUI.Instance.AveriaSerifBold,
@@ -219,7 +395,6 @@ namespace ItemConduit.GUI
 				}
 				else
 				{
-					// Body text style: Regular font, WhiteShade color, size 16
 					JotunnGUI.Instance.ApplyTextStyle(
 						text,
 						JotunnGUI.Instance.AveriaSerif,
@@ -249,243 +424,72 @@ namespace ItemConduit.GUI
 			}
 		}
 
-		/// <summary>
-		/// Apply localization to all text components
-		/// </summary>
-		protected void ApplyLocalization()
-		{
-			foreach (Text text in uiRoot.GetComponentsInChildren<Text>())
-			{
-				text.text = Localization.instance.Localize(text.text);
-			}
-		}
-
 		#endregion
 
-		#region Show/Hide
+		#region Item Slot Helper Class
 
-		/// <summary>
-		/// Show the GUI window
-		/// </summary>
-		public virtual void Show()
+		protected class BaseItemSlot : MonoBehaviour
 		{
-			if (uiRoot == null)
+			public Image background;
+			public Image icon;
+			public Button button;
+			protected ItemDrop.ItemData currentItem;
+
+			public virtual void SetItem(ItemDrop.ItemData item)
 			{
-				InitializeBaseNodeUI();
-			}
+				currentItem = item;
 
-			isVisible = true;
-			uiRoot.SetActive(true);
-
-			GUIManager.BlockInput(true);
-			// Register with our GUIController (not Jötunn's GUIManager)
-			GUIController.Instance?.RegisterGUI(this);
-
-			// FORCE cursor to show - Valheim fights this, so we're aggressive
-			//Cursor.visible = true;
-			//Cursor.lockState = CursorLockMode.None;
-
-			if (DebugConfig.showDebug.Value)
-			{
-				Logger.LogInfo($"[ItemConduit] Showing GUI: {GetType().Name}");
-			}
-		}
-
-		/// <summary>
-		/// Hide the GUI window
-		/// </summary>
-		public virtual void Hide()
-		{
-			if (uiRoot != null)
-			{
-				isVisible = false;
-				uiRoot.SetActive(false);
-
-				// Unregister from our GUIController (not Jötunn's GUIManager)
-				GUIController.Instance?.UnregisterGUI(this);
-				GUIManager.BlockInput(false);
-
-				if (DebugConfig.showDebug.Value)
+				if (item == null)
 				{
-					Logger.LogInfo($"[ItemConduit] Hiding GUI: {GetType().Name}");
+					Clear();
+					return;
+				}
+
+				try
+				{
+					Sprite itemIcon = item.GetIcon();
+					if (itemIcon != null)
+					{
+						icon.sprite = itemIcon;
+						icon.color = Color.white;
+						icon.enabled = true;
+					}
+					else
+					{
+						Clear();
+					}
+				}
+				catch (System.Exception ex)
+				{
+					if (DebugConfig.showDebug.Value)
+					{
+						Logger.LogWarning($"[ItemConduit] Failed to get icon for item: {ex.Message}");
+					}
+					Clear();
 				}
 			}
-		}
 
-		/// <summary>
-		/// Check if GUI is currently visible
-		/// </summary>
-		public bool IsVisible()
-		{
-			return isVisible;
-		}
-
-		#endregion
-
-		#region Helper Methods
-
-		/// <summary>
-		/// Create scroll view container
-		/// </summary>
-		protected GameObject CreateScrollView(GameObject parent)
-		{
-			GameObject scrollView = new GameObject("ScrollView");
-			scrollView.transform.SetParent(parent.transform, false);
-
-			ScrollRect scrollRect = scrollView.AddComponent<ScrollRect>();
-			Image scrollBg = scrollView.AddComponent<Image>();
-			scrollBg.color = new Color(0, 0, 0, 0.3f);
-
-			RectTransform scrollRectTransform = scrollView.GetComponent<RectTransform>();
-			scrollRectTransform.anchorMin = Vector2.zero;
-			scrollRectTransform.anchorMax = Vector2.one;
-			scrollRectTransform.offsetMin = new Vector2(20, 20);
-			scrollRectTransform.offsetMax = new Vector2(-20, -20);
-
-			// Viewport
-			GameObject viewport = new GameObject("Viewport");
-			viewport.transform.SetParent(scrollView.transform, false);
-
-			Image viewportImage = viewport.AddComponent<Image>();
-			viewportImage.color = Color.clear;
-			Mask viewportMask = viewport.AddComponent<Mask>();
-			viewportMask.showMaskGraphic = false;
-
-			RectTransform viewportRect = viewport.GetComponent<RectTransform>();
-			viewportRect.anchorMin = Vector2.zero;
-			viewportRect.anchorMax = Vector2.one;
-			viewportRect.offsetMin = Vector2.zero;
-			viewportRect.offsetMax = Vector2.zero;
-
-			// Content
-			GameObject content = new GameObject("Content");
-			content.transform.SetParent(viewport.transform, false);
-
-			VerticalLayoutGroup contentLayout = content.AddComponent<VerticalLayoutGroup>();
-			contentLayout.padding = new RectOffset(10, 10, 10, 10);
-			contentLayout.spacing = 5;
-			contentLayout.childForceExpandWidth = true;
-			contentLayout.childForceExpandHeight = false;
-
-			ContentSizeFitter contentFitter = content.AddComponent<ContentSizeFitter>();
-			contentFitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-			RectTransform contentRect = content.GetComponent<RectTransform>();
-			contentRect.anchorMin = new Vector2(0, 1);
-			contentRect.anchorMax = new Vector2(1, 1);
-			contentRect.pivot = new Vector2(0.5f, 1);
-			contentRect.anchoredPosition = Vector2.zero;
-
-			scrollRect.content = contentRect;
-			scrollRect.viewport = viewportRect;
-			scrollRect.horizontal = false;
-			scrollRect.vertical = true;
-			scrollRect.scrollSensitivity = 30;
-
-			return scrollView;
-		}
-
-		/// <summary>
-		/// Create title text (will be styled with ValheimOrange)
-		/// Name it "Title" so ApplyJotunnStyling recognizes it
-		/// </summary>
-		protected Text CreateTitle(Transform parent, string text)
-		{
-			GameObject titleObj = new GameObject("Title");
-			titleObj.transform.SetParent(parent, false);
-			// NO TAG - we identify by GameObject name instead
-
-			Text titleText = titleObj.AddComponent<Text>();
-			titleText.text = text;
-			titleText.alignment = TextAnchor.MiddleCenter;
-
-			LayoutElement layoutElement = titleObj.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 40;
-
-			return titleText;
-		}
-
-		/// <summary>
-		/// Create section header
-		/// </summary>
-		protected Text CreateSectionHeader(Transform parent, string text)
-		{
-			GameObject headerObj = new GameObject("Header_" + text);
-			headerObj.transform.SetParent(parent, false);
-
-			Text headerText = headerObj.AddComponent<Text>();
-			headerText.text = text;
-			headerText.fontStyle = FontStyle.Bold;
-
-			LayoutElement layoutElement = headerObj.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 30;
-
-			return headerText;
-		}
-
-		/// <summary>
-		/// Create info/help text
-		/// </summary>
-		protected Text CreateInfoText(Transform parent, string text, float spacing = 0)
-		{
-			GameObject infoObj = new GameObject("Info");
-			infoObj.transform.SetParent(parent, false);
-
-			Text infoText = infoObj.AddComponent<Text>();
-			infoText.text = text;
-			infoText.fontStyle = FontStyle.Italic;
-			infoText.color = new Color(0.7f, 0.7f, 0.6f);
-
-			LayoutElement layoutElement = infoObj.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 20;
-
-			if (spacing > 0)
+			public virtual void Clear()
 			{
-				CreateSpacer(parent, spacing);
+				currentItem = null;
+				icon.enabled = false;
 			}
 
-			return infoText;
-		}
+			public virtual void SetHighlight(bool highlight)
+			{
+				background.color = highlight ? new Color(1f, 0.8f, 0.3f, 1f) : Color.white;
+			}
 
-		/// <summary>
-		/// Create spacer for layout
-		/// </summary>
-		protected void CreateSpacer(Transform parent, float height)
-		{
-			GameObject spacer = new GameObject("Spacer");
-			spacer.transform.SetParent(parent, false);
-
-			LayoutElement layoutElement = spacer.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = height;
-		}
-
-		/// <summary>
-		/// Create horizontal layout group
-		/// </summary>
-		protected GameObject CreateHorizontalGroup(Transform parent)
-		{
-			GameObject group = new GameObject("HorizontalGroup");
-			group.transform.SetParent(parent, false);
-
-			HorizontalLayoutGroup layout = group.AddComponent<HorizontalLayoutGroup>();
-			layout.spacing = 10;
-			layout.childForceExpandWidth = false;
-			layout.childForceExpandHeight = false;
-			layout.childAlignment = TextAnchor.MiddleCenter;
-
-			LayoutElement layoutElement = group.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 30;
-
-			return group;
+			public ItemDrop.ItemData GetCurrentItem()
+			{
+				return currentItem;
+			}
 		}
 
 		#endregion
 
 		#region Abstract Methods
 
-		/// <summary>
-		/// Get the size of this panel (must be implemented by derived classes)
-		/// </summary>
 		protected abstract Vector2 GetPanelSize();
 
 		#endregion

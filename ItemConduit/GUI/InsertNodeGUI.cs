@@ -1,507 +1,502 @@
-using ItemConduit.Config;
-using ItemConduit.Nodes;
-using Jotunn;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using ItemConduit.Nodes;
+using ItemConduit.Config;
+using System.Collections.Generic;
+using System.Linq;
+using Jotunn.Managers;
 using Logger = Jotunn.Logger;
 
 namespace ItemConduit.GUI
 {
 	/// <summary>
-	/// GUI for configuring Insert Nodes - Hopper visual style
+	/// GUI for configuring Insert Nodes - inherits common UI logic from BaseNodeGUI
 	/// </summary>
 	public class InsertNodeGUI : BaseNodeGUI
 	{
+		#region Fields
+
 		private InsertNode node;
 
-		// UI Elements
+		// UI Components
 		private InputField channelInput;
-		private Slider prioritySlider;
-		private Text priorityValueText;
+		private InputField priorityInput;
 		private Toggle whitelistToggle;
-		private InputField filterInput;
+		private InputField searchInput;
+		private Text categoryFilterText; // Shows currently filtered items
+		private Text categoryBrowserText; // Shows current category being browsed
 
-		protected override Vector2 GetPanelSize()
-		{
-			return new Vector2(400, 480);
-		}
+		// Item grid
+		private GameObject itemGridContainer;
+		private GridLayoutGroup itemGrid;
+		private List<ItemSlot> itemSlots = new List<ItemSlot>();
+
+		// Category filtering
+		private int currentCategoryIndex = 0;
+		private readonly string[] categories = { "All", "Weapons", "Armors", "Foods", "Materials", "Consumables", "Tools", "Trophies", "Misc" };
+
+		#endregion
+
+		#region Initialization
 
 		public void Initialize(InsertNode insertNode)
 		{
 			node = insertNode;
 			InitializeBaseNodeUI();
 			BuildUI();
-			LoadCurrentSettings();
+			LoadItemDatabase();
+			UpdateFilteredItems();
+			LoadNodeSettings();
+		}
 
-			// Apply Jötunn styling after UI is built
-			ApplyJotunnStyling(panel);
-
-			// Apply localization
-			ApplyLocalization();
-
-			// Fix references (like ValheimHopper)
-			uiRoot.FixReferences(true);
+		protected override Vector2 GetPanelSize()
+		{
+			return new Vector2(640, 750);
 		}
 
 		private void BuildUI()
 		{
-			// Create content container (NO scroll view - keep it compact like Hopper)
 			GameObject content = new GameObject("Content");
 			content.transform.SetParent(panel.transform, false);
 
-			VerticalLayoutGroup contentLayout = content.AddComponent<VerticalLayoutGroup>();
-			contentLayout.padding = new RectOffset(20, 20, 20, 20);
-			contentLayout.spacing = 8;
-			contentLayout.childForceExpandWidth = true;
-			contentLayout.childForceExpandHeight = false;
+			VerticalLayoutGroup vertLayout = content.AddComponent<VerticalLayoutGroup>();
+			vertLayout.padding = new RectOffset(15, 15, 15, 15);
+			vertLayout.spacing = 10;
+			vertLayout.childForceExpandWidth = true;
+			vertLayout.childForceExpandHeight = false;
+			vertLayout.childControlHeight = true;
 
 			RectTransform contentRect = content.GetComponent<RectTransform>();
 			contentRect.anchorMin = Vector2.zero;
 			contentRect.anchorMax = Vector2.one;
-			contentRect.offsetMin = Vector2.zero;
-			contentRect.offsetMax = Vector2.zero;
+			contentRect.sizeDelta = Vector2.zero;
 
-			// Title
-			CreateTitle(content.transform, "Insert Node Configuration");
+			CreateTitle(content.transform);
+			CreateSpacer(content.transform, 5);
+			CreateTopSection(content.transform);
 			CreateSpacer(content.transform, 10);
+			CreateSearchSection(content.transform);
+			CreateSpacer(content.transform, 10);
+			CreateItemGrid(content.transform);
+			CreateSpacer(content.transform, 10);
+			CreateBottomButtons(content.transform);
 
-			// Channel ID
-			CreateLabel(content.transform, "Channel ID:");
-			channelInput = CreateSimpleInputField(content.transform);
-			CreateSpacer(content.transform, 8);
+			ApplyJotunnStyling(panel);
+			GUIManager.Instance.ApplyWoodpanelStyle(panel.GetComponent<RectTransform>());
+		}
+
+		private void CreateTitle(Transform parent)
+		{
+			GameObject titleObj = new GameObject("Title");
+			titleObj.transform.SetParent(parent, false);
+
+			Text title = titleObj.AddComponent<Text>();
+			title.text = "Insert Node Configuration";
+			title.alignment = TextAnchor.MiddleCenter;
+			title.name = "Title";
+
+			LayoutElement layoutElem = titleObj.AddComponent<LayoutElement>();
+			layoutElem.preferredHeight = 40;
+		}
+
+		private void CreateTopSection(Transform parent)
+		{
+			// First row: Channel and Priority
+			GameObject firstRow = CreateHorizontalGroup(parent);
+			firstRow.GetComponent<LayoutElement>().preferredHeight = 50;
+			firstRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleLeft;
+
+			// Channel
+			GameObject channelLabelObj = new GameObject("ChannelLabel");
+			channelLabelObj.transform.SetParent(firstRow.transform, false);
+			Text channelLabel = channelLabelObj.AddComponent<Text>();
+			channelLabel.text = "Channel ID:";
+			channelLabel.alignment = TextAnchor.MiddleLeft;
+			LayoutElement channelLabelElem = channelLabelObj.AddComponent<LayoutElement>();
+			channelLabelElem.preferredWidth = 100;
+
+			GameObject channelInputObj = CreateStandardInputField(firstRow.transform, "None");
+			channelInput = channelInputObj.GetComponent<InputField>();
+			channelInput.onEndEdit.AddListener(OnChannelChanged);
+			LayoutElement channelInputElem = channelInputObj.GetComponent<LayoutElement>();
+			channelInputElem.preferredWidth = 150;
+
+			// Spacer
+			GameObject spacer1 = new GameObject("Spacer");
+			spacer1.transform.SetParent(firstRow.transform, false);
+			LayoutElement spacerElem1 = spacer1.AddComponent<LayoutElement>();
+			spacerElem1.preferredWidth = 20;
 
 			// Priority
-			CreateLabel(content.transform, "Priority:");
-			CreatePrioritySliderRow(content.transform);
-			CreateSpacer(content.transform, 8);
+			GameObject priorityLabelObj = new GameObject("PriorityLabel");
+			priorityLabelObj.transform.SetParent(firstRow.transform, false);
+			Text priorityLabel = priorityLabelObj.AddComponent<Text>();
+			priorityLabel.text = "Priority:";
+			priorityLabel.alignment = TextAnchor.MiddleLeft;
+			LayoutElement priorityLabelElem = priorityLabelObj.AddComponent<LayoutElement>();
+			priorityLabelElem.preferredWidth = 70;
 
-			// Filter toggle (Hopper style - text left, checkbox right)
-			whitelistToggle = CreateHopperToggle(content.transform, "Whitelist mode");
-			CreateSpacer(content.transform, 4);
+			GameObject priorityInputObj = CreateStandardInputField(firstRow.transform, "0");
+			priorityInput = priorityInputObj.GetComponent<InputField>();
+			priorityInput.contentType = InputField.ContentType.IntegerNumber;
+			priorityInput.onEndEdit.AddListener(OnPriorityChanged);
+			LayoutElement priorityInputElem = priorityInputObj.GetComponent<LayoutElement>();
+			priorityInputElem.preferredWidth = 80;
 
-			// Filter input
-			CreateLabel(content.transform, "Item Filter:");
-			filterInput = CreateMultilineInputField(content.transform, 80);
-			CreateSpacer(content.transform, 12);
+			// Second row: Whitelist
+			GameObject secondRow = CreateHorizontalGroup(parent);
+			secondRow.GetComponent<LayoutElement>().preferredHeight = 40;
+			secondRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleLeft;
 
-			// Action buttons (horizontal row like Hopper)
-			CreateActionButtons(content.transform);
+			GameObject toggleObj = CreateStandardToggle(secondRow.transform, "Whitelist", true);
+			whitelistToggle = toggleObj.GetComponent<Toggle>();
+			whitelistToggle.onValueChanged.AddListener(OnWhitelistChanged);
 		}
 
-		#region UI Component Creation (Hopper Style)
-
-		private Text CreateLabel(Transform parent, string text)
+		private void CreateSearchSection(Transform parent)
 		{
-			GameObject labelObj = new GameObject("Label");
-			labelObj.transform.SetParent(parent, false);
+			GameObject searchSection = new GameObject("SearchSection");
+			searchSection.transform.SetParent(parent, false);
 
-			Text label = labelObj.AddComponent<Text>();
-			label.text = text;
-			label.alignment = TextAnchor.MiddleLeft;
+			VerticalLayoutGroup vLayout = searchSection.AddComponent<VerticalLayoutGroup>();
+			vLayout.spacing = 5;
+			vLayout.childForceExpandWidth = true;
+			vLayout.childForceExpandHeight = false;
 
-			LayoutElement layoutElement = labelObj.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 20;
+			LayoutElement searchElem = searchSection.AddComponent<LayoutElement>();
+			searchElem.preferredHeight = 90;
 
-			return label;
+			// Current filtered items display
+			GameObject filteredRow = CreateHorizontalGroup(searchSection.transform);
+			filteredRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleCenter;
+			filteredRow.GetComponent<LayoutElement>().preferredHeight = 25;
+
+			GameObject filteredTextObj = new GameObject("FilteredText");
+			filteredTextObj.transform.SetParent(filteredRow.transform, false);
+			categoryFilterText = filteredTextObj.AddComponent<Text>();
+			categoryFilterText.text = "Current Filtered: None";
+			categoryFilterText.alignment = TextAnchor.MiddleCenter;
+			categoryFilterText.fontSize = 14;
+			LayoutElement filteredTextElem = filteredTextObj.AddComponent<LayoutElement>();
+			filteredTextElem.flexibleWidth = 1;
+
+			// Category browser
+			GameObject categoryRow = CreateHorizontalGroup(searchSection.transform);
+			categoryRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleCenter;
+			categoryRow.GetComponent<LayoutElement>().preferredHeight = 30;
+
+			Button leftArrow = CreateStandardButton(categoryRow.transform, "<", 30);
+			leftArrow.onClick.AddListener(OnPreviousCategory);
+
+			GameObject categoryTextObj = new GameObject("CategoryText");
+			categoryTextObj.transform.SetParent(categoryRow.transform, false);
+			categoryBrowserText = categoryTextObj.AddComponent<Text>();
+			categoryBrowserText.text = $"Browse: {categories[currentCategoryIndex]}";
+			categoryBrowserText.alignment = TextAnchor.MiddleCenter;
+			LayoutElement catTextElem = categoryTextObj.AddComponent<LayoutElement>();
+			catTextElem.preferredWidth = 300;
+
+			Button rightArrow = CreateStandardButton(categoryRow.transform, ">", 30);
+			rightArrow.onClick.AddListener(OnNextCategory);
+
+			// Search input
+			GameObject searchInputObj = CreateStandardInputField(searchSection.transform, "Search items...");
+			searchInput = searchInputObj.GetComponent<InputField>();
+			searchInput.onValueChanged.AddListener(OnSearchChanged);
 		}
 
-		private InputField CreateSimpleInputField(Transform parent)
+		private void CreateItemGrid(Transform parent)
 		{
-			GameObject fieldObj = new GameObject("InputField");
-			fieldObj.transform.SetParent(parent, false);
+			GameObject scrollContainer = new GameObject("ScrollContainer");
+			scrollContainer.transform.SetParent(parent, false);
 
-			Image background = fieldObj.AddComponent<Image>();
-			background.color = new Color(0, 0, 0, 0.5f);
+			LayoutElement scrollElem = scrollContainer.AddComponent<LayoutElement>();
+			scrollElem.flexibleHeight = 1;
+			scrollElem.preferredHeight = GRID_ROWS * ITEM_SLOT_SIZE + 20;
 
-			InputField input = fieldObj.AddComponent<InputField>();
+			ScrollRect scroll = scrollContainer.AddComponent<ScrollRect>();
+			scroll.horizontal = false;
+			scroll.vertical = true;
+			scroll.movementType = ScrollRect.MovementType.Clamped;
 
-			// Text
-			GameObject textObj = new GameObject("Text");
-			textObj.transform.SetParent(fieldObj.transform, false);
-			Text text = textObj.AddComponent<Text>();
-			text.supportRichText = false;
+			// Viewport
+			GameObject viewport = new GameObject("Viewport");
+			viewport.transform.SetParent(scrollContainer.transform, false);
+			RectTransform viewportRect = viewport.AddComponent<RectTransform>();
+			viewportRect.anchorMin = Vector2.zero;
+			viewportRect.anchorMax = Vector2.one;
+			viewportRect.sizeDelta = Vector2.zero;
+			viewport.AddComponent<Image>().color = new Color(0, 0, 0, 0.3f);
+			viewport.AddComponent<Mask>().showMaskGraphic = true;
 
-			RectTransform textRect = textObj.GetComponent<RectTransform>();
-			textRect.anchorMin = Vector2.zero;
-			textRect.anchorMax = Vector2.one;
-			textRect.offsetMin = new Vector2(8, 2);
-			textRect.offsetMax = new Vector2(-8, -2);
+			scroll.viewport = viewportRect;
 
-			// Placeholder
-			GameObject placeholderObj = new GameObject("Placeholder");
-			placeholderObj.transform.SetParent(fieldObj.transform, false);
-			Text placeholderText = placeholderObj.AddComponent<Text>();
-			placeholderText.fontStyle = FontStyle.Italic;
-			placeholderText.color = new Color(0.5f, 0.5f, 0.5f, 0.5f);
-			placeholderText.text = "Enter channel...";
+			// Content
+			itemGridContainer = new GameObject("ItemGrid");
+			itemGridContainer.transform.SetParent(viewport.transform, false);
 
-			RectTransform placeholderRect = placeholderObj.GetComponent<RectTransform>();
-			placeholderRect.anchorMin = Vector2.zero;
-			placeholderRect.anchorMax = Vector2.one;
-			placeholderRect.offsetMin = textRect.offsetMin;
-			placeholderRect.offsetMax = textRect.offsetMax;
+			RectTransform gridRect = itemGridContainer.AddComponent<RectTransform>();
+			gridRect.anchorMin = new Vector2(0, 1);
+			gridRect.anchorMax = new Vector2(1, 1);
+			gridRect.pivot = new Vector2(0.5f, 1);
 
-			input.targetGraphic = background;
-			input.textComponent = text;
-			input.placeholder = placeholderText;
+			itemGrid = itemGridContainer.AddComponent<GridLayoutGroup>();
+			itemGrid.cellSize = new Vector2(ITEM_SLOT_SIZE, ITEM_SLOT_SIZE);
+			itemGrid.spacing = new Vector2(5, 5);
+			itemGrid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+			itemGrid.constraintCount = GRID_COLUMNS;
+			itemGrid.childAlignment = TextAnchor.UpperCenter;
+			itemGrid.startCorner = GridLayoutGroup.Corner.UpperLeft;
+			itemGrid.startAxis = GridLayoutGroup.Axis.Horizontal;
 
-			LayoutElement layoutElement = fieldObj.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 30;
+			ContentSizeFitter fitter = itemGridContainer.AddComponent<ContentSizeFitter>();
+			fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-			return input;
-		}
+			scroll.content = gridRect;
 
-		private InputField CreateMultilineInputField(Transform parent, float height)
-		{
-			InputField input = CreateSimpleInputField(parent);
-			input.lineType = InputField.LineType.MultiLineNewline;
-
-			Text placeholderText = input.placeholder as Text;
-			if (placeholderText != null)
+			// Create item slots
+			for (int i = 0; i < GRID_COLUMNS * GRID_ROWS; i++)
 			{
-				placeholderText.text = "Item names (one per line)...";
+				CreateItemSlot(itemGridContainer.transform, i);
+			}
+		}
+
+		private void CreateItemSlot(Transform parent, int index)
+		{
+			GameObject slotObj = new GameObject($"ItemSlot_{index}");
+			slotObj.transform.SetParent(parent, false);
+
+			Image bg = slotObj.AddComponent<Image>();
+			bg.sprite = GUIManager.Instance.GetSprite("item_background");
+			bg.type = Image.Type.Sliced;
+
+			GameObject iconObj = new GameObject("Icon");
+			iconObj.transform.SetParent(slotObj.transform, false);
+			RectTransform iconRect = iconObj.AddComponent<RectTransform>();
+			iconRect.anchorMin = Vector2.zero;
+			iconRect.anchorMax = Vector2.one;
+			iconRect.sizeDelta = new Vector2(-10, -10);
+
+			Image icon = iconObj.AddComponent<Image>();
+			icon.preserveAspect = true;
+
+			Button button = slotObj.AddComponent<Button>();
+			int slotIndex = index;
+			button.onClick.AddListener(() => OnItemSlotClicked(slotIndex));
+
+			ItemSlot slot = slotObj.AddComponent<ItemSlot>();
+			slot.background = bg;
+			slot.icon = icon;
+			slot.button = button;
+
+			itemSlots.Add(slot);
+		}
+
+		private void CreateBottomButtons(Transform parent)
+		{
+			GameObject buttonRow = CreateHorizontalGroup(parent);
+			buttonRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleCenter;
+			buttonRow.GetComponent<LayoutElement>().preferredHeight = 50;
+
+			Button closeBtn = CreateStandardButton(buttonRow.transform, "Close", 150);
+			closeBtn.onClick.AddListener(Hide);
+
+			Button clearBtn = CreateStandardButton(buttonRow.transform, "Clear Filter", 150);
+			clearBtn.onClick.AddListener(OnClearFilter);
+		}
+
+		#endregion
+
+		#region Item Management
+
+		private void UpdateFilteredItems()
+		{
+			filteredItems.Clear();
+
+			string searchText = searchInput != null ? searchInput.text.ToLower() : "";
+			string category = categories[currentCategoryIndex];
+
+			foreach (var item in allItems)
+			{
+				if (!MatchesCategory(item, category))
+					continue;
+
+				if (!string.IsNullOrEmpty(searchText))
+				{
+					string itemName = item.m_shared.m_name.ToLower();
+					string prefabName = (item.m_dropPrefab?.name ?? "").ToLower();
+
+					if (!itemName.Contains(searchText) && !prefabName.Contains(searchText))
+						continue;
+				}
+
+				filteredItems.Add(item);
 			}
 
-			LayoutElement layoutElement = input.GetComponent<LayoutElement>();
-			layoutElement.preferredHeight = height;
-
-			return input;
+			UpdateItemGrid();
 		}
 
-		private void CreatePrioritySliderRow(Transform parent)
+		private void UpdateItemGrid()
 		{
-			GameObject sliderRow = new GameObject("PriorityRow");
-			sliderRow.transform.SetParent(parent, false);
-
-			HorizontalLayoutGroup layout = sliderRow.AddComponent<HorizontalLayoutGroup>();
-			layout.spacing = 10;
-			layout.childForceExpandWidth = true;
-			layout.childForceExpandHeight = false;
-
-			// Min label
-			GameObject minLabel = new GameObject("MinLabel");
-			minLabel.transform.SetParent(sliderRow.transform, false);
-			Text minText = minLabel.AddComponent<Text>();
-			minText.text = "-100";
-			minText.alignment = TextAnchor.MiddleCenter;
-
-			LayoutElement minLayout = minLabel.AddComponent<LayoutElement>();
-			minLayout.preferredWidth = 35;
-			minLayout.flexibleWidth = 0;
-
-			// Slider - FIXED: Create properly
-			prioritySlider = CreateSlider(sliderRow.transform);
-
-			// Max label
-			GameObject maxLabel = new GameObject("MaxLabel");
-			maxLabel.transform.SetParent(sliderRow.transform, false);
-			Text maxText = maxLabel.AddComponent<Text>();
-			maxText.text = "100";
-			maxText.alignment = TextAnchor.MiddleCenter;
-
-			LayoutElement maxLayout = maxLabel.AddComponent<LayoutElement>();
-			maxLayout.preferredWidth = 35;
-			maxLayout.flexibleWidth = 0;
-
-			// Value display
-			GameObject valueLabel = new GameObject("ValueLabel");
-			valueLabel.transform.SetParent(sliderRow.transform, false);
-			priorityValueText = valueLabel.AddComponent<Text>();
-			priorityValueText.text = "0";
-			priorityValueText.alignment = TextAnchor.MiddleCenter;
-
-			LayoutElement valueLayout = valueLabel.AddComponent<LayoutElement>();
-			valueLayout.preferredWidth = 40;
-			valueLayout.flexibleWidth = 0;
-
-			LayoutElement rowLayout = sliderRow.AddComponent<LayoutElement>();
-			rowLayout.preferredHeight = 30;
-
-			// Update value text when slider changes
-			prioritySlider.onValueChanged.AddListener(value =>
+			for (int i = 0; i < itemSlots.Count; i++)
 			{
-				priorityValueText.text = value.ToString("F0");
-			});
+				if (i < filteredItems.Count)
+				{
+					ItemDrop.ItemData item = filteredItems[i];
+					itemSlots[i].SetItem(item);
+
+					bool isFiltered = node.ItemFilter.Any(f =>
+						f.Equals(item.m_dropPrefab?.name ?? item.m_shared.m_name, System.StringComparison.OrdinalIgnoreCase));
+					itemSlots[i].SetHighlight(isFiltered);
+				}
+				else
+				{
+					itemSlots[i].Clear();
+				}
+			}
+
+			// Update the "Current Filtered" display
+			UpdateCurrentFilteredDisplay();
 		}
 
-		private Slider CreateSlider(Transform parent)
+		private void UpdateCurrentFilteredDisplay()
 		{
-			// Create slider GameObject with RectTransform
-			GameObject sliderObj = new GameObject("Slider");
-			RectTransform sliderRect = sliderObj.AddComponent<RectTransform>();
-			sliderObj.transform.SetParent(parent, false);
-			sliderRect.sizeDelta = new Vector2(100, 20);
+			if (categoryFilterText == null || node == null) return;
 
-			// Add Slider component
-			Slider slider = sliderObj.AddComponent<Slider>();
-
-			// Background
-			GameObject background = new GameObject("Background");
-			RectTransform bgRect = background.AddComponent<RectTransform>();
-			background.transform.SetParent(sliderObj.transform, false);
-
-			Image bgImage = background.AddComponent<Image>();
-			bgImage.color = new Color(0.2f, 0.2f, 0.2f);
-
-			bgRect.anchorMin = Vector2.zero;
-			bgRect.anchorMax = Vector2.one;
-			bgRect.sizeDelta = Vector2.zero;
-			bgRect.anchoredPosition = Vector2.zero;
-
-			// Fill Area
-			GameObject fillArea = new GameObject("Fill Area");
-			RectTransform fillAreaRect = fillArea.AddComponent<RectTransform>();
-			fillArea.transform.SetParent(sliderObj.transform, false);
-
-			fillAreaRect.anchorMin = Vector2.zero;
-			fillAreaRect.anchorMax = Vector2.one;
-			fillAreaRect.sizeDelta = Vector2.zero;
-			fillAreaRect.anchoredPosition = Vector2.zero;
-
-			// Fill
-			GameObject fill = new GameObject("Fill");
-			RectTransform fillRect = fill.AddComponent<RectTransform>();
-			fill.transform.SetParent(fillArea.transform, false);
-
-			Image fillImage = fill.AddComponent<Image>();
-			fillImage.color = new Color(0.8f, 0.6f, 0.2f);
-
-			fillRect.anchorMin = Vector2.zero;
-			fillRect.anchorMax = Vector2.one;
-			fillRect.sizeDelta = Vector2.zero;
-			fillRect.anchoredPosition = Vector2.zero;
-
-			// Handle Slide Area
-			GameObject handleArea = new GameObject("Handle Slide Area");
-			RectTransform handleAreaRect = handleArea.AddComponent<RectTransform>();
-			handleArea.transform.SetParent(sliderObj.transform, false);
-
-			handleAreaRect.anchorMin = Vector2.zero;
-			handleAreaRect.anchorMax = Vector2.one;
-			handleAreaRect.sizeDelta = Vector2.zero;
-			handleAreaRect.anchoredPosition = Vector2.zero;
-
-			// Handle
-			GameObject handle = new GameObject("Handle");
-			RectTransform handleRect = handle.AddComponent<RectTransform>();
-			handle.transform.SetParent(handleArea.transform, false);
-
-			Image handleImage = handle.AddComponent<Image>();
-			handleImage.color = Color.white;
-
-			handleRect.sizeDelta = new Vector2(16, 0);
-			handleRect.anchoredPosition = Vector2.zero;
-
-			// Configure slider references
-			slider.fillRect = fillRect;
-			slider.handleRect = handleRect;
-			slider.targetGraphic = handleImage;
-			slider.direction = Slider.Direction.LeftToRight;
-			slider.minValue = -100;
-			slider.maxValue = 100;
-			slider.wholeNumbers = true;
-			slider.value = 0;
-
-			// Add layout element
-			LayoutElement sliderLayout = sliderObj.AddComponent<LayoutElement>();
-			sliderLayout.flexibleWidth = 1;
-			sliderLayout.preferredHeight = 20;
-
-			return slider;
-		}
-
-		/// <summary>
-		/// Create toggle in Hopper style: text on left, checkbox on right
-		/// </summary>
-		private Toggle CreateHopperToggle(Transform parent, string label)
-		{
-			GameObject toggleRow = new GameObject("ToggleRow_" + label);
-			toggleRow.transform.SetParent(parent, false);
-
-			// Horizontal layout
-			HorizontalLayoutGroup layout = toggleRow.AddComponent<HorizontalLayoutGroup>();
-			layout.spacing = 10;
-			layout.childForceExpandWidth = false;
-			layout.childForceExpandHeight = false;
-			layout.childAlignment = TextAnchor.MiddleLeft;
-
-			// Label text (on the left)
-			GameObject labelObj = new GameObject("Label");
-			labelObj.transform.SetParent(toggleRow.transform, false);
-			Text labelText = labelObj.AddComponent<Text>();
-			labelText.text = label;
-			labelText.alignment = TextAnchor.MiddleLeft;
-
-			LayoutElement labelLayout = labelObj.AddComponent<LayoutElement>();
-			labelLayout.flexibleWidth = 1;
-
-			// Toggle (on the right)
-			GameObject toggleObj = new GameObject("Toggle");
-			toggleObj.transform.SetParent(toggleRow.transform, false);
-			Toggle toggle = toggleObj.AddComponent<Toggle>();
-
-			// Background circle
-			GameObject background = new GameObject("Background");
-			background.transform.SetParent(toggleObj.transform, false);
-			Image bgImage = background.AddComponent<Image>();
-			bgImage.color = new Color(0.2f, 0.2f, 0.2f);
-
-			RectTransform bgRect = background.GetComponent<RectTransform>();
-			bgRect.anchorMin = new Vector2(0.5f, 0.5f);
-			bgRect.anchorMax = new Vector2(0.5f, 0.5f);
-			bgRect.sizeDelta = new Vector2(20, 20);
-
-			// Checkmark
-			GameObject checkmark = new GameObject("Checkmark");
-			checkmark.transform.SetParent(background.transform, false);
-			Image checkImage = checkmark.AddComponent<Image>();
-			checkImage.color = new Color(0.8f, 0.7f, 0.3f); // Yellow-ish like Hopper
-
-			RectTransform checkRect = checkmark.GetComponent<RectTransform>();
-			checkRect.anchorMin = Vector2.zero;
-			checkRect.anchorMax = Vector2.one;
-			checkRect.offsetMin = new Vector2(4, 4);
-			checkRect.offsetMax = new Vector2(-4, -4);
-
-			toggle.targetGraphic = bgImage;
-			toggle.graphic = checkImage;
-
-			LayoutElement toggleLayout = toggleObj.AddComponent<LayoutElement>();
-			toggleLayout.preferredWidth = 20;
-			toggleLayout.preferredHeight = 20;
-			toggleLayout.flexibleWidth = 0;
-
-			LayoutElement rowLayout = toggleRow.AddComponent<LayoutElement>();
-			rowLayout.preferredHeight = 25;
-
-			return toggle;
-		}
-
-		/// <summary>
-		/// Create action buttons in Hopper style (horizontal row at bottom)
-		/// </summary>
-		private void CreateActionButtons(Transform parent)
-		{
-			GameObject buttonRow = new GameObject("ButtonRow");
-			buttonRow.transform.SetParent(parent, false);
-
-			HorizontalLayoutGroup layout = buttonRow.AddComponent<HorizontalLayoutGroup>();
-			layout.spacing = 10;
-			layout.childForceExpandWidth = true;
-			layout.childForceExpandHeight = false;
-
-			// Create three buttons like Hopper: Reset, Copy, Paste equivalent
-			CreateHopperButton(buttonRow.transform, "Apply", OnApply);
-			CreateHopperButton(buttonRow.transform, "Reset", OnReset);
-			CreateHopperButton(buttonRow.transform, "Cancel", OnCancel);
-
-			LayoutElement rowLayout = buttonRow.AddComponent<LayoutElement>();
-			rowLayout.preferredHeight = 35;
-		}
-
-		private void CreateHopperButton(Transform parent, string text, System.Action action)
-		{
-			GameObject buttonObj = new GameObject("Button_" + text);
-			buttonObj.transform.SetParent(parent, false);
-
-			Button button = buttonObj.AddComponent<Button>();
-			Image buttonImage = buttonObj.AddComponent<Image>();
-			buttonImage.color = new Color(0, 0, 0, 0.7f); // Dark background like Hopper
-
-			// Button text
-			GameObject textObj = new GameObject("Text");
-			textObj.transform.SetParent(buttonObj.transform, false);
-			Text buttonText = textObj.AddComponent<Text>();
-			buttonText.text = text;
-			buttonText.alignment = TextAnchor.MiddleCenter;
-
-			RectTransform textRect = textObj.GetComponent<RectTransform>();
-			textRect.anchorMin = Vector2.zero;
-			textRect.anchorMax = Vector2.one;
-			textRect.offsetMin = Vector2.zero;
-			textRect.offsetMax = Vector2.zero;
-
-			button.targetGraphic = buttonImage;
-			button.onClick.AddListener(() => action());
-
-			LayoutElement layoutElement = buttonObj.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 35;
-			layoutElement.flexibleWidth = 1;
+			if (node.ItemFilter.Count == 0)
+			{
+				categoryFilterText.text = "Current Filtered: None";
+			}
+			else if (node.ItemFilter.Count <= 3)
+			{
+				// Show item names if 3 or fewer
+				string itemNames = string.Join(", ", node.ItemFilter.Take(3));
+				categoryFilterText.text = $"Current Filtered: {itemNames}";
+			}
+			else
+			{
+				// Show count if more than 3
+				categoryFilterText.text = $"Current Filtered: {node.ItemFilter.Count} items";
+			}
 		}
 
 		#endregion
 
 		#region Event Handlers
 
-		private void OnApply()
+		private void OnChannelChanged(string newChannel)
 		{
-			// Set channel
-			node.SetChannel(channelInput.text);
-
-			// Set priority
-			int priority = (int)prioritySlider.value;
-			node.SetPriority(priority);
-
-			// Set filter
-
-			node.SetFilter(ParseFilter(), whitelistToggle.isOn);
-
-
-			if (DebugConfig.showDebug.Value)
+			if (node != null)
 			{
-				Logger.LogInfo($"[ItemConduit] Applied settings: Channel={channelInput.text}, Priority={priority}");
+				node.SetChannel(newChannel);
 			}
-
-			Hide();
 		}
 
-		private void OnReset()
+		private void OnPriorityChanged(string priorityText)
 		{
-			LoadCurrentSettings();
-		}
-
-		private void OnCancel()
-		{
-			Hide();
-		}
-
-		private void LoadCurrentSettings()
-		{
-			channelInput.text = node.ChannelId ?? "None";
-			prioritySlider.value = node.Priority;
-			priorityValueText.text = node.Priority.ToString("F0");
-
-			if (node.ItemFilter != null && node.ItemFilter.Count > 0)
+			if (node != null && int.TryParse(priorityText, out int priority))
 			{
-				filterInput.text = string.Join("\n", node.ItemFilter);
-				whitelistToggle.isOn = node.IsWhitelist;
+				node.SetPriority(priority);
+			}
+		}
+
+		private void OnWhitelistChanged(bool isWhitelist)
+		{
+			if (node != null)
+			{
+				node.SetFilter(node.ItemFilter, isWhitelist);
+			}
+		}
+
+		private void OnSearchChanged(string searchText)
+		{
+			UpdateFilteredItems();
+		}
+
+		private void OnPreviousCategory()
+		{
+			currentCategoryIndex--;
+			if (currentCategoryIndex < 0)
+				currentCategoryIndex = categories.Length - 1;
+
+			if (categoryBrowserText != null)
+				categoryBrowserText.text = $"Browse: {categories[currentCategoryIndex]}";
+
+			UpdateFilteredItems();
+		}
+
+		private void OnNextCategory()
+		{
+			currentCategoryIndex++;
+			if (currentCategoryIndex >= categories.Length)
+				currentCategoryIndex = 0;
+
+			if (categoryBrowserText != null)
+				categoryBrowserText.text = $"Browse: {categories[currentCategoryIndex]}";
+
+			UpdateFilteredItems();
+		}
+
+		private void OnItemSlotClicked(int slotIndex)
+		{
+			if (slotIndex >= filteredItems.Count) return;
+
+			ItemDrop.ItemData item = filteredItems[slotIndex];
+			string itemName = item.m_dropPrefab?.name ?? item.m_shared.m_name;
+
+			if (node.ItemFilter.Contains(itemName))
+			{
+				HashSet<string> newFilter = new HashSet<string>(node.ItemFilter);
+				newFilter.Remove(itemName);
+				node.SetFilter(newFilter, node.IsWhitelist);
 			}
 			else
 			{
-				filterInput.text = "";
-				whitelistToggle.isOn = true;
+				HashSet<string> newFilter = new HashSet<string>(node.ItemFilter);
+				newFilter.Add(itemName);
+				node.SetFilter(newFilter, node.IsWhitelist);
+			}
+
+			UpdateItemGrid();
+		}
+
+		private void OnClearFilter()
+		{
+			if (node != null)
+			{
+				node.SetFilter(new HashSet<string>(), node.IsWhitelist);
+				UpdateItemGrid();
 			}
 		}
 
-		private HashSet<string> ParseFilter()
-		{
-			HashSet<string> filter = new HashSet<string>();
-			string[] lines = filterInput.text.Split('\n');
-			foreach (string line in lines)
-			{
-				string trimmed = line.Trim();
-				if (!string.IsNullOrEmpty(trimmed))
-				{
-					filter.Add(trimmed);
-				}
-			}
+		#endregion
 
-			if (DebugConfig.showDebug.Value)
-			{
-				Logger.LogInfo($"Filter Settings: {string.Join(",", filter)}");
-			}
-			return filter;
+		#region GUI Control
+
+		private void LoadNodeSettings()
+		{
+			if (node == null) return;
+
+			channelInput.text = node.ChannelId;
+			priorityInput.text = node.Priority.ToString();
+			whitelistToggle.isOn = node.IsWhitelist;
+			UpdateItemGrid();
+		}
+
+		public override void Show()
+		{
+			base.Show();
+			LoadNodeSettings();
+		}
+
+		#endregion
+
+		#region ItemSlot Class - Inherits from BaseItemSlot
+
+		private class ItemSlot : BaseItemSlot
+		{
+			// Inherits all functionality from BaseItemSlot
+			// Can override methods here if needed for Insert-specific behavior
 		}
 
 		#endregion
