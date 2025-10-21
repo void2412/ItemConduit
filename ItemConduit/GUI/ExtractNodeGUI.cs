@@ -452,66 +452,10 @@ namespace ItemConduit.GUI
 			UpdateItemGrid();
 		}
 
-		private bool originalMouseCapture = true;
-
 		public override void Show()
 		{
-			if (uiRoot != null)
-			{
-				uiRoot.SetActive(true);
-				isVisible = true;
-
-				// Store and disable camera mouse capture
-				if (GameCamera.instance != null)
-				{
-					originalMouseCapture = GameCamera.instance.m_mouseCapture;
-					GameCamera.instance.m_mouseCapture = false;
-				}
-
-				// Force cursor unlocked and visible
-				Cursor.lockState = CursorLockMode.None;
-				Cursor.visible = true;
-
-				GUIController.Instance.RegisterGUI(this);
-				LoadNodeSettings();
-			}
-		}
-
-		public override void Hide()
-		{
-			if (uiRoot != null)
-			{
-				uiRoot.SetActive(false);
-				isVisible = false;
-
-				// Restore camera mouse capture
-				if (GameCamera.instance != null)
-				{
-					GameCamera.instance.m_mouseCapture = originalMouseCapture;
-				}
-
-				GUIController.Instance.UnregisterGUI(this);
-			}
-		}
-
-		protected override void Update()
-		{
-			if (!isVisible) return;
-
-			// Keep mouse capture disabled and cursor visible
-			if (GameCamera.instance != null && GameCamera.instance.m_mouseCapture)
-			{
-				GameCamera.instance.m_mouseCapture = false;
-			}
-
-			Cursor.lockState = CursorLockMode.None;
-			Cursor.visible = true;
-
-			// Close on Escape
-			if (Input.GetKeyDown(KeyCode.Escape))
-			{
-				Hide();
-			}
+			base.Show();
+			LoadNodeSettings();
 		}
 
 		#endregion

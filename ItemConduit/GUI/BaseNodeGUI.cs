@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Logger = Jotunn.Logger;
 using JotunnGUI = Jotunn.Managers.GUIManager;
+using System;
 
 namespace ItemConduit.GUI
 {
@@ -33,6 +34,9 @@ namespace ItemConduit.GUI
 		protected List<ItemDrop.ItemData> allItems = new List<ItemDrop.ItemData>();
 		protected List<ItemDrop.ItemData> filteredItems = new List<ItemDrop.ItemData>();
 
+		private List<InputField> trackedInputFields = new List<InputField>();
+		private bool wasAnyInputFieldFocused = false;
+
 		#endregion
 
 		#region Lifecycle
@@ -44,9 +48,42 @@ namespace ItemConduit.GUI
 
 		protected virtual void Update()
 		{
-			if (isVisible && Input.GetKeyDown(KeyCode.Escape))
+			if (!isVisible) return;
+
+			// Check if any input field currently has focus
+			bool anyInputFieldFocused = false;
+			foreach (var inputField in trackedInputFields)
 			{
-				Hide();
+				if (inputField != null && inputField.isFocused)
+				{
+					anyInputFieldFocused = true;
+					break;
+				}
+			}
+
+			// Notify GUIController when focus state changes
+			if (anyInputFieldFocused != wasAnyInputFieldFocused)
+			{
+				if (anyInputFieldFocused)
+				{
+					GUIController.Instance.OnInputFieldFocused();
+				}
+				else
+				{
+					GUIController.Instance.OnInputFieldUnfocused();
+				}
+				wasAnyInputFieldFocused = anyInputFieldFocused;
+			}
+
+			// Handle Escape key
+			if (Input.GetKeyDown(KeyCode.Escape))
+			{
+				// If any input field has focus, Escape unfocuses it (Unity does this automatically)
+				// If no input field has focus, close the GUI
+				if (!anyInputFieldFocused)
+				{
+					Hide();
+				}
 			}
 		}
 
@@ -111,8 +148,11 @@ namespace ItemConduit.GUI
 				uiRoot.SetActive(true);
 				isVisible = true;
 
-				// Only register with GUIController - don't call GUIManager.BlockInput
+				// Register with GUIController
 				GUIController.Instance.RegisterGUI(this);
+
+				// Find and track all input fields
+				RegisterInputFieldEvents();
 			}
 		}
 
@@ -123,7 +163,10 @@ namespace ItemConduit.GUI
 				uiRoot.SetActive(false);
 				isVisible = false;
 
-				// Only unregister from GUIController
+				// Unregister input field tracking
+				UnregisterInputFieldEvents();
+
+				// Unregister from GUIController
 				GUIController.Instance.UnregisterGUI(this);
 			}
 		}
@@ -131,6 +174,50 @@ namespace ItemConduit.GUI
 		public bool IsVisible()
 		{
 			return isVisible;
+		}
+
+		#endregion
+
+		#region Input Field Focus Tracking
+
+		/// <summary>
+		/// Find and register all input fields in the GUI for focus tracking
+		/// </summary>
+		private void RegisterInputFieldEvents()
+		{
+			if (panel == null) return;
+
+			// Clear previous tracked fields
+			trackedInputFields.Clear();
+			wasAnyInputFieldFocused = false;
+
+			// Find all input fields in the panel
+			var inputFields = panel.GetComponentsInChildren<InputField>(true);
+
+			foreach (InputField inputField in inputFields)
+			{
+				if (inputField != null)
+				{
+					trackedInputFields.Add(inputField);
+				}
+			}
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"[ItemConduit] Registered {trackedInputFields.Count} input fields for focus tracking");
+			}
+		}
+
+		/// <summary>
+		/// Clear input field tracking
+		/// </summary>
+		private void UnregisterInputFieldEvents()
+		{
+			trackedInputFields.Clear();
+			wasAnyInputFieldFocused = false;
+
+			// Make sure to notify GUIController that no input field has focus
+			GUIController.Instance.OnInputFieldUnfocused();
 		}
 
 		#endregion
@@ -293,6 +380,7 @@ namespace ItemConduit.GUI
 		}
 
 		#endregion
+
 
 		#region Item Management - Common Logic
 

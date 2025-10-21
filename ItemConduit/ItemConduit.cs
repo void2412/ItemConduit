@@ -1,4 +1,4 @@
-using BepInEx;
+﻿using BepInEx;
 using BepInEx.Configuration;
 using Jotunn.Configs;
 using Jotunn.Entities;
@@ -53,6 +53,7 @@ namespace ItemConduit.Core
 			harmony = new Harmony(PluginGUID);
 			harmony.PatchAll();
 
+			VerifyPatches();
 			// Register callback for when vanilla prefabs are loaded
 			PrefabManager.OnVanillaPrefabsAvailable += NodeRegistration.RegisterPieces;
 
@@ -85,6 +86,44 @@ namespace ItemConduit.Core
 			global::ItemConduit.Network.NetworkManager.Instance?.Shutdown();
 
 			Jotunn.Logger.LogInfo($"{PluginName} shutdown complete");
+		}
+
+		private void VerifyPatches()
+		{
+			var playerTakeInputPatches = Harmony.GetPatchInfo(AccessTools.Method(typeof(Player), "TakeInput"));
+			var gameCameraUpdateMouseCapturePatches = Harmony.GetPatchInfo(AccessTools.Method(typeof(GameCamera), "UpdateMouseCapture"));
+			var gameCameraUpdateCameraPatches = Harmony.GetPatchInfo(AccessTools.Method(typeof(GameCamera), "UpdateCamera"));
+
+			Logger.LogInfo("=== ItemConduit Harmony Patch Verification ===");
+
+			if (playerTakeInputPatches != null && playerTakeInputPatches.Postfixes.Count > 0)
+			{
+				Logger.LogInfo("✓ Player.TakeInput patch applied successfully");
+			}
+			else
+			{
+				Logger.LogError("✗ Player.TakeInput patch FAILED to apply!");
+			}
+
+			if (gameCameraUpdateMouseCapturePatches != null && gameCameraUpdateMouseCapturePatches.Postfixes.Count > 0)
+			{
+				Logger.LogInfo("✓ GameCamera.UpdateMouseCapture patch applied successfully");
+			}
+			else
+			{
+				Logger.LogWarning("✗ GameCamera.UpdateMouseCapture patch not applied (might not exist)");
+			}
+
+			if (gameCameraUpdateCameraPatches != null && gameCameraUpdateCameraPatches.Prefixes.Count > 0)
+			{
+				Logger.LogInfo("✓ GameCamera.UpdateCamera patch applied successfully");
+			}
+			else
+			{
+				Logger.LogWarning("✗ GameCamera.UpdateCamera patch not applied");
+			}
+
+			Logger.LogInfo("=== End Patch Verification ===");
 		}
 	}
 

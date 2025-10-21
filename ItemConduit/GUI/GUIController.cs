@@ -1,13 +1,14 @@
 using System.Collections.Generic;
 using UnityEngine;
 using ItemConduit.Config;
+using HarmonyLib;
 using Logger = Jotunn.Logger;
 
 namespace ItemConduit.GUI
 {
 	/// <summary>
 	/// Manages all GUI windows for the ItemConduit mod
-	/// Renamed from GUIManager to avoid conflict with Jotunn.Managers.GUIManager
+	/// Tracks input field focus and directly manages input blocking
 	/// </summary>
 	public class GUIController : MonoBehaviour
 	{
@@ -38,11 +39,8 @@ namespace ItemConduit.GUI
 		/// <summary>Whether any GUI is currently active</summary>
 		private bool hasActiveGUI = false;
 
-		/// <summary>Previous cursor lock state</summary>
-		private CursorLockMode previousCursorLockMode;
-
-		/// <summary>Previous cursor visibility</summary>
-		private bool previousCursorVisible;
+		/// <summary>Whether an input field currently has focus (user is typing)</summary>
+		private bool hasInputFieldFocus = false;
 
 		#endregion
 
@@ -60,12 +58,6 @@ namespace ItemConduit.GUI
 				if (DebugConfig.showDebug.Value)
 				{
 					Logger.LogInfo($"[ItemConduit] Registered GUI: {gui.GetType().Name}");
-				}
-
-				// Update cursor state when first GUI is opened
-				if (!hasActiveGUI)
-				{
-					EnableGUIMode();
 				}
 
 				hasActiveGUI = activeGUIs.Count > 0;
@@ -88,10 +80,10 @@ namespace ItemConduit.GUI
 
 				hasActiveGUI = activeGUIs.Count > 0;
 
-				// Restore cursor state when last GUI is closed
+				// Clear input field focus when last GUI closes
 				if (!hasActiveGUI)
 				{
-					DisableGUIMode();
+					hasInputFieldFocus = false;
 				}
 			}
 		}
@@ -113,46 +105,36 @@ namespace ItemConduit.GUI
 
 			activeGUIs.Clear();
 			hasActiveGUI = false;
-			DisableGUIMode();
+			hasInputFieldFocus = false;
 		}
 
 		#endregion
 
-		#region Cursor Management
+		#region Input Field Focus Tracking
 
 		/// <summary>
-		/// Enable GUI mode (show cursor)
-		/// Player input blocking is handled by Harmony patches
+		/// Called when an input field gains focus (user starts typing)
 		/// </summary>
-		private void EnableGUIMode()
+		public void OnInputFieldFocused()
 		{
-			// Store previous cursor state
-			previousCursorLockMode = Cursor.lockState;
-			previousCursorVisible = Cursor.visible;
-
-			// Enable cursor for GUI interaction
-			Cursor.lockState = CursorLockMode.None;
-			Cursor.visible = true;
-
-			if (DebugConfig.showDebug.Value)
-			{
-				Logger.LogInfo("[ItemConduit] Enabled GUI mode");
-			}
+			hasInputFieldFocus = true;
 		}
 
 		/// <summary>
-		/// Disable GUI mode (restore cursor)
+		/// Called when an input field loses focus (user stops typing)
 		/// </summary>
-		private void DisableGUIMode()
+		public void OnInputFieldUnfocused()
 		{
-			// Restore cursor state
-			Cursor.lockState = previousCursorLockMode;
-			Cursor.visible = previousCursorVisible;
+			hasInputFieldFocus = false;
+		}
 
-			if (DebugConfig.showDebug.Value)
-			{
-				Logger.LogInfo("[ItemConduit] Disabled GUI mode");
-			}
+		/// <summary>
+		/// Check if an input field currently has focus
+		/// Used by Harmony patches to block input appropriately
+		/// </summary>
+		public bool HasInputFieldFocus()
+		{
+			return hasInputFieldFocus;
 		}
 
 		#endregion
@@ -160,20 +142,26 @@ namespace ItemConduit.GUI
 		#region Unity Events
 
 		/// <summary>
-		/// Handle escape key globally
+		/// Handle global input and enforce input blocking every frame
 		/// </summary>
 		private void Update()
 		{
-			// Enforce cursor state while GUI is active
+			// Ensure cursor is always visible and unlocked when GUI is active
 			if (hasActiveGUI)
 			{
-				// Force cursor to be visible and unlocked every frame
 				Cursor.visible = true;
 				Cursor.lockState = CursorLockMode.None;
+
+				// DIRECTLY disable camera mouse capture every frame
+				if (GameCamera.instance != null)
+				{
+					// Use Traverse to access private field
+					Traverse.Create(GameCamera.instance).Field("m_mouseCapture").SetValue(false);
+				}
 			}
 
-			// Close all GUIs when ESC is pressed
-			if (hasActiveGUI && Input.GetKeyDown(KeyCode.Escape))
+			// Close all GUIs when ESC is pressed (unless typing in input field)
+			if (hasActiveGUI && Input.GetKeyDown(KeyCode.Escape) && !hasInputFieldFocus)
 			{
 				CloseAll();
 			}
