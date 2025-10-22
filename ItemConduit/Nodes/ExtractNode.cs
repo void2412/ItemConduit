@@ -22,13 +22,13 @@ namespace ItemConduit.Nodes
 		#region Configuration Properties
 
 		/// <summary>Channel ID for routing items to specific insert nodes</summary>
-		public string ChannelId { get;  set; } = "";
+		public string ChannelId { get; private set; } = "None";
 
 		/// <summary>Set of item names to filter (whitelist or blacklist)</summary>
 		public HashSet<string> ItemFilter { get; private set; } = new HashSet<string>();
 
 		/// <summary>Whether the filter is a whitelist (true) or blacklist (false)</summary>
-		public bool IsWhitelist { get;  set; } = true;
+		public bool IsWhitelist { get; private set; } = true;
 
 		#endregion
 
@@ -66,7 +66,7 @@ namespace ItemConduit.Nodes
 			{
 				zNetView.Register<string>("RPC_UpdateChannel", RPC_UpdateChannel);
 				zNetView.Register<string>("RPC_UpdateFilter", RPC_UpdateFilter);
-				zNetView.Register<bool>("RPC_UpdateWhitelist", RPC_UpdateWhitelist);
+				zNetView.Register<bool>("RPC_UpdateMode", RPC_UpdateMode);
 			}
 		}
 
@@ -84,7 +84,7 @@ namespace ItemConduit.Nodes
 			ZDO zdo = zNetView.GetZDO();
 			if (zdo == null) return;
 
-			string savedChannel = zdo.GetString("ItemConduit_Channel", "");
+			string savedChannel = zdo.GetString("ItemConduit_Channel", "None");
 			ChannelId = savedChannel;
 
 			string savedFilter = zdo.GetString("ItemConduit_Filter", "");
@@ -242,7 +242,7 @@ namespace ItemConduit.Nodes
 		/// <param name="channelId">The channel ID to set</param>
 		public void SetChannel(string channelId)
 		{
-			ChannelId = string.IsNullOrEmpty(channelId) ? "" : channelId;
+			ChannelId = string.IsNullOrEmpty(channelId) ? "None" : channelId;
 
 			// Save to ZDO for persistence
 			if (zNetView != null && zNetView.IsValid())
@@ -280,7 +280,6 @@ namespace ItemConduit.Nodes
 		public void SetFilter(HashSet<string> filter)
 		{
 			ItemFilter = filter != null ?new HashSet<string>(filter) : new HashSet<string>();
-			
 
 			// Save to ZDO for persistence
 			if (zNetView != null && zNetView.IsValid())
@@ -307,10 +306,10 @@ namespace ItemConduit.Nodes
 			}
 		}
 
-
 		public void SetWhitelist(bool isWhitelist)
 		{
 			IsWhitelist = isWhitelist;
+
 			if (zNetView != null && zNetView.IsValid())
 			{
 				ZDO zdo = zNetView.GetZDO();
@@ -320,18 +319,16 @@ namespace ItemConduit.Nodes
 				}
 			}
 
-
 			if (zNetView != null && zNetView.IsValid() && ZNet.instance.IsServer())
 			{
-				zNetView.InvokeRPC(ZNetView.Everybody, "RPC_UpdateWhitelist", isWhitelist);
+				zNetView.InvokeRPC(ZNetView.Everybody, "RPC_UpdateMode", isWhitelist);
 			}
 
-			if (DebugConfig.showDebug.Value) 
+			if (DebugConfig.showDebug.Value)
 			{
-				string mode = isWhitelist ? "whitelist" : "blacklist";
-				Logger.LogInfo($"[ItemConduit] Extract node {name} filter set to {mode}");
+				string mode = IsWhitelist ? "whitelist" : "blacklist";
+				Logger.LogInfo($"[ItemConduit] Extract node {name} mode set: {mode}");
 			}
-
 		}
 
 		#endregion
@@ -368,17 +365,18 @@ namespace ItemConduit.Nodes
 
 			if (DebugConfig.showDebug.Value)
 			{
-				Logger.LogInfo($"[ItemConduit] {NodeType} node {name} received filter update via RPC: {ItemFilter.Count} items, mode: {(IsWhitelist ? "whitelist" : "blacklist")}");
+				Logger.LogInfo($"[ItemConduit] {NodeType} node {name} received filter update via RPC: {ItemFilter.Count} items");
 			}
 		}
 
-		private void RPC_UpdateWhitelist(long sender, bool isWhitelist)
+		private void RPC_UpdateMode(long sender, bool isWhitelist)
 		{
 			IsWhitelist = isWhitelist;
 
 			if (DebugConfig.showDebug.Value)
 			{
-				Logger.LogInfo($"[ItemConduit] {NodeType} node {name} received update via RPC: {(IsWhitelist ? "whitelist" : "blacklist")}");
+				string mode = IsWhitelist ? "whitelist" : "blacklist";
+				Logger.LogInfo($"[ItemConduit] {NodeType} node {name} received mode via RPC: {mode}");
 			}
 		}
 
