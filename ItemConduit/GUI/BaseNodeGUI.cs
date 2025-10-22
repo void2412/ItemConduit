@@ -12,18 +12,15 @@ using System;
 namespace ItemConduit.GUI
 {
 	/// <summary>
-	/// Base class for all node GUI windows with Jötunn integration and common UI helpers
+	/// Base class for all node GUI windows using Jötunn GUIManager
 	/// </summary>
 	public abstract class BaseNodeGUI : MonoBehaviour
 	{
 		#region Fields
 
-		protected GameObject uiRoot;
 		protected GameObject panel;
 		protected RectTransform panelRect;
 		protected bool isVisible = false;
-
-		protected static readonly Color WhiteShade = new Color(219f / 255f, 219f / 255f, 219f / 255f);
 
 		// Constants for item grid
 		protected const int GRID_COLUMNS = 8;
@@ -78,8 +75,6 @@ namespace ItemConduit.GUI
 			// Handle Escape key
 			if (Input.GetKeyDown(KeyCode.Escape))
 			{
-				// If any input field has focus, Escape unfocuses it (Unity does this automatically)
-				// If no input field has focus, close the GUI
 				if (!anyInputFieldFocused)
 				{
 					Hide();
@@ -98,43 +93,21 @@ namespace ItemConduit.GUI
 
 		protected virtual void CreateJotunnPanel()
 		{
-			uiRoot = new GameObject("ItemConduitUI");
-			uiRoot.transform.SetParent(JotunnGUI.CustomGUIFront.transform, false);
+			// Create wood panel using Jötunn
+			panel = JotunnGUI.Instance.CreateWoodpanel(
+				parent: JotunnGUI.CustomGUIFront.transform,
+				anchorMin: new Vector2(0.5f, 0.5f),
+				anchorMax: new Vector2(0.5f, 0.5f),
+				position: new Vector2(0, 0),
+				width: GetPanelSize().x,
+				height: GetPanelSize().y,
+				draggable: true
+			);
 
-			Canvas canvas = uiRoot.AddComponent<Canvas>();
-			canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-			canvas.sortingOrder = 100;
-
-			CanvasScaler scaler = uiRoot.AddComponent<CanvasScaler>();
-			scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-			scaler.referenceResolution = new Vector2(1920, 1080);
-
-			uiRoot.AddComponent<GraphicRaycaster>();
-			uiRoot.AddComponent<CanvasGroup>();
-
-			panel = CreateStyledPanel();
-			panel.transform.SetParent(uiRoot.transform, false);
-			panel.AddComponent<DragWindowCntrl>();
-
+			panel.name = "ItemConduitPanel";
 			panelRect = panel.GetComponent<RectTransform>();
-			panelRect.anchorMin = new Vector2(0.5f, 0.5f);
-			panelRect.anchorMax = new Vector2(0.5f, 0.5f);
-			panelRect.pivot = new Vector2(0.5f, 0.5f);
-			panelRect.anchoredPosition = Vector2.zero;
-			panelRect.sizeDelta = GetPanelSize();
 
-			uiRoot.SetActive(false);
-		}
-
-		protected GameObject CreateStyledPanel()
-		{
-			GameObject panel = new GameObject("Panel");
-			RectTransform rect = panel.AddComponent<RectTransform>();
-
-			Image background = panel.AddComponent<Image>();
-			background.color = GUIManager.Instance.ValheimOrange;
-
-			return panel;
+			panel.SetActive(false);
 		}
 
 		#endregion
@@ -143,9 +116,9 @@ namespace ItemConduit.GUI
 
 		public virtual void Show()
 		{
-			if (uiRoot != null)
+			if (panel != null)
 			{
-				uiRoot.SetActive(true);
+				panel.SetActive(true);
 				isVisible = true;
 
 				// Register with GUIController
@@ -158,9 +131,9 @@ namespace ItemConduit.GUI
 
 		public virtual void Hide()
 		{
-			if (uiRoot != null)
+			if (panel != null)
 			{
-				uiRoot.SetActive(false);
+				panel.SetActive(false);
 				isVisible = false;
 
 				// Unregister input field tracking
@@ -180,18 +153,13 @@ namespace ItemConduit.GUI
 
 		#region Input Field Focus Tracking
 
-		/// <summary>
-		/// Find and register all input fields in the GUI for focus tracking
-		/// </summary>
 		private void RegisterInputFieldEvents()
 		{
 			if (panel == null) return;
 
-			// Clear previous tracked fields
 			trackedInputFields.Clear();
 			wasAnyInputFieldFocused = false;
 
-			// Find all input fields in the panel
 			var inputFields = panel.GetComponentsInChildren<InputField>(true);
 
 			foreach (InputField inputField in inputFields)
@@ -208,151 +176,196 @@ namespace ItemConduit.GUI
 			}
 		}
 
-		/// <summary>
-		/// Clear input field tracking
-		/// </summary>
 		private void UnregisterInputFieldEvents()
 		{
 			trackedInputFields.Clear();
 			wasAnyInputFieldFocused = false;
-
-			// Make sure to notify GUIController that no input field has focus
 			GUIController.Instance.OnInputFieldUnfocused();
 		}
 
 		#endregion
 
-		#region UI Helper Methods - Common to all Node GUIs
+		#region UI Helper Methods - Using Jötunn GUIManager
 
-		protected GameObject CreateStandardInputField(Transform parent, string placeholder)
+		/// <summary>
+		/// Create a text element using Jötunn
+		/// </summary>
+		protected Text CreateJotunnText(Transform parent, string text, int fontSize = 16,
+			TextAnchor alignment = TextAnchor.MiddleLeft, bool bold = false, float width = 100, float height = 30)
 		{
-			GameObject inputObj = new GameObject("InputField");
-			inputObj.transform.SetParent(parent, false);
+			GameObject textObj = new GameObject("Text_" + text);
+			textObj.transform.SetParent(parent, false);
 
-			Image bg = inputObj.AddComponent<Image>();
-			bg.color = new Color(0, 0, 0, 0.5f);
+			Text textComponent = textObj.AddComponent<Text>();
+			textComponent.text = text;
+			textComponent.alignment = alignment;
 
-			InputField input = inputObj.AddComponent<InputField>();
-			input.transition = Selectable.Transition.ColorTint;
+			// Apply Jötunn text styling
+			JotunnGUI.Instance.ApplyTextStyle(
+				textComponent,
+				bold ? JotunnGUI.Instance.AveriaSerifBold : JotunnGUI.Instance.AveriaSerif,
+				Color.white,
+				fontSize,
+				bold
+			);
 
-			// Text
-			GameObject textArea = new GameObject("Text");
-			textArea.transform.SetParent(inputObj.transform, false);
-			RectTransform textRect = textArea.AddComponent<RectTransform>();
-			textRect.anchorMin = Vector2.zero;
-			textRect.anchorMax = Vector2.one;
-			textRect.sizeDelta = new Vector2(-10, 0);
+			// Add layout element for sizing
+			LayoutElement layout = textObj.AddComponent<LayoutElement>();
+			layout.preferredWidth = width;
+			layout.preferredHeight = height;
 
-			Text text = textArea.AddComponent<Text>();
-			text.supportRichText = false;
-			text.alignment = TextAnchor.MiddleLeft;
-			text.color = Color.white;
-			input.textComponent = text;
-
-			// Placeholder
-			GameObject placeholderObj = new GameObject("Placeholder");
-			placeholderObj.transform.SetParent(inputObj.transform, false);
-			RectTransform placeholderRect = placeholderObj.AddComponent<RectTransform>();
-			placeholderRect.anchorMin = Vector2.zero;
-			placeholderRect.anchorMax = Vector2.one;
-			placeholderRect.sizeDelta = new Vector2(-10, 0);
-
-			Text placeholderText = placeholderObj.AddComponent<Text>();
-			placeholderText.text = placeholder;
-			placeholderText.fontStyle = FontStyle.Italic;
-			placeholderText.color = new Color(0.5f, 0.5f, 0.5f);
-			placeholderText.alignment = TextAnchor.MiddleLeft;
-			input.placeholder = placeholderText;
-
-			LayoutElement layout = inputObj.AddComponent<LayoutElement>();
-			layout.preferredHeight = 30;
-			layout.flexibleWidth = 1;
-
-			return inputObj;
+			return textComponent;
 		}
 
-		protected GameObject CreateStandardToggle(Transform parent, string label, bool defaultValue)
+		/// <summary>
+		/// Create an input field using Jötunn
+		/// </summary>
+		protected InputField CreateJotunnInputField(Transform parent, string placeholder,
+			float width = 150, float height = 30)
 		{
-			GameObject toggleObj = new GameObject("Toggle");
-			toggleObj.transform.SetParent(parent, false);
+			GameObject inputObj = JotunnGUI.Instance.CreateInputField(
+				parent: parent,
+				anchorMin: Vector2.zero,
+				anchorMax: Vector2.one,
+				position: Vector2.zero,
+				contentType: InputField.ContentType.Standard,
+				placeholderText: placeholder,
+				fontSize: 16,
+				width: width,
+				height: height
+			);
 
-			Toggle toggle = toggleObj.AddComponent<Toggle>();
+			InputField inputField = inputObj.GetComponent<InputField>();
+
+			// Add layout element
+			if (!inputObj.GetComponent<LayoutElement>())
+			{
+				LayoutElement layout = inputObj.AddComponent<LayoutElement>();
+				layout.preferredWidth = width;
+				layout.preferredHeight = height;
+			}
+
+			return inputField;
+		}
+
+		/// <summary>
+		/// Create a toggle using Jötunn
+		/// </summary>
+		protected Toggle CreateJotunnToggle(Transform parent, string label, bool defaultValue = true,
+			float width = 150, float height = 30)
+		{
+			GameObject toggleObj = JotunnGUI.Instance.CreateToggle(
+				parent: parent,
+				width: width,
+				height: height
+			);
+
+			Toggle toggle = toggleObj.GetComponent<Toggle>();
 			toggle.isOn = defaultValue;
 
-			// Background
-			GameObject bg = new GameObject("Background");
-			bg.transform.SetParent(toggleObj.transform, false);
-			RectTransform bgRect = bg.AddComponent<RectTransform>();
-			bgRect.sizeDelta = new Vector2(20, 20);
-			Image bgImage = bg.AddComponent<Image>();
-			bgImage.color = new Color(0.2f, 0.2f, 0.2f);
-
-			// Checkmark
-			GameObject checkmark = new GameObject("Checkmark");
-			checkmark.transform.SetParent(bg.transform, false);
-			RectTransform checkRect = checkmark.AddComponent<RectTransform>();
-			checkRect.anchorMin = Vector2.zero;
-			checkRect.anchorMax = Vector2.one;
-			checkRect.sizeDelta = new Vector2(-4, -4);
-			Image checkImage = checkmark.AddComponent<Image>();
-			checkImage.color = new Color(0.2f, 0.8f, 0.2f);
-
-			toggle.targetGraphic = bgImage;
-			toggle.graphic = checkImage;
-
-			// Label
+			// Add label
 			GameObject labelObj = new GameObject("Label");
 			labelObj.transform.SetParent(toggleObj.transform, false);
+
 			Text labelText = labelObj.AddComponent<Text>();
 			labelText.text = label;
 			labelText.alignment = TextAnchor.MiddleLeft;
+
+			JotunnGUI.Instance.ApplyTextStyle(labelText, JotunnGUI.Instance.AveriaSerif, Color.white, 16);
+
 			RectTransform labelRect = labelObj.GetComponent<RectTransform>();
 			labelRect.anchorMin = new Vector2(0, 0);
 			labelRect.anchorMax = new Vector2(1, 1);
 			labelRect.offsetMin = new Vector2(25, 0);
 			labelRect.offsetMax = Vector2.zero;
 
-			HorizontalLayoutGroup hLayout = toggleObj.AddComponent<HorizontalLayoutGroup>();
-			hLayout.spacing = 5;
-			hLayout.childForceExpandWidth = false;
-			hLayout.childAlignment = TextAnchor.MiddleLeft;
-
+			// Add layout element
 			LayoutElement layout = toggleObj.AddComponent<LayoutElement>();
-			layout.preferredHeight = 30;
+			layout.preferredWidth = width;
+			layout.preferredHeight = height;
 
-			return toggleObj;
+			return toggle;
 		}
 
-		protected Button CreateStandardButton(Transform parent, string text, float width)
+		/// <summary>
+		/// Create a button using Jötunn
+		/// </summary>
+		protected Button CreateJotunnButton(Transform parent, string text, UnityEngine.Events.UnityAction onClick,
+			float width = 150, float height = 40)
 		{
-			GameObject buttonObj = new GameObject("Button_" + text);
-			buttonObj.transform.SetParent(parent, false);
+			GameObject buttonObj = JotunnGUI.Instance.CreateButton(
+				text: text,
+				parent: parent,
+				anchorMin: Vector2.zero,
+				anchorMax: Vector2.one,
+				position: Vector2.zero,
+				width: width,
+				height: height
+			);
 
-			Image bg = buttonObj.AddComponent<Image>();
-			bg.color = new Color(0.3f, 0.25f, 0.2f);
+			Button button = buttonObj.GetComponent<Button>();
+			if (onClick != null)
+			{
+				button.onClick.AddListener(onClick);
+			}
 
-			Button button = buttonObj.AddComponent<Button>();
-			button.targetGraphic = bg;
-
-			GameObject textObj = new GameObject("Text");
-			textObj.transform.SetParent(buttonObj.transform, false);
-			RectTransform textRect = textObj.AddComponent<RectTransform>();
-			textRect.anchorMin = Vector2.zero;
-			textRect.anchorMax = Vector2.one;
-			textRect.sizeDelta = Vector2.zero;
-
-			Text buttonText = textObj.AddComponent<Text>();
-			buttonText.text = text;
-			buttonText.alignment = TextAnchor.MiddleCenter;
-			buttonText.color = Color.white;
-
-			LayoutElement layout = buttonObj.AddComponent<LayoutElement>();
-			layout.preferredWidth = width;
-			layout.preferredHeight = 40;
+			// Add layout element
+			if (!buttonObj.GetComponent<LayoutElement>())
+			{
+				LayoutElement layout = buttonObj.AddComponent<LayoutElement>();
+				layout.preferredWidth = width;
+				layout.preferredHeight = height;
+			}
 
 			return button;
 		}
 
+		/// <summary>
+		/// Create a horizontal layout group
+		/// </summary>
+		protected GameObject CreateHorizontalGroup(Transform parent, float spacing = 10,
+			float height = 30, TextAnchor alignment = TextAnchor.MiddleCenter)
+		{
+			GameObject group = new GameObject("HorizontalGroup");
+			group.transform.SetParent(parent, false);
+
+			HorizontalLayoutGroup layout = group.AddComponent<HorizontalLayoutGroup>();
+			layout.spacing = spacing;
+			layout.childForceExpandWidth = false;
+			layout.childForceExpandHeight = false;
+			layout.childAlignment = alignment;
+			layout.childControlWidth = false;
+			layout.childControlHeight = false;
+
+			LayoutElement layoutElement = group.AddComponent<LayoutElement>();
+			layoutElement.preferredHeight = height;
+			layoutElement.flexibleWidth = 1;
+
+			return group;
+		}
+
+		/// <summary>
+		/// Create a vertical layout group
+		/// </summary>
+		protected GameObject CreateVerticalGroup(Transform parent, float spacing = 10,
+			TextAnchor alignment = TextAnchor.UpperCenter)
+		{
+			GameObject group = new GameObject("VerticalGroup");
+			group.transform.SetParent(parent, false);
+
+			VerticalLayoutGroup layout = group.AddComponent<VerticalLayoutGroup>();
+			layout.spacing = spacing;
+			layout.childForceExpandWidth = true;
+			layout.childForceExpandHeight = false;
+			layout.childAlignment = alignment;
+			layout.childControlHeight = false;
+
+			return group;
+		}
+
+		/// <summary>
+		/// Create a spacer
+		/// </summary>
 		protected void CreateSpacer(Transform parent, float height)
 		{
 			GameObject spacer = new GameObject("Spacer");
@@ -362,25 +375,61 @@ namespace ItemConduit.GUI
 			layoutElement.preferredHeight = height;
 		}
 
-		protected GameObject CreateHorizontalGroup(Transform parent)
+		/// <summary>
+		/// Create a scroll rect for item grid
+		/// </summary>
+		protected ScrollRect CreateJotunnScrollRect(Transform parent, float width, float height)
 		{
-			GameObject group = new GameObject("HorizontalGroup");
-			group.transform.SetParent(parent, false);
+			GameObject scrollObj = new GameObject("ScrollView");
+			scrollObj.transform.SetParent(parent, false);
 
-			HorizontalLayoutGroup layout = group.AddComponent<HorizontalLayoutGroup>();
-			layout.spacing = 10;
-			layout.childForceExpandWidth = false;
-			layout.childForceExpandHeight = false;
-			layout.childAlignment = TextAnchor.MiddleCenter;
+			RectTransform scrollRect = scrollObj.AddComponent<RectTransform>();
+			scrollRect.sizeDelta = new Vector2(width, height);
 
-			LayoutElement layoutElement = group.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 30;
+			Image scrollBg = scrollObj.AddComponent<Image>();
+			scrollBg.color = new Color(0, 0, 0, 0.3f);
 
-			return group;
+			ScrollRect scroll = scrollObj.AddComponent<ScrollRect>();
+			scroll.horizontal = false;
+			scroll.vertical = true;
+			scroll.movementType = ScrollRect.MovementType.Clamped;
+
+			// Create viewport
+			GameObject viewport = new GameObject("Viewport");
+			viewport.transform.SetParent(scrollObj.transform, false);
+
+			RectTransform viewportRect = viewport.AddComponent<RectTransform>();
+			viewportRect.anchorMin = Vector2.zero;
+			viewportRect.anchorMax = Vector2.one;
+			viewportRect.sizeDelta = Vector2.zero;
+
+			viewport.AddComponent<Image>().color = new Color(0, 0, 0, 0.1f);
+			viewport.AddComponent<Mask>().showMaskGraphic = false;
+
+			scroll.viewport = viewportRect;
+
+			// Create content
+			GameObject content = new GameObject("Content");
+			content.transform.SetParent(viewport.transform, false);
+
+			RectTransform contentRect = content.AddComponent<RectTransform>();
+			contentRect.anchorMin = new Vector2(0, 1);
+			contentRect.anchorMax = new Vector2(1, 1);
+			contentRect.pivot = new Vector2(0.5f, 1);
+			contentRect.sizeDelta = new Vector2(0, height);
+
+			scroll.content = contentRect;
+
+			// Add layout element
+			LayoutElement layout = scrollObj.AddComponent<LayoutElement>();
+			layout.preferredWidth = width;
+			layout.preferredHeight = height;
+			layout.flexibleHeight = 1;
+
+			return scroll;
 		}
 
 		#endregion
-
 
 		#region Item Management - Common Logic
 
@@ -388,127 +437,24 @@ namespace ItemConduit.GUI
 		{
 			allItems.Clear();
 
-			if (ObjectDB.instance == null) return;
-
-			foreach (GameObject prefab in ObjectDB.instance.m_items)
+			if (ObjectDB.instance == null)
 			{
-				ItemDrop itemDrop = prefab.GetComponent<ItemDrop>();
+				Logger.LogWarning("[ItemConduit] ObjectDB not ready yet");
+				return;
+			}
+
+			foreach (GameObject itemPrefab in ObjectDB.instance.m_items)
+			{
+				ItemDrop itemDrop = itemPrefab.GetComponent<ItemDrop>();
 				if (itemDrop != null && itemDrop.m_itemData != null)
 				{
-					// Only add items that have valid icons
-					try
-					{
-						Sprite icon = itemDrop.m_itemData.GetIcon();
-						if (icon != null)
-						{
-							allItems.Add(itemDrop.m_itemData);
-						}
-					}
-					catch
-					{
-						// Skip items with invalid icon data
-						if (DebugConfig.showDebug.Value)
-						{
-							Logger.LogWarning($"[ItemConduit] Skipping item with invalid icon: {prefab.name}");
-						}
-					}
-				}
-			}
-		}
-
-		protected bool MatchesCategory(ItemDrop.ItemData item, string category)
-		{
-			if (category == "All") return true;
-
-			ItemDrop.ItemData.ItemType itemType = item.m_shared.m_itemType;
-
-			switch (category)
-			{
-				case "Weapons":
-					return itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon ||
-						   itemType == ItemDrop.ItemData.ItemType.TwoHandedWeapon ||
-						   itemType == ItemDrop.ItemData.ItemType.TwoHandedWeaponLeft ||
-						   itemType == ItemDrop.ItemData.ItemType.Bow ||
-						   itemType == ItemDrop.ItemData.ItemType.Torch;
-				case "Armors":
-					return itemType == ItemDrop.ItemData.ItemType.Helmet ||
-						   itemType == ItemDrop.ItemData.ItemType.Chest ||
-						   itemType == ItemDrop.ItemData.ItemType.Legs ||
-						   itemType == ItemDrop.ItemData.ItemType.Shoulder ||
-						   itemType == ItemDrop.ItemData.ItemType.Hands ||
-						   itemType == ItemDrop.ItemData.ItemType.Shield;
-				case "Foods":
-					return itemType == ItemDrop.ItemData.ItemType.Consumable && item.m_shared.m_food > 0;
-				case "Materials":
-					return itemType == ItemDrop.ItemData.ItemType.Material;
-				case "Consumables":
-					return itemType == ItemDrop.ItemData.ItemType.Consumable;
-				case "Tools":
-					return itemType == ItemDrop.ItemData.ItemType.Tool;
-				case "Trophies":
-					return itemType == ItemDrop.ItemData.ItemType.Trophy;
-				case "Misc":
-					return itemType == ItemDrop.ItemData.ItemType.Misc;
-				default:
-					return false;
-			}
-		}
-
-		#endregion
-
-		#region Styling
-
-		protected void ApplyJotunnStyling(GameObject root)
-		{
-			// Apply text styling
-			foreach (Text text in root.GetComponentsInChildren<Text>())
-			{
-				if (text.name == "Title" || text.name.Contains("Title"))
-				{
-					JotunnGUI.Instance.ApplyTextStyle(
-						text,
-						JotunnGUI.Instance.AveriaSerifBold,
-						JotunnGUI.Instance.ValheimOrange,
-						20
-					);
-				}
-				else if (text.name.Contains("Header"))
-				{
-					JotunnGUI.Instance.ApplyTextStyle(
-						text,
-						JotunnGUI.Instance.AveriaSerifBold,
-						WhiteShade,
-						18
-					);
-				}
-				else
-				{
-					JotunnGUI.Instance.ApplyTextStyle(
-						text,
-						JotunnGUI.Instance.AveriaSerif,
-						WhiteShade,
-						16,
-						false
-					);
+					allItems.Add(itemDrop.m_itemData);
 				}
 			}
 
-			// Apply input field styling
-			foreach (InputField inputField in root.GetComponentsInChildren<InputField>())
+			if (DebugConfig.showDebug.Value)
 			{
-				JotunnGUI.Instance.ApplyInputFieldStyle(inputField, 16);
-			}
-
-			// Apply toggle styling
-			foreach (Toggle toggle in root.GetComponentsInChildren<Toggle>())
-			{
-				JotunnGUI.Instance.ApplyToogleStyle(toggle);
-			}
-
-			// Apply button styling
-			foreach (Button button in root.GetComponentsInChildren<Button>())
-			{
-				JotunnGUI.Instance.ApplyButtonStyle(button);
+				Logger.LogInfo($"[ItemConduit] Loaded {allItems.Count} items from database");
 			}
 		}
 

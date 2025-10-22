@@ -10,7 +10,7 @@ using Logger = Jotunn.Logger;
 namespace ItemConduit.GUI
 {
 	/// <summary>
-	/// GUI for configuring Extract Nodes - inherits common UI logic from BaseNodeGUI
+	/// GUI for configuring Extract Nodes - using Jötunn GUIManager
 	/// </summary>
 	public class ExtractNodeGUI : BaseNodeGUI
 	{
@@ -22,11 +22,10 @@ namespace ItemConduit.GUI
 		private InputField channelInput;
 		private Toggle whitelistToggle;
 		private InputField searchInput;
-		private Text categoryFilterText; // Shows currently filtered items
-		private Text categoryBrowserText; // Shows current category being browsed
+		private Text categoryBrowserText;
 
 		// Item grid
-		private GameObject itemGridContainer;
+		private ScrollRect scrollRect;
 		private GridLayoutGroup itemGrid;
 		private List<ItemSlot> itemSlots = new List<ItemSlot>();
 
@@ -55,21 +54,19 @@ namespace ItemConduit.GUI
 
 		private void BuildUI()
 		{
-			GameObject content = new GameObject("Content");
-			content.transform.SetParent(panel.transform, false);
+			// Create main content container
+			GameObject content = CreateVerticalGroup(panel.transform, spacing: 10);
 
-			VerticalLayoutGroup vertLayout = content.AddComponent<VerticalLayoutGroup>();
+			VerticalLayoutGroup vertLayout = content.GetComponent<VerticalLayoutGroup>();
 			vertLayout.padding = new RectOffset(15, 15, 15, 15);
-			vertLayout.spacing = 10;
 			vertLayout.childForceExpandWidth = true;
-			vertLayout.childForceExpandHeight = false;
-			vertLayout.childControlHeight = true;
 
 			RectTransform contentRect = content.GetComponent<RectTransform>();
 			contentRect.anchorMin = Vector2.zero;
 			contentRect.anchorMax = Vector2.one;
 			contentRect.sizeDelta = Vector2.zero;
 
+			// Build UI sections
 			CreateTitle(content.transform);
 			CreateSpacer(content.transform, 5);
 			CreateTopSection(content.transform);
@@ -79,45 +76,44 @@ namespace ItemConduit.GUI
 			CreateItemGrid(content.transform);
 			CreateSpacer(content.transform, 10);
 			CreateBottomButtons(content.transform);
-
-			ApplyJotunnStyling(panel);
-			GUIManager.Instance.ApplyWoodpanelStyle(panel.GetComponent<RectTransform>());
 		}
 
 		private void CreateTitle(Transform parent)
 		{
-			GameObject titleObj = new GameObject("Title");
-			titleObj.transform.SetParent(parent, false);
-
-			Text title = titleObj.AddComponent<Text>();
-			title.text = "Extract Node Configuration";
-			title.alignment = TextAnchor.MiddleCenter;
+			Text title = CreateJotunnText(
+				parent: parent,
+				text: "Extract Node Configuration",
+				fontSize: 20,
+				alignment: TextAnchor.MiddleCenter,
+				bold: true,
+				width: 600,
+				height: 40
+			);
 			title.name = "Title";
-
-			LayoutElement layoutElem = titleObj.AddComponent<LayoutElement>();
-			layoutElem.preferredHeight = 40;
 		}
 
 		private void CreateTopSection(Transform parent)
 		{
-			GameObject topSection = CreateHorizontalGroup(parent);
-			topSection.GetComponent<LayoutElement>().preferredHeight = 50;
+			GameObject topSection = CreateHorizontalGroup(parent, spacing: 10, height: 50);
 
 			// Channel label
-			GameObject channelLabelObj = new GameObject("ChannelLabel");
-			channelLabelObj.transform.SetParent(topSection.transform, false);
-			Text channelLabel = channelLabelObj.AddComponent<Text>();
-			channelLabel.text = "Channel ID:";
-			channelLabel.alignment = TextAnchor.MiddleLeft;
-			LayoutElement channelLabelElem = channelLabelObj.AddComponent<LayoutElement>();
-			channelLabelElem.preferredWidth = 100;
+			CreateJotunnText(
+				parent: topSection.transform,
+				text: "Channel ID:",
+				fontSize: 16,
+				alignment: TextAnchor.MiddleLeft,
+				width: 100,
+				height: 30
+			);
 
 			// Channel input
-			GameObject channelInputObj = CreateStandardInputField(topSection.transform, "None");
-			channelInput = channelInputObj.GetComponent<InputField>();
+			channelInput = CreateJotunnInputField(
+				parent: topSection.transform,
+				placeholder: "None",
+				width: 200,
+				height: 30
+			);
 			channelInput.onEndEdit.AddListener(OnChannelChanged);
-			LayoutElement channelInputElem = channelInputObj.GetComponent<LayoutElement>();
-			channelInputElem.preferredWidth = 200;
 
 			// Spacer
 			GameObject spacer = new GameObject("Spacer");
@@ -126,98 +122,73 @@ namespace ItemConduit.GUI
 			spacerElem.flexibleWidth = 1;
 
 			// Whitelist toggle
-			GameObject toggleObj = CreateStandardToggle(topSection.transform, "Whitelist", true);
-			whitelistToggle = toggleObj.GetComponent<Toggle>();
+			whitelistToggle = CreateJotunnToggle(
+				parent: topSection.transform,
+				label: "Whitelist",
+				defaultValue: true,
+				width: 120,
+				height: 30
+			);
 			whitelistToggle.onValueChanged.AddListener(OnWhitelistChanged);
 		}
 
 		private void CreateSearchSection(Transform parent)
 		{
-			GameObject searchSection = new GameObject("SearchSection");
-			searchSection.transform.SetParent(parent, false);
+			GameObject searchSection = CreateVerticalGroup(parent, spacing: 5);
 
-			VerticalLayoutGroup vLayout = searchSection.AddComponent<VerticalLayoutGroup>();
-			vLayout.spacing = 5;
-			vLayout.childForceExpandWidth = true;
-			vLayout.childForceExpandHeight = false;
+			// Category browser row
+			GameObject categoryRow = CreateHorizontalGroup(searchSection.transform, spacing: 5, height: 40);
 
-			LayoutElement searchElem = searchSection.AddComponent<LayoutElement>();
-			searchElem.preferredHeight = 90;
+			// Left arrow button
+			Button leftArrow = CreateJotunnButton(
+				parent: categoryRow.transform,
+				text: "<",
+				onClick: OnPreviousCategory,
+				width: 40,
+				height: 30
+			);
 
-			// Current filtered items display
-			GameObject filteredRow = CreateHorizontalGroup(searchSection.transform);
-			filteredRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleCenter;
-			filteredRow.GetComponent<LayoutElement>().preferredHeight = 25;
+			// Category text
+			categoryBrowserText = CreateJotunnText(
+				parent: categoryRow.transform,
+				text: $"Browse: {categories[currentCategoryIndex]}",
+				fontSize: 16,
+				alignment: TextAnchor.MiddleCenter,
+				width: 300,
+				height: 30
+			);
 
-			GameObject filteredTextObj = new GameObject("FilteredText");
-			filteredTextObj.transform.SetParent(filteredRow.transform, false);
-			categoryFilterText = filteredTextObj.AddComponent<Text>();
-			categoryFilterText.text = "Current Filtered: None";
-			categoryFilterText.alignment = TextAnchor.MiddleCenter;
-			categoryFilterText.fontSize = 14;
-			LayoutElement filteredTextElem = filteredTextObj.AddComponent<LayoutElement>();
-			filteredTextElem.flexibleWidth = 1;
-
-			// Category browser
-			GameObject categoryRow = CreateHorizontalGroup(searchSection.transform);
-			categoryRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleCenter;
-			categoryRow.GetComponent<LayoutElement>().preferredHeight = 30;
-
-			Button leftArrow = CreateStandardButton(categoryRow.transform, "<", 30);
-			leftArrow.onClick.AddListener(OnPreviousCategory);
-
-			GameObject categoryTextObj = new GameObject("CategoryText");
-			categoryTextObj.transform.SetParent(categoryRow.transform, false);
-			categoryBrowserText = categoryTextObj.AddComponent<Text>();
-			categoryBrowserText.text = $"Browse: {categories[currentCategoryIndex]}";
-			categoryBrowserText.alignment = TextAnchor.MiddleCenter;
-			LayoutElement catTextElem = categoryTextObj.AddComponent<LayoutElement>();
-			catTextElem.preferredWidth = 300;
-
-			Button rightArrow = CreateStandardButton(categoryRow.transform, ">", 30);
-			rightArrow.onClick.AddListener(OnNextCategory);
+			// Right arrow button
+			Button rightArrow = CreateJotunnButton(
+				parent: categoryRow.transform,
+				text: ">",
+				onClick: OnNextCategory,
+				width: 40,
+				height: 30
+			);
 
 			// Search input
-			GameObject searchInputObj = CreateStandardInputField(searchSection.transform, "Search items...");
-			searchInput = searchInputObj.GetComponent<InputField>();
+			searchInput = CreateJotunnInputField(
+				parent: searchSection.transform,
+				placeholder: "Search items...",
+				width: 600,
+				height: 30
+			);
 			searchInput.onValueChanged.AddListener(OnSearchChanged);
 		}
 
 		private void CreateItemGrid(Transform parent)
 		{
-			GameObject scrollContainer = new GameObject("ScrollContainer");
-			scrollContainer.transform.SetParent(parent, false);
+			// Create scroll rect using Jötunn helper
+			float gridWidth = GRID_COLUMNS * ITEM_SLOT_SIZE + (GRID_COLUMNS - 1) * 5 + 20;
+			float gridHeight = GRID_ROWS * ITEM_SLOT_SIZE + 20;
 
-			LayoutElement scrollElem = scrollContainer.AddComponent<LayoutElement>();
-			scrollElem.flexibleHeight = 1;
-			scrollElem.preferredHeight = GRID_ROWS * ITEM_SLOT_SIZE + 20;
+			scrollRect = CreateJotunnScrollRect(parent, gridWidth, gridHeight);
 
-			ScrollRect scroll = scrollContainer.AddComponent<ScrollRect>();
-			scroll.horizontal = false;
-			scroll.vertical = true;
-			scroll.movementType = ScrollRect.MovementType.Clamped;
+			// Get the content from scroll rect
+			GameObject itemGridContainer = scrollRect.content.gameObject;
 
-			// Viewport
-			GameObject viewport = new GameObject("Viewport");
-			viewport.transform.SetParent(scrollContainer.transform, false);
-			RectTransform viewportRect = viewport.AddComponent<RectTransform>();
-			viewportRect.anchorMin = Vector2.zero;
-			viewportRect.anchorMax = Vector2.one;
-			viewportRect.sizeDelta = Vector2.zero;
-			viewport.AddComponent<Image>().color = new Color(0, 0, 0, 0.3f);
-			viewport.AddComponent<Mask>().showMaskGraphic = true;
-
-			scroll.viewport = viewportRect;
-
-			// Content
-			itemGridContainer = new GameObject("ItemGrid");
-			itemGridContainer.transform.SetParent(viewport.transform, false);
-
-			RectTransform gridRect = itemGridContainer.AddComponent<RectTransform>();
-			gridRect.anchorMin = new Vector2(0, 1);
-			gridRect.anchorMax = new Vector2(1, 1);
-			gridRect.pivot = new Vector2(0.5f, 1);
-
+			// Add grid layout
 			itemGrid = itemGridContainer.AddComponent<GridLayoutGroup>();
 			itemGrid.cellSize = new Vector2(ITEM_SLOT_SIZE, ITEM_SLOT_SIZE);
 			itemGrid.spacing = new Vector2(5, 5);
@@ -227,10 +198,9 @@ namespace ItemConduit.GUI
 			itemGrid.startCorner = GridLayoutGroup.Corner.UpperLeft;
 			itemGrid.startAxis = GridLayoutGroup.Axis.Horizontal;
 
+			// Add content size fitter
 			ContentSizeFitter fitter = itemGridContainer.AddComponent<ContentSizeFitter>();
 			fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-			scroll.content = gridRect;
 
 			// Create item slots
 			for (int i = 0; i < GRID_COLUMNS * GRID_ROWS; i++)
@@ -244,12 +214,15 @@ namespace ItemConduit.GUI
 			GameObject slotObj = new GameObject($"ItemSlot_{index}");
 			slotObj.transform.SetParent(parent, false);
 
+			// Background
 			Image bg = slotObj.AddComponent<Image>();
 			bg.sprite = GUIManager.Instance.GetSprite("item_background");
 			bg.type = Image.Type.Sliced;
 
+			// Icon
 			GameObject iconObj = new GameObject("Icon");
 			iconObj.transform.SetParent(slotObj.transform, false);
+
 			RectTransform iconRect = iconObj.AddComponent<RectTransform>();
 			iconRect.anchorMin = Vector2.zero;
 			iconRect.anchorMax = Vector2.one;
@@ -258,10 +231,14 @@ namespace ItemConduit.GUI
 			Image icon = iconObj.AddComponent<Image>();
 			icon.preserveAspect = true;
 
+			// Button
 			Button button = slotObj.AddComponent<Button>();
+			GUIManager.Instance.ApplyButtonStyle(button);
+
 			int slotIndex = index;
 			button.onClick.AddListener(() => OnItemSlotClicked(slotIndex));
 
+			// Item slot component
 			ItemSlot slot = slotObj.AddComponent<ItemSlot>();
 			slot.background = bg;
 			slot.icon = icon;
@@ -272,15 +249,25 @@ namespace ItemConduit.GUI
 
 		private void CreateBottomButtons(Transform parent)
 		{
-			GameObject buttonRow = CreateHorizontalGroup(parent);
-			buttonRow.GetComponent<HorizontalLayoutGroup>().childAlignment = TextAnchor.MiddleCenter;
-			buttonRow.GetComponent<LayoutElement>().preferredHeight = 50;
+			GameObject buttonRow = CreateHorizontalGroup(parent, spacing: 10, height: 50, alignment: TextAnchor.MiddleCenter);
 
-			Button closeBtn = CreateStandardButton(buttonRow.transform, "Close", 150);
-			closeBtn.onClick.AddListener(Hide);
+			// Close button
+			CreateJotunnButton(
+				parent: buttonRow.transform,
+				text: "Close",
+				onClick: Hide,
+				width: 150,
+				height: 40
+			);
 
-			Button clearBtn = CreateStandardButton(buttonRow.transform, "Clear Filter", 150);
-			clearBtn.onClick.AddListener(OnClearFilter);
+			// Clear filter button
+			CreateJotunnButton(
+				parent: buttonRow.transform,
+				text: "Clear Filter",
+				onClick: OnClearFilter,
+				width: 150,
+				height: 40
+			);
 		}
 
 		#endregion
@@ -311,62 +298,65 @@ namespace ItemConduit.GUI
 				filteredItems.Add(item);
 			}
 
-			UpdateItemGrid();
+			UpdateItemSlots();
 		}
 
-		private void UpdateItemGrid()
+		private bool MatchesCategory(ItemDrop.ItemData item, string category)
+		{
+			if (category == "All") return true;
+
+			return category switch
+			{
+				"Weapons" => item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon ||
+							 item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.TwoHandedWeapon ||
+							 item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Bow ||
+							 item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.TwoHandedWeaponLeft,
+				"Armors" => item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Helmet ||
+							item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Chest ||
+							item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Legs ||
+							item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Shoulder,
+				"Foods" => item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Consumable &&
+						   item.m_shared.m_food > 0,
+				"Materials" => item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Material,
+				"Consumables" => item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Consumable,
+				"Tools" => item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Tool,
+				"Trophies" => item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Trophy,
+				"Misc" => item.m_shared.m_itemType == ItemDrop.ItemData.ItemType.Misc,
+				_ => false
+			};
+		}
+
+		private void UpdateItemSlots()
 		{
 			for (int i = 0; i < itemSlots.Count; i++)
 			{
 				if (i < filteredItems.Count)
 				{
-					ItemDrop.ItemData item = filteredItems[i];
-					itemSlots[i].SetItem(item);
-
-					bool isFiltered = node.ItemFilter.Any(f =>
-						f.Equals(item.m_dropPrefab?.name ?? item.m_shared.m_name, System.StringComparison.OrdinalIgnoreCase));
-					itemSlots[i].SetHighlight(isFiltered);
+					itemSlots[i].SetItem(filteredItems[i]);
+					itemSlots[i].SetHighlight(IsItemInFilter(filteredItems[i]));
 				}
 				else
 				{
 					itemSlots[i].Clear();
 				}
 			}
-
-			// Update the "Current Filtered" display
-			UpdateCurrentFilteredDisplay();
 		}
 
-		private void UpdateCurrentFilteredDisplay()
+		private bool IsItemInFilter(ItemDrop.ItemData item)
 		{
-			if (categoryFilterText == null || node == null) return;
-
-			if (node.ItemFilter.Count == 0)
-			{
-				categoryFilterText.text = "Current Filtered: None";
-			}
-			else if (node.ItemFilter.Count <= 3)
-			{
-				// Show item names if 3 or fewer
-				string itemNames = string.Join(", ", node.ItemFilter.Take(3));
-				categoryFilterText.text = $"Current Filtered: {itemNames}";
-			}
-			else
-			{
-				// Show count if more than 3
-				categoryFilterText.text = $"Current Filtered: {node.ItemFilter.Count} items";
-			}
+			if (node == null) return false;
+			return node.ItemFilter.Contains(item.m_dropPrefab?.name ?? "");
 		}
 
 		#endregion
 
 		#region Event Handlers
 
-		private void OnChannelChanged(string newChannel)
+		private void OnChannelChanged(string channelId)
 		{
 			if (node != null)
 			{
-				node.SetChannel(newChannel);
+				node.SetChannel(channelId);
 			}
 		}
 
@@ -374,7 +364,8 @@ namespace ItemConduit.GUI
 		{
 			if (node != null)
 			{
-				node.SetFilter(node.ItemFilter, isWhitelist);
+				node.SetWhitelist(isWhitelist);
+				UpdateItemSlots();
 			}
 		}
 
@@ -389,9 +380,7 @@ namespace ItemConduit.GUI
 			if (currentCategoryIndex < 0)
 				currentCategoryIndex = categories.Length - 1;
 
-			if (categoryBrowserText != null)
-				categoryBrowserText.text = $"Browse: {categories[currentCategoryIndex]}";
-
+			categoryBrowserText.text = $"Browse: {categories[currentCategoryIndex]}";
 			UpdateFilteredItems();
 		}
 
@@ -401,9 +390,7 @@ namespace ItemConduit.GUI
 			if (currentCategoryIndex >= categories.Length)
 				currentCategoryIndex = 0;
 
-			if (categoryBrowserText != null)
-				categoryBrowserText.text = $"Browse: {categories[currentCategoryIndex]}";
-
+			categoryBrowserText.text = $"Browse: {categories[currentCategoryIndex]}";
 			UpdateFilteredItems();
 		}
 
@@ -412,60 +399,65 @@ namespace ItemConduit.GUI
 			if (slotIndex >= filteredItems.Count) return;
 
 			ItemDrop.ItemData item = filteredItems[slotIndex];
-			string itemName = item.m_dropPrefab?.name ?? item.m_shared.m_name;
+			if (item == null) return;
 
-			if (node.ItemFilter.Contains(itemName))
-			{
-				HashSet<string> newFilter = new HashSet<string>(node.ItemFilter);
-				newFilter.Remove(itemName);
-				node.SetFilter(newFilter, node.IsWhitelist);
-			}
-			else
-			{
-				HashSet<string> newFilter = new HashSet<string>(node.ItemFilter);
-				newFilter.Add(itemName);
-				node.SetFilter(newFilter, node.IsWhitelist);
-			}
+			string itemName = item.m_dropPrefab?.name ?? "";
+			if (string.IsNullOrEmpty(itemName)) return;
 
-			UpdateItemGrid();
+			if (node != null)
+			{
+				if (node.ItemFilter.Contains(itemName))
+				{
+					node.ItemFilter.Remove(itemName);
+				}
+				else
+				{
+					node.ItemFilter.Add(itemName);
+				}
+
+				node.SetFilter(node.ItemFilter);
+				UpdateItemSlots();
+			}
 		}
 
 		private void OnClearFilter()
 		{
 			if (node != null)
 			{
-				node.SetFilter(new HashSet<string>(), node.IsWhitelist);
-				UpdateItemGrid();
+				node.ItemFilter.Clear();
+				node.SetFilter(node.ItemFilter);
+				UpdateItemSlots();
 			}
 		}
 
 		#endregion
 
-		#region GUI Control
+		#region Settings
 
 		private void LoadNodeSettings()
 		{
 			if (node == null) return;
 
-			channelInput.text = node.ChannelId;
-			whitelistToggle.isOn = node.IsWhitelist;
-			UpdateItemGrid();
-		}
+			if (channelInput != null)
+			{
+				channelInput.text = node.ChannelId ?? "";
+			}
 
-		public override void Show()
-		{
-			base.Show();
-			LoadNodeSettings();
+			if (whitelistToggle != null)
+			{
+				whitelistToggle.isOn = node.IsWhitelist;
+			}
+
+			UpdateItemSlots();
 		}
 
 		#endregion
 
-		#region ItemSlot Class - Inherits from BaseItemSlot
+		#region Item Slot Class
 
-		private class ItemSlot : BaseItemSlot
+		protected class ItemSlot : BaseItemSlot
 		{
-			// Inherits all functionality from BaseItemSlot
-			// Can override methods here if needed for Extract-specific behavior
+			// Inherits from BaseItemSlot in BaseNodeGUI
 		}
 
 		#endregion
