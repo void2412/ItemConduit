@@ -22,16 +22,16 @@ namespace ItemConduit.Nodes
 		#region Configuration Properties
 
 		/// <summary>Channel ID for receiving items from specific extract nodes</summary>
-		public string ChannelId { get; private set; } = "";
+		public string ChannelId { get; set; } = "";
 
 		/// <summary>Priority level for filling order (higher = filled first)</summary>
-		public int Priority { get; private set; } = 0;
+		public int Priority { get; set; } = 0;
 
 		/// <summary>Set of item names to filter (whitelist or blacklist)</summary>
-		public HashSet<string> ItemFilter { get; private set; } = new HashSet<string>();
+		public HashSet<string> ItemFilter { get; set; } = new HashSet<string>();
 
 		/// <summary>Whether the filter is a whitelist (true) or blacklist (false)</summary>
-		public bool IsWhitelist { get; private set; } = true;
+		public bool IsWhitelist { get; set; } = true;
 
 		#endregion
 

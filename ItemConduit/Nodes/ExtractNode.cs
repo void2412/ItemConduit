@@ -22,13 +22,13 @@ namespace ItemConduit.Nodes
 		#region Configuration Properties
 
 		/// <summary>Channel ID for routing items to specific insert nodes</summary>
-		public string ChannelId { get; private set; } = "";
+		public string ChannelId { get; set; } = "";
 
 		/// <summary>Set of item names to filter (whitelist or blacklist)</summary>
-		public HashSet<string> ItemFilter { get; private set; } = new HashSet<string>();
+		public HashSet<string> ItemFilter { get; set; } = new HashSet<string>();
 
 		/// <summary>Whether the filter is a whitelist (true) or blacklist (false)</summary>
-		public bool IsWhitelist { get; private set; } = true;
+		public bool IsWhitelist { get; set; } = true;
 
 		#endregion
 
