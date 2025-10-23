@@ -22,7 +22,7 @@ namespace ItemConduit.Nodes
 		#region Configuration Properties
 
 		/// <summary>Channel ID for routing items to specific insert nodes</summary>
-		public string ChannelId { get; private set; } = "None";
+		public string ChannelId { get; private set; } = "";
 
 		/// <summary>Set of item names to filter (whitelist or blacklist)</summary>
 		public HashSet<string> ItemFilter { get; private set; } = new HashSet<string>();
@@ -84,7 +84,7 @@ namespace ItemConduit.Nodes
 			ZDO zdo = zNetView.GetZDO();
 			if (zdo == null) return;
 
-			string savedChannel = zdo.GetString("ItemConduit_Channel", "None");
+			string savedChannel = zdo.GetString("ItemConduit_Channel", "");
 			ChannelId = savedChannel;
 
 			string savedFilter = zdo.GetString("ItemConduit_Filter", "");
@@ -242,7 +242,7 @@ namespace ItemConduit.Nodes
 		/// <param name="channelId">The channel ID to set</param>
 		public void SetChannel(string channelId)
 		{
-			ChannelId = string.IsNullOrEmpty(channelId) ? "None" : channelId;
+			ChannelId = string.IsNullOrEmpty(channelId) ? "" : channelId;
 
 			// Save to ZDO for persistence
 			if (zNetView != null && zNetView.IsValid())

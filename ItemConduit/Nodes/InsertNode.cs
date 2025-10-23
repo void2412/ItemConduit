@@ -22,7 +22,7 @@ namespace ItemConduit.Nodes
 		#region Configuration Properties
 
 		/// <summary>Channel ID for receiving items from specific extract nodes</summary>
-		public string ChannelId { get; private set; } = "None";
+		public string ChannelId { get; private set; } = "";
 
 		/// <summary>Priority level for filling order (higher = filled first)</summary>
 		public int Priority { get; private set; } = 0;
@@ -89,7 +89,7 @@ namespace ItemConduit.Nodes
 			if (zdo == null) return;
 
 			// Load channel
-			string savedChannel = zdo.GetString("ItemConduit_Channel", "None");
+			string savedChannel = zdo.GetString("ItemConduit_Channel", "");
 			ChannelId = savedChannel;
 
 			// Load priority
