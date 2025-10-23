@@ -7,12 +7,12 @@ using System.Collections.Generic;
 using System.Linq;
 using Logger = Jotunn.Logger;
 using JotunnGUI = Jotunn.Managers.GUIManager;
-using System;
 
 namespace ItemConduit.GUI
 {
 	/// <summary>
-	/// Base class for all node GUI windows with Jötunn integration and common UI helpers
+	/// Base class for all node GUI windows with wireframe-based design
+	/// Matches the size and position of Valheim's Crafting panel
 	/// </summary>
 	public abstract class BaseNodeGUI : MonoBehaviour
 	{
@@ -23,17 +23,32 @@ namespace ItemConduit.GUI
 		protected RectTransform panelRect;
 		protected bool isVisible = false;
 
-		protected static readonly Color WhiteShade = new Color(219f / 255f, 219f / 255f, 219f / 255f);
-
-		// Constants for item grid
+		// Constants for item grid (8 columns x 7 rows = 56 items visible)
 		protected const int GRID_COLUMNS = 8;
 		protected const int GRID_ROWS = 7;
-		protected const int ITEM_SLOT_SIZE = 70;
+		protected const int ITEM_SLOT_SIZE = 64;
 
 		// Item management
 		protected List<ItemDrop.ItemData> allItems = new List<ItemDrop.ItemData>();
 		protected List<ItemDrop.ItemData> filteredItems = new List<ItemDrop.ItemData>();
 
+		// Category management
+		protected enum Category
+		{
+			CurrentlyFiltered,
+			All,
+			Weapons,
+			Armors,
+			Foods,
+			Materials,
+			Consumables,
+			Tools,
+			Trophies,
+			Misc
+		}
+		protected Category currentCategory = Category.All;
+
+		// Input field tracking for focus management
 		private List<InputField> trackedInputFields = new List<InputField>();
 		private bool wasAnyInputFieldFocused = false;
 
@@ -50,7 +65,7 @@ namespace ItemConduit.GUI
 		{
 			if (!isVisible) return;
 
-			// Check if any input field currently has focus
+			// Track input field focus
 			bool anyInputFieldFocused = false;
 			foreach (var inputField in trackedInputFields)
 			{
@@ -78,8 +93,6 @@ namespace ItemConduit.GUI
 			// Handle Escape key
 			if (Input.GetKeyDown(KeyCode.Escape))
 			{
-				// If any input field has focus, Escape unfocuses it (Unity does this automatically)
-				// If no input field has focus, close the GUI
 				if (!anyInputFieldFocused)
 				{
 					Hide();
@@ -137,6 +150,8 @@ namespace ItemConduit.GUI
 			return panel;
 		}
 
+		protected abstract Vector2 GetPanelSize();
+
 		#endregion
 
 		#region Show/Hide
@@ -148,10 +163,7 @@ namespace ItemConduit.GUI
 				uiRoot.SetActive(true);
 				isVisible = true;
 
-				// Register with GUIController
 				GUIController.Instance.RegisterGUI(this);
-
-				// Find and track all input fields
 				RegisterInputFieldEvents();
 			}
 		}
@@ -163,10 +175,7 @@ namespace ItemConduit.GUI
 				uiRoot.SetActive(false);
 				isVisible = false;
 
-				// Unregister input field tracking
 				UnregisterInputFieldEvents();
-
-				// Unregister from GUIController
 				GUIController.Instance.UnregisterGUI(this);
 			}
 		}
@@ -178,53 +187,27 @@ namespace ItemConduit.GUI
 
 		#endregion
 
-		#region Input Field Focus Tracking
+		#region Input Field Tracking
 
-		/// <summary>
-		/// Find and register all input fields in the GUI for focus tracking
-		/// </summary>
-		private void RegisterInputFieldEvents()
+		protected void RegisterInputFieldEvents()
 		{
-			if (panel == null) return;
-
-			// Clear previous tracked fields
 			trackedInputFields.Clear();
-			wasAnyInputFieldFocused = false;
-
-			// Find all input fields in the panel
-			var inputFields = panel.GetComponentsInChildren<InputField>(true);
-
-			foreach (InputField inputField in inputFields)
+			foreach (InputField inputField in panel.GetComponentsInChildren<InputField>(true))
 			{
-				if (inputField != null)
-				{
-					trackedInputFields.Add(inputField);
-				}
-			}
-
-			if (DebugConfig.showDebug.Value)
-			{
-				Logger.LogInfo($"[ItemConduit] Registered {trackedInputFields.Count} input fields for focus tracking");
+				trackedInputFields.Add(inputField);
 			}
 		}
 
-		/// <summary>
-		/// Clear input field tracking
-		/// </summary>
-		private void UnregisterInputFieldEvents()
+		protected void UnregisterInputFieldEvents()
 		{
 			trackedInputFields.Clear();
-			wasAnyInputFieldFocused = false;
-
-			// Make sure to notify GUIController that no input field has focus
-			GUIController.Instance.OnInputFieldUnfocused();
 		}
 
 		#endregion
 
-		#region UI Helper Methods - Common to all Node GUIs
+		#region UI Creation Helpers
 
-		protected GameObject CreateStandardInputField(Transform parent, string placeholder)
+		protected GameObject CreateInputField(Transform parent, string placeholder, float width)
 		{
 			GameObject inputObj = new GameObject("InputField");
 			inputObj.transform.SetParent(parent, false);
@@ -232,46 +215,42 @@ namespace ItemConduit.GUI
 			Image bg = inputObj.AddComponent<Image>();
 			bg.color = new Color(0, 0, 0, 0.5f);
 
-			InputField input = inputObj.AddComponent<InputField>();
-			input.transition = Selectable.Transition.ColorTint;
+			InputField inputField = inputObj.AddComponent<InputField>();
+			inputField.textComponent = CreateTextComponent(inputObj.transform, "Text");
 
-			// Text
-			GameObject textArea = new GameObject("Text");
-			textArea.transform.SetParent(inputObj.transform, false);
-			RectTransform textRect = textArea.AddComponent<RectTransform>();
-			textRect.anchorMin = Vector2.zero;
-			textRect.anchorMax = Vector2.one;
-			textRect.sizeDelta = new Vector2(-10, 0);
-
-			Text text = textArea.AddComponent<Text>();
-			text.supportRichText = false;
-			text.alignment = TextAnchor.MiddleLeft;
-			text.color = Color.white;
-			input.textComponent = text;
-
-			// Placeholder
 			GameObject placeholderObj = new GameObject("Placeholder");
 			placeholderObj.transform.SetParent(inputObj.transform, false);
-			RectTransform placeholderRect = placeholderObj.AddComponent<RectTransform>();
-			placeholderRect.anchorMin = Vector2.zero;
-			placeholderRect.anchorMax = Vector2.one;
-			placeholderRect.sizeDelta = new Vector2(-10, 0);
-
-			Text placeholderText = placeholderObj.AddComponent<Text>();
+			Text placeholderText = CreateTextComponent(placeholderObj.transform, "Placeholder");
 			placeholderText.text = placeholder;
-			placeholderText.fontStyle = FontStyle.Italic;
-			placeholderText.color = new Color(0.5f, 0.5f, 0.5f);
-			placeholderText.alignment = TextAnchor.MiddleLeft;
-			input.placeholder = placeholderText;
+			placeholderText.color = new Color(1, 1, 1, 0.5f);
+			inputField.placeholder = placeholderText;
 
 			LayoutElement layout = inputObj.AddComponent<LayoutElement>();
+			layout.preferredWidth = width;
 			layout.preferredHeight = 30;
-			layout.flexibleWidth = 1;
 
 			return inputObj;
 		}
 
-		protected GameObject CreateStandardToggle(Transform parent, string label, bool defaultValue)
+		protected Text CreateTextComponent(Transform parent, string name)
+		{
+			GameObject textObj = new GameObject(name);
+			textObj.transform.SetParent(parent, false);
+
+			RectTransform rect = textObj.AddComponent<RectTransform>();
+			rect.anchorMin = Vector2.zero;
+			rect.anchorMax = Vector2.one;
+			rect.offsetMin = new Vector2(5, 2);
+			rect.offsetMax = new Vector2(-5, -2);
+
+			Text text = textObj.AddComponent<Text>();
+			text.alignment = TextAnchor.MiddleLeft;
+			text.color = Color.white;
+
+			return text;
+		}
+
+		protected GameObject CreateToggle(Transform parent, string label, bool defaultValue)
 		{
 			GameObject toggleObj = new GameObject("Toggle");
 			toggleObj.transform.SetParent(parent, false);
@@ -280,25 +259,25 @@ namespace ItemConduit.GUI
 			toggle.isOn = defaultValue;
 
 			// Background
-			GameObject bg = new GameObject("Background");
-			bg.transform.SetParent(toggleObj.transform, false);
-			RectTransform bgRect = bg.AddComponent<RectTransform>();
-			bgRect.sizeDelta = new Vector2(20, 20);
-			Image bgImage = bg.AddComponent<Image>();
+			GameObject bgObj = new GameObject("Background");
+			bgObj.transform.SetParent(toggleObj.transform, false);
+			Image bgImage = bgObj.AddComponent<Image>();
 			bgImage.color = new Color(0.2f, 0.2f, 0.2f);
+			RectTransform bgRect = bgObj.GetComponent<RectTransform>();
+			bgRect.sizeDelta = new Vector2(20, 20);
 
 			// Checkmark
-			GameObject checkmark = new GameObject("Checkmark");
-			checkmark.transform.SetParent(bg.transform, false);
-			RectTransform checkRect = checkmark.AddComponent<RectTransform>();
+			GameObject checkObj = new GameObject("Checkmark");
+			checkObj.transform.SetParent(bgObj.transform, false);
+			Image checkImage = checkObj.AddComponent<Image>();
+			checkImage.color = Color.white;
+			toggle.graphic = checkImage;
+			RectTransform checkRect = checkObj.GetComponent<RectTransform>();
 			checkRect.anchorMin = Vector2.zero;
 			checkRect.anchorMax = Vector2.one;
-			checkRect.sizeDelta = new Vector2(-4, -4);
-			Image checkImage = checkmark.AddComponent<Image>();
-			checkImage.color = new Color(0.2f, 0.8f, 0.2f);
+			checkRect.sizeDelta = new Vector2(-6, -6);
 
 			toggle.targetGraphic = bgImage;
-			toggle.graphic = checkImage;
 
 			// Label
 			GameObject labelObj = new GameObject("Label");
@@ -306,16 +285,16 @@ namespace ItemConduit.GUI
 			Text labelText = labelObj.AddComponent<Text>();
 			labelText.text = label;
 			labelText.alignment = TextAnchor.MiddleLeft;
+			labelText.color = Color.white;
 			RectTransform labelRect = labelObj.GetComponent<RectTransform>();
 			labelRect.anchorMin = new Vector2(0, 0);
 			labelRect.anchorMax = new Vector2(1, 1);
-			labelRect.offsetMin = new Vector2(25, 0);
+			labelRect.offsetMin = new Vector2(28, 0);
 			labelRect.offsetMax = Vector2.zero;
 
 			HorizontalLayoutGroup hLayout = toggleObj.AddComponent<HorizontalLayoutGroup>();
-			hLayout.spacing = 5;
+			hLayout.spacing = 8;
 			hLayout.childForceExpandWidth = false;
-			hLayout.childAlignment = TextAnchor.MiddleLeft;
 
 			LayoutElement layout = toggleObj.AddComponent<LayoutElement>();
 			layout.preferredHeight = 30;
@@ -323,9 +302,9 @@ namespace ItemConduit.GUI
 			return toggleObj;
 		}
 
-		protected Button CreateStandardButton(Transform parent, string text, float width)
+		protected Button CreateButton(Transform parent, string text, float width, float height)
 		{
-			GameObject buttonObj = new GameObject("Button_" + text);
+			GameObject buttonObj = new GameObject("Button");
 			buttonObj.transform.SetParent(parent, false);
 
 			Image bg = buttonObj.AddComponent<Image>();
@@ -348,41 +327,25 @@ namespace ItemConduit.GUI
 
 			LayoutElement layout = buttonObj.AddComponent<LayoutElement>();
 			layout.preferredWidth = width;
-			layout.preferredHeight = 40;
+			layout.preferredHeight = height;
 
 			return button;
 		}
 
-		protected void CreateSpacer(Transform parent, float height)
+		protected GameObject CreateSpacer(Transform parent, float height)
 		{
 			GameObject spacer = new GameObject("Spacer");
 			spacer.transform.SetParent(parent, false);
 
-			LayoutElement layoutElement = spacer.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = height;
-		}
+			LayoutElement layout = spacer.AddComponent<LayoutElement>();
+			layout.preferredHeight = height;
 
-		protected GameObject CreateHorizontalGroup(Transform parent)
-		{
-			GameObject group = new GameObject("HorizontalGroup");
-			group.transform.SetParent(parent, false);
-
-			HorizontalLayoutGroup layout = group.AddComponent<HorizontalLayoutGroup>();
-			layout.spacing = 10;
-			layout.childForceExpandWidth = false;
-			layout.childForceExpandHeight = false;
-			layout.childAlignment = TextAnchor.MiddleCenter;
-
-			LayoutElement layoutElement = group.AddComponent<LayoutElement>();
-			layoutElement.preferredHeight = 30;
-
-			return group;
+			return spacer;
 		}
 
 		#endregion
 
-
-		#region Item Management - Common Logic
+		#region Item Management
 
 		protected void LoadItemDatabase()
 		{
@@ -395,7 +358,6 @@ namespace ItemConduit.GUI
 				ItemDrop itemDrop = prefab.GetComponent<ItemDrop>();
 				if (itemDrop != null && itemDrop.m_itemData != null)
 				{
-					// Only add items that have valid icons
 					try
 					{
 						Sprite icon = itemDrop.m_itemData.GetIcon();
@@ -406,7 +368,6 @@ namespace ItemConduit.GUI
 					}
 					catch
 					{
-						// Skip items with invalid icon data
 						if (DebugConfig.showDebug.Value)
 						{
 							Logger.LogWarning($"[ItemConduit] Skipping item with invalid icon: {prefab.name}");
@@ -416,41 +377,59 @@ namespace ItemConduit.GUI
 			}
 		}
 
-		protected bool MatchesCategory(ItemDrop.ItemData item, string category)
+		protected bool MatchesCategory(ItemDrop.ItemData item, Category category)
 		{
-			if (category == "All") return true;
+			if (category == Category.All) return true;
 
 			ItemDrop.ItemData.ItemType itemType = item.m_shared.m_itemType;
 
 			switch (category)
 			{
-				case "Weapons":
+				case Category.Weapons:
 					return itemType == ItemDrop.ItemData.ItemType.OneHandedWeapon ||
 						   itemType == ItemDrop.ItemData.ItemType.TwoHandedWeapon ||
 						   itemType == ItemDrop.ItemData.ItemType.TwoHandedWeaponLeft ||
 						   itemType == ItemDrop.ItemData.ItemType.Bow ||
 						   itemType == ItemDrop.ItemData.ItemType.Torch;
-				case "Armors":
+				case Category.Armors:
 					return itemType == ItemDrop.ItemData.ItemType.Helmet ||
 						   itemType == ItemDrop.ItemData.ItemType.Chest ||
 						   itemType == ItemDrop.ItemData.ItemType.Legs ||
 						   itemType == ItemDrop.ItemData.ItemType.Shoulder ||
 						   itemType == ItemDrop.ItemData.ItemType.Hands ||
 						   itemType == ItemDrop.ItemData.ItemType.Shield;
-				case "Foods":
+				case Category.Foods:
 					return itemType == ItemDrop.ItemData.ItemType.Consumable && item.m_shared.m_food > 0;
-				case "Materials":
+				case Category.Materials:
 					return itemType == ItemDrop.ItemData.ItemType.Material;
-				case "Consumables":
+				case Category.Consumables:
 					return itemType == ItemDrop.ItemData.ItemType.Consumable;
-				case "Tools":
+				case Category.Tools:
 					return itemType == ItemDrop.ItemData.ItemType.Tool;
-				case "Trophies":
+				case Category.Trophies:
 					return itemType == ItemDrop.ItemData.ItemType.Trophy;
-				case "Misc":
+				case Category.Misc:
 					return itemType == ItemDrop.ItemData.ItemType.Misc;
 				default:
 					return false;
+			}
+		}
+
+		protected string GetCategoryDisplayName(Category category)
+		{
+			switch (category)
+			{
+				case Category.CurrentlyFiltered: return "Currently Filtered";
+				case Category.All: return "All";
+				case Category.Weapons: return "Weapons";
+				case Category.Armors: return "Armors";
+				case Category.Foods: return "Foods";
+				case Category.Materials: return "Materials";
+				case Category.Consumables: return "Consumables";
+				case Category.Tools: return "Tools";
+				case Category.Trophies: return "Trophies";
+				case Category.Misc: return "Misc";
+				default: return "Unknown";
 			}
 		}
 
@@ -461,7 +440,7 @@ namespace ItemConduit.GUI
 		protected void ApplyJotunnStyling(GameObject root)
 		{
 			// Apply text styling
-			foreach (Text text in root.GetComponentsInChildren<Text>())
+			foreach (Text text in root.GetComponentsInChildren<Text>(true))
 			{
 				if (text.name == "Title" || text.name.Contains("Title"))
 				{
@@ -472,21 +451,12 @@ namespace ItemConduit.GUI
 						20
 					);
 				}
-				else if (text.name.Contains("Header"))
-				{
-					JotunnGUI.Instance.ApplyTextStyle(
-						text,
-						JotunnGUI.Instance.AveriaSerifBold,
-						WhiteShade,
-						18
-					);
-				}
 				else
 				{
 					JotunnGUI.Instance.ApplyTextStyle(
 						text,
 						JotunnGUI.Instance.AveriaSerif,
-						WhiteShade,
+						Color.white,
 						16,
 						false
 					);
@@ -494,19 +464,19 @@ namespace ItemConduit.GUI
 			}
 
 			// Apply input field styling
-			foreach (InputField inputField in root.GetComponentsInChildren<InputField>())
+			foreach (InputField inputField in root.GetComponentsInChildren<InputField>(true))
 			{
 				JotunnGUI.Instance.ApplyInputFieldStyle(inputField, 16);
 			}
 
 			// Apply toggle styling
-			foreach (Toggle toggle in root.GetComponentsInChildren<Toggle>())
+			foreach (Toggle toggle in root.GetComponentsInChildren<Toggle>(true))
 			{
 				JotunnGUI.Instance.ApplyToogleStyle(toggle);
 			}
 
 			// Apply button styling
-			foreach (Button button in root.GetComponentsInChildren<Button>())
+			foreach (Button button in root.GetComponentsInChildren<Button>(true))
 			{
 				JotunnGUI.Instance.ApplyButtonStyle(button);
 			}
@@ -521,6 +491,7 @@ namespace ItemConduit.GUI
 			public Image background;
 			public Image icon;
 			public Button button;
+			public Image highlightBorder;
 			protected ItemDrop.ItemData currentItem;
 
 			public virtual void SetItem(ItemDrop.ItemData item)
@@ -565,7 +536,10 @@ namespace ItemConduit.GUI
 
 			public virtual void SetHighlight(bool highlight)
 			{
-				background.color = highlight ? new Color(1f, 0.8f, 0.3f, 1f) : Color.white;
+				if (highlightBorder != null)
+				{
+					highlightBorder.enabled = highlight;
+				}
 			}
 
 			public ItemDrop.ItemData GetCurrentItem()
@@ -573,12 +547,6 @@ namespace ItemConduit.GUI
 				return currentItem;
 			}
 		}
-
-		#endregion
-
-		#region Abstract Methods
-
-		protected abstract Vector2 GetPanelSize();
 
 		#endregion
 	}
