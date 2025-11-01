@@ -17,7 +17,7 @@ namespace ItemConduit.Nodes
 	/// Insert node implementation - pushes items into containers
 	/// Container detection is handled by base class
 	/// </summary>
-	public class InsertNode : BaseNode
+	public class InsertNode : BaseNode, IFilterNode
 	{
 		#region Configuration Properties
 

@@ -17,7 +17,7 @@ namespace ItemConduit.Nodes
 	/// Extract node implementation - pulls items from containers
 	/// Container detection is handled by base class
 	/// </summary>
-	public class ExtractNode : BaseNode
+	public class ExtractNode : BaseNode, IFilterNode
 	{
 		#region Configuration Properties
 
