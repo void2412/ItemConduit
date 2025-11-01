@@ -17,7 +17,7 @@ namespace ItemConduit.GUI
 		protected InputField searchInput;
 
 		private GameObject itemGridContainer;
-		private readonly List<FilterItemSlot> itemSlots = new List<FilterItemSlot>();
+		private readonly List<ItemSlot> itemSlots = new List<ItemSlot>();
 		private readonly Dictionary<Category, Button> categoryButtons = new Dictionary<Category, Button>();
 
 		public void Initialize(TNode targetNode)
@@ -305,7 +305,7 @@ namespace ItemConduit.GUI
 			int slotIndex = index;
 			button.onClick.AddListener(() => OnItemSlotClicked(slotIndex));
 
-			FilterItemSlot slot = slotObj.AddComponent<FilterItemSlot>();
+			ItemSlot slot = slotObj.AddComponent<ItemSlot>();
 			slot.background = bg;
 			slot.icon = icon;
 			slot.button = button;
@@ -494,6 +494,11 @@ namespace ItemConduit.GUI
 		protected abstract string GetTitleText();
 		protected virtual void AddTopRowContent(Transform topRow) { }
 
+
+	}
+
+	public class ItemSlot : BaseItemSlot
+	{
 
 	}
 }
