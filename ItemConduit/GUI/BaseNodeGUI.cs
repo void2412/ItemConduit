@@ -23,9 +23,7 @@ namespace ItemConduit.GUI
 		protected RectTransform panelRect;
 		protected bool isVisible = false;
 
-		// Constants for item grid (8 columns x 7 rows = 56 items visible)
 		protected const int GRID_COLUMNS = 8;
-		//protected const int GRID_ROWS = 7;
 		protected const int ITEM_SLOT_SIZE = 64;
 
 		// Item management

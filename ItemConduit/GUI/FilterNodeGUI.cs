@@ -30,7 +30,7 @@ namespace ItemConduit.GUI
 			SelectCategory(Category.All);
 		}
 
-		protected override Vector2 GetPanelSize() => new Vector2(850, 600);
+		protected override Vector2 GetPanelSize() => new Vector2(1100, 750);
 
 		private void BuildUI()
 		{
@@ -239,7 +239,7 @@ namespace ItemConduit.GUI
 			scroll.horizontal = false;
 			scroll.vertical = true;
 			scroll.movementType = ScrollRect.MovementType.Clamped;
-			scroll.scrollSensitivity = 100f;
+			scroll.scrollSensitivity = 500f;
 			scroll.inertia = true;
 			scroll.decelerationRate = 0.135f;
 			scroll.viewport = scrollRect; // Set viewport for clipping
@@ -296,7 +296,7 @@ namespace ItemConduit.GUI
 			gridLayout.childAlignment = TextAnchor.UpperLeft;
 			gridLayout.startCorner = GridLayoutGroup.Corner.UpperLeft;
 			gridLayout.startAxis = GridLayoutGroup.Axis.Horizontal;
-			gridLayout.padding = new RectOffset(5, 5, 5, 5);
+			gridLayout.padding = new RectOffset(100, 5, 5, 5); // CHANGED: left=10 (was 5)
 
 			ContentSizeFitter fitter = itemGridContainer.AddComponent<ContentSizeFitter>();
 			fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
