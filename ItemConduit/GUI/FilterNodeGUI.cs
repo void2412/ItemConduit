@@ -257,7 +257,7 @@ namespace ItemConduit.GUI
 			scroll.horizontal = false;
 			scroll.vertical = true;
 			scroll.movementType = ScrollRect.MovementType.Clamped;
-			scroll.scrollSensitivity = 500f;
+			scroll.scrollSensitivity = 1000f;
 			scroll.inertia = true;
 			scroll.decelerationRate = 0.135f;
 			scroll.viewport = scrollRect; // Set viewport for clipping
