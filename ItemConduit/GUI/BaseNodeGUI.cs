@@ -112,12 +112,13 @@ namespace ItemConduit.GUI
 		protected virtual void CreateJotunnPanel()
 		{
 			uiRoot = new GameObject("ItemConduitUI");
-			originalParent = JotunnGUI.CustomGUIBack.transform;
+			originalParent = JotunnGUI.CustomGUIFront.transform;
 			uiRoot.transform.SetParent(originalParent, false);
 
 			uiCanvas = uiRoot.AddComponent<Canvas>();
 			uiCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-			uiCanvas.sortingOrder = 100;
+			uiCanvas.overrideSorting = true;
+			uiCanvas.sortingOrder = 500;
 
 			CanvasScaler scaler = uiRoot.AddComponent<CanvasScaler>();
 			scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;

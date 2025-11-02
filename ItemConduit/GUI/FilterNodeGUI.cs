@@ -649,6 +649,7 @@ namespace ItemConduit.GUI
 				{
 					Logger.LogWarning("[ItemConduit] No settings to paste - use Copy first");
 				}
+				user.Message(MessageHud.MessageType.Center, "No Data in Clipboard", 0, null);
 				return;
 			}
 
