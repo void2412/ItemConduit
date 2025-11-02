@@ -210,43 +210,61 @@ namespace ItemConduit.GUI
 			GameObject inputObj = new GameObject("InputField");
 			inputObj.transform.SetParent(parent, false);
 
+			RectTransform inputRect = inputObj.AddComponent<RectTransform>();
+			inputRect.sizeDelta = new Vector2(width, 48); // DOUBLED from 24
+
 			Image bg = inputObj.AddComponent<Image>();
 			bg.color = new Color(0, 0, 0, 0.5f);
 
 			InputField inputField = inputObj.AddComponent<InputField>();
-			inputField.textComponent = CreateTextComponent(inputObj.transform, "Text");
 
-			GameObject placeholderObj = new GameObject("Placeholder");
-			placeholderObj.transform.SetParent(inputObj.transform, false);
-			Text placeholderText = CreateTextComponent(placeholderObj.transform, "Placeholder");
-			placeholderText.text = placeholder;
-			placeholderText.color = new Color(1, 1, 1, 0.5f);
-			inputField.placeholder = placeholderText;
+			GameObject textObj = new GameObject("Text");
+			textObj.transform.SetParent(inputObj.transform, false);
 
-			LayoutElement layout = inputObj.AddComponent<LayoutElement>();
-			layout.preferredWidth = width;
-			layout.preferredHeight = 30;
-
-			return inputObj;
-		}
-
-		protected Text CreateTextComponent(Transform parent, string name)
-		{
-			GameObject textObj = new GameObject(name);
-			textObj.transform.SetParent(parent, false);
-
-			RectTransform rect = textObj.AddComponent<RectTransform>();
-			rect.anchorMin = Vector2.zero;
-			rect.anchorMax = Vector2.one;
-			rect.offsetMin = new Vector2(5, 2);
-			rect.offsetMax = new Vector2(-5, -2);
+			RectTransform textRect = textObj.AddComponent<RectTransform>();
+			textRect.anchorMin = Vector2.zero;
+			textRect.anchorMax = Vector2.one;
+			textRect.offsetMin = new Vector2(10, 0); // DOUBLED padding from 5
+			textRect.offsetMax = new Vector2(-10, 0);
 
 			Text text = textObj.AddComponent<Text>();
 			text.alignment = TextAnchor.MiddleLeft;
 			text.color = Color.white;
+			text.fontSize = 28; // DOUBLED from 14
+			text.verticalOverflow = VerticalWrapMode.Truncate;
+			text.horizontalOverflow = HorizontalWrapMode.Overflow;
 
-			return text;
+			inputField.textComponent = text;
+
+			GameObject placeholderObj = new GameObject("Placeholder");
+			placeholderObj.transform.SetParent(inputObj.transform, false);
+
+			RectTransform placeholderRect = placeholderObj.AddComponent<RectTransform>();
+			placeholderRect.anchorMin = Vector2.zero;
+			placeholderRect.anchorMax = Vector2.one;
+			placeholderRect.offsetMin = new Vector2(10, 0); // DOUBLED padding
+			placeholderRect.offsetMax = new Vector2(-10, 0);
+
+			Text placeholderText = placeholderObj.AddComponent<Text>();
+			placeholderText.text = placeholder;
+			placeholderText.alignment = TextAnchor.MiddleLeft;
+			placeholderText.color = new Color(1, 1, 1, 0.5f);
+			placeholderText.fontSize = 28; // DOUBLED from 14
+			placeholderText.verticalOverflow = VerticalWrapMode.Truncate;
+			placeholderText.horizontalOverflow = HorizontalWrapMode.Overflow;
+
+			inputField.placeholder = placeholderText;
+
+			LayoutElement layout = inputObj.AddComponent<LayoutElement>();
+			layout.preferredWidth = width;
+			layout.preferredHeight = 48; // DOUBLED from 24
+			layout.minHeight = 48;
+			layout.flexibleHeight = 0;
+
+			return inputObj;
 		}
+
+
 
 		protected GameObject CreateToggle(Transform parent, string label, bool defaultValue)
 		{
@@ -262,7 +280,7 @@ namespace ItemConduit.GUI
 			Image bgImage = bgObj.AddComponent<Image>();
 			bgImage.color = new Color(0.2f, 0.2f, 0.2f);
 			RectTransform bgRect = bgObj.GetComponent<RectTransform>();
-			bgRect.sizeDelta = new Vector2(20, 20);
+			bgRect.sizeDelta = new Vector2(18, 18); // Reduced from 20x20
 
 			// Checkmark
 			GameObject checkObj = new GameObject("Checkmark");
@@ -284,20 +302,45 @@ namespace ItemConduit.GUI
 			labelText.text = label;
 			labelText.alignment = TextAnchor.MiddleLeft;
 			labelText.color = Color.white;
+			labelText.fontSize = 14; // ADD THIS - smaller font
 			RectTransform labelRect = labelObj.GetComponent<RectTransform>();
 			labelRect.anchorMin = new Vector2(0, 0);
 			labelRect.anchorMax = new Vector2(1, 1);
-			labelRect.offsetMin = new Vector2(28, 0);
+			labelRect.offsetMin = new Vector2(24, 0); // Reduced from 28
 			labelRect.offsetMax = Vector2.zero;
 
 			HorizontalLayoutGroup hLayout = toggleObj.AddComponent<HorizontalLayoutGroup>();
-			hLayout.spacing = 8;
+			hLayout.spacing = 6; // Reduced from 8
 			hLayout.childForceExpandWidth = false;
 
 			LayoutElement layout = toggleObj.AddComponent<LayoutElement>();
-			layout.preferredHeight = 30;
+			layout.preferredHeight = 15; // Reduced from 30
 
 			return toggleObj;
+		}
+
+		protected Text CreateLabel(Transform parent, string name, string text, float preferredWidth, TextAnchor alignment = TextAnchor.MiddleLeft)
+		{
+			GameObject labelObj = new GameObject(name);
+			labelObj.transform.SetParent(parent, false);
+
+			RectTransform labelRect = labelObj.AddComponent<RectTransform>();
+			labelRect.sizeDelta = new Vector2(preferredWidth, 48); // DOUBLED from 24
+
+			Text labelText = labelObj.AddComponent<Text>();
+			labelText.text = text;
+			labelText.alignment = alignment;
+			labelText.color = Color.white;
+			labelText.fontSize = 28; // DOUBLED from 14
+			labelText.verticalOverflow = VerticalWrapMode.Truncate;
+
+			LayoutElement layout = labelObj.AddComponent<LayoutElement>();
+			layout.preferredWidth = preferredWidth;
+			layout.preferredHeight = 48; // DOUBLED from 24
+			layout.minHeight = 48;
+			layout.flexibleHeight = 0;
+
+			return labelText;
 		}
 
 		protected Button CreateButton(Transform parent, string text, float width, float height)
@@ -305,11 +348,19 @@ namespace ItemConduit.GUI
 			GameObject buttonObj = new GameObject("Button");
 			buttonObj.transform.SetParent(parent, false);
 
+			RectTransform buttonRect = buttonObj.AddComponent<RectTransform>();
+			buttonRect.sizeDelta = new Vector2(width, height);
+
 			Image bg = buttonObj.AddComponent<Image>();
 			bg.color = new Color(0.3f, 0.25f, 0.2f);
 
 			Button button = buttonObj.AddComponent<Button>();
 			button.targetGraphic = bg;
+
+			ColorBlock colors = button.colors;
+			colors.highlightedColor = new Color(0.4f, 0.35f, 0.3f);
+			colors.pressedColor = new Color(0.2f, 0.15f, 0.1f);
+			button.colors = colors;
 
 			GameObject textObj = new GameObject("Text");
 			textObj.transform.SetParent(buttonObj.transform, false);
@@ -322,10 +373,13 @@ namespace ItemConduit.GUI
 			buttonText.text = text;
 			buttonText.alignment = TextAnchor.MiddleCenter;
 			buttonText.color = Color.white;
+			buttonText.fontSize = 28; // DOUBLED from 14
 
 			LayoutElement layout = buttonObj.AddComponent<LayoutElement>();
 			layout.preferredWidth = width;
 			layout.preferredHeight = height;
+			layout.minHeight = height;
+			layout.flexibleHeight = 0;
 
 			return button;
 		}

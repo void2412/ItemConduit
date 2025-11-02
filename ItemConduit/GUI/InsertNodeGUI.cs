@@ -14,9 +14,9 @@ namespace ItemConduit.GUI
 
 		protected override void AddTopRowContent(Transform topRow)
 		{
-			CreateLabel(topRow, "PriorityLabel", "Priority:", 60f);
+			CreateLabel(topRow, "PriorityLabel", "Priority:", 100f); // DOUBLED width
 
-			GameObject priorityInputObj = CreateInputField(topRow, "0", 60f);
+			GameObject priorityInputObj = CreateInputField(topRow, "0", 100f); // DOUBLED width
 			priorityInput = priorityInputObj.GetComponent<InputField>();
 			priorityInput.contentType = InputField.ContentType.IntegerNumber;
 			priorityInput.onEndEdit.AddListener(OnPriorityChanged);

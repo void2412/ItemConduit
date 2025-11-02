@@ -13,7 +13,7 @@ namespace ItemConduit.GUI
 		protected TNode node;
 
 		protected InputField channelInput;
-		protected Toggle whitelistToggle;
+		protected Button modeButton;
 		protected InputField searchInput;
 
 		private GameObject itemGridContainer;
@@ -70,16 +70,20 @@ namespace ItemConduit.GUI
 			topRow.transform.SetParent(parent, false);
 
 			HorizontalLayoutGroup hLayout = topRow.AddComponent<HorizontalLayoutGroup>();
-			hLayout.spacing = GetTopRowSpacing();
+			hLayout.spacing = 10;
 			hLayout.childForceExpandWidth = false;
-			hLayout.childAlignment = TextAnchor.MiddleLeft;
+			hLayout.childForceExpandHeight = false;
+			hLayout.childControlHeight = false;
+			hLayout.childControlWidth = false;
+			hLayout.childAlignment = TextAnchor.MiddleCenter;
 
 			LayoutElement topRowLayout = topRow.AddComponent<LayoutElement>();
-			topRowLayout.preferredHeight = 35;
+			topRowLayout.preferredHeight = 56; // DOUBLED from 28
+			topRowLayout.minHeight = 56;
 
-			CreateLabel(topRow.transform, "ChannelLabel", GetChannelLabelText(), GetChannelLabelWidth());
+			CreateLabel(topRow.transform, "ChannelLabel", "Channel:", 120f); // DOUBLED width
 
-			GameObject channelInputObj = CreateInputField(topRow.transform, GetChannelPlaceholder(), GetChannelInputWidth());
+			GameObject channelInputObj = CreateInputField(topRow.transform, GetChannelPlaceholder(), 240f); // DOUBLED width
 			channelInput = channelInputObj.GetComponent<InputField>();
 			channelInput.onEndEdit.AddListener(OnChannelChanged);
 
@@ -90,11 +94,11 @@ namespace ItemConduit.GUI
 			LayoutElement spacerLayout = spacer.AddComponent<LayoutElement>();
 			spacerLayout.flexibleWidth = 1;
 
-			CreateLabel(topRow.transform, "WhitelistLabel", GetWhitelistLabelText(), GetWhitelistLabelWidth(), TextAnchor.MiddleRight);
+			CreateLabel(topRow.transform, "ModeLabel", "Filter Mode:", 160f, TextAnchor.MiddleRight); // DOUBLED width
 
-			GameObject toggleObj = CreateToggle(topRow.transform, GetWhitelistToggleText(), true);
-			whitelistToggle = toggleObj.GetComponent<Toggle>();
-			whitelistToggle.onValueChanged.AddListener(OnWhitelistChanged);
+			// Create mode toggle button
+			modeButton = CreateButton(topRow.transform, "Whitelist", 200f, 48f); // DOUBLED both dimensions
+			modeButton.onClick.AddListener(OnModeButtonClicked);
 		}
 
 		private void CreateSearchBox(Transform parent)
@@ -104,17 +108,31 @@ namespace ItemConduit.GUI
 
 			HorizontalLayoutGroup hLayout = searchContainer.AddComponent<HorizontalLayoutGroup>();
 			hLayout.spacing = 8;
-			hLayout.childForceExpandWidth = true;
+			hLayout.childForceExpandWidth = false;
+			hLayout.childForceExpandHeight = false;
+			hLayout.childControlHeight = false;
+			hLayout.childControlWidth = true;
+			hLayout.childAlignment = TextAnchor.MiddleCenter;
 
 			LayoutElement searchLayout = searchContainer.AddComponent<LayoutElement>();
-			searchLayout.preferredHeight = 35;
+			searchLayout.preferredHeight = 56; // DOUBLED from 28
+			searchLayout.minHeight = 56;
+			searchLayout.flexibleWidth = 1;
 
-			CreateLabel(searchContainer.transform, "SearchLabel", "Search:", 60f);
+			Text label = CreateLabel(searchContainer.transform, "SearchLabel", "Search:", 110f); // DOUBLED width
+			LayoutElement labelLayout = label.GetComponent<LayoutElement>();
+			labelLayout.flexibleWidth = 0;
 
-			GameObject searchInputObj = CreateInputField(searchContainer.transform, "Search items...", 0);
+			GameObject searchInputObj = CreateInputField(searchContainer.transform, "Search items...", 200f); // DOUBLED minimum width
 			searchInput = searchInputObj.GetComponent<InputField>();
 			searchInput.onValueChanged.AddListener(OnSearchChanged);
-			searchInputObj.GetComponent<LayoutElement>().flexibleWidth = 1;
+
+			LayoutElement inputLayout = searchInputObj.GetComponent<LayoutElement>();
+			inputLayout.flexibleWidth = 1;
+			inputLayout.minWidth = 200f;
+			inputLayout.preferredHeight = 48; // DOUBLED from 24
+			inputLayout.minHeight = 48;
+			inputLayout.flexibleHeight = 0;
 		}
 
 		private void CreateMainSection(Transform parent)
@@ -162,8 +180,8 @@ namespace ItemConduit.GUI
 			vLayout.childAlignment = TextAnchor.UpperLeft;
 
 			LayoutElement sidebarLayout = sidebar.AddComponent<LayoutElement>();
-			sidebarLayout.preferredWidth = 150;
-			sidebarLayout.minWidth = 150;
+			sidebarLayout.preferredWidth = 100;
+			sidebarLayout.minWidth = 100;
 			sidebarLayout.flexibleHeight = 1;
 
 			AddCategoryButton(sidebar.transform, Category.CurrentlyFiltered);
@@ -445,13 +463,6 @@ namespace ItemConduit.GUI
 			}
 		}
 
-		private void OnWhitelistChanged(bool isWhitelist)
-		{
-			if (node != null)
-			{
-				node.SetWhitelist(isWhitelist);
-			}
-		}
 
 		private void OnSearchChanged(string _)
 		{
@@ -485,6 +496,31 @@ namespace ItemConduit.GUI
 			UpdateItemGrid();
 		}
 
+		private void OnModeButtonClicked()
+		{
+			if (node != null)
+			{
+				bool newMode = !node.IsWhitelist;
+				node.SetWhitelist(newMode);
+
+				// Update button text and color
+				Text buttonText = modeButton.GetComponentInChildren<Text>();
+				if (buttonText != null)
+				{
+					buttonText.text = newMode ? "Whitelist" : "Blacklist";
+				}
+
+				// Optional: Change button color based on mode
+				Image buttonImg = modeButton.GetComponent<Image>();
+				if (buttonImg != null)
+				{
+					buttonImg.color = newMode
+						? new Color(0.3f, 0.5f, 0.3f) // Green tint for whitelist
+						: new Color(0.5f, 0.3f, 0.3f); // Red tint for blacklist
+				}
+			}
+		}
+
 		protected virtual void LoadNodeSettings()
 		{
 			if (node == null)
@@ -497,9 +533,22 @@ namespace ItemConduit.GUI
 				channelInput.SetTextWithoutNotify(node.ChannelId);
 			}
 
-			if (whitelistToggle != null)
+			// Update mode button instead of toggle
+			if (modeButton != null)
 			{
-				whitelistToggle.SetIsOnWithoutNotify(node.IsWhitelist);
+				Text buttonText = modeButton.GetComponentInChildren<Text>();
+				if (buttonText != null)
+				{
+					buttonText.text = node.IsWhitelist ? "Whitelist" : "Blacklist";
+				}
+
+				Image buttonImg = modeButton.GetComponent<Image>();
+				if (buttonImg != null)
+				{
+					buttonImg.color = node.IsWhitelist
+						? new Color(0.3f, 0.5f, 0.3f)
+						: new Color(0.5f, 0.3f, 0.3f);
+				}
 			}
 
 			OnAfterLoadNodeSettings();
@@ -516,28 +565,15 @@ namespace ItemConduit.GUI
 			LoadNodeSettings();
 		}
 
-		protected Text CreateLabel(Transform parent, string name, string text, float preferredWidth, TextAnchor alignment = TextAnchor.MiddleLeft)
-		{
-			GameObject labelObj = new GameObject(name);
-			labelObj.transform.SetParent(parent, false);
+		
 
-			Text labelText = labelObj.AddComponent<Text>();
-			labelText.text = text;
-			labelText.alignment = alignment;
-
-			LayoutElement layout = labelObj.AddComponent<LayoutElement>();
-			layout.preferredWidth = preferredWidth;
-
-			return labelText;
-		}
-
-		protected virtual float GetTopRowSpacing() => 15f;
-		protected virtual float GetChannelLabelWidth() => 80f;
+		protected virtual float GetTopRowSpacing() => 10f;
+		protected virtual float GetChannelLabelWidth() => 60f;
 		protected virtual string GetChannelLabelText() => "Channel ID:";
 		protected virtual string GetChannelPlaceholder() => "None";
-		protected virtual float GetChannelInputWidth() => 150f;
+		protected virtual float GetChannelInputWidth() => 120f;
 		protected virtual string GetWhitelistLabelText() => "Whitelist/Blacklist:";
-		protected virtual float GetWhitelistLabelWidth() => 130f;
+		protected virtual float GetWhitelistLabelWidth() => 80f;
 		protected virtual string GetWhitelistToggleText() => "Whitelist";
 
 		protected abstract string GetTitleText();
