@@ -1,3 +1,4 @@
+﻿using ItemConduit.Config;
 using ItemConduit.Interfaces;
 using ItemConduit.Nodes;
 using Jotunn.Managers;
@@ -5,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using UnityEngine.UI;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.GUI
 {
@@ -20,6 +22,9 @@ namespace ItemConduit.GUI
 		private readonly List<ItemSlot> itemSlots = new List<ItemSlot>();
 		private readonly Dictionary<Category, Button> categoryButtons = new Dictionary<Category, Button>();
 
+
+		
+
 		public void Initialize(TNode targetNode)
 		{
 			node = targetNode;
@@ -31,7 +36,7 @@ namespace ItemConduit.GUI
 			SelectCategory(Category.All);
 		}
 
-		protected override Vector2 GetPanelSize() => new Vector2(1100, 750);
+		protected override Vector2 GetPanelSize() => new Vector2(1100, 850);
 
 		private void BuildUI()
 		{
@@ -53,6 +58,7 @@ namespace ItemConduit.GUI
 			CreateTopRow(content.transform);
 			CreateSearchBox(content.transform);
 			CreateMainSection(content.transform);
+			CreateFooter(content.transform);
 
 			ApplyJotunnStyling(panel);
 			GUIManager.Instance.ApplyWoodpanelStyle(panel.GetComponent<RectTransform>());
@@ -162,6 +168,63 @@ namespace ItemConduit.GUI
 			CreateItemGrid(mainSection.transform);
 		}
 
+		private void CreateFooter(Transform parent)
+		{
+			GameObject footer = new GameObject("Footer");
+			footer.transform.SetParent(parent, false);
+
+			HorizontalLayoutGroup hLayout = footer.AddComponent<HorizontalLayoutGroup>();
+			hLayout.spacing = 12; // Reduced spacing to fit 4 buttons
+			hLayout.childForceExpandWidth = true;
+			hLayout.childForceExpandHeight = false;
+			hLayout.childControlHeight = false;
+			hLayout.childControlWidth = false;
+			hLayout.childAlignment = TextAnchor.MiddleCenter;
+			hLayout.padding = new RectOffset(10, 10, 10, 10);
+
+			LayoutElement footerLayout = footer.AddComponent<LayoutElement>();
+			footerLayout.preferredHeight = 70;
+			footerLayout.minHeight = 70;
+
+			// Copy button
+			Button copyButton = CreateButton(footer.transform, "Copy Settings", 240f, 50f); // Reduced width
+			copyButton.onClick.AddListener(OnCopySettings);
+
+			// Paste button
+			Button pasteButton = CreateButton(footer.transform, "Paste Settings", 240f, 50f);
+			pasteButton.onClick.AddListener(OnPasteSettings);
+
+			// Clear Clipboard button
+			Button clearClipboardButton = CreateButton(footer.transform, "Clear Clipboard", 240f, 50f);
+			clearClipboardButton.onClick.AddListener(OnClearClipboard);
+
+			// Style clear clipboard button (gray tint)
+			Image clearClipboardImg = clearClipboardButton.GetComponent<Image>();
+			if (clearClipboardImg != null)
+			{
+				ColorBlock colors = clearClipboardButton.colors;
+				colors.normalColor = new Color(0.25f, 0.25f, 0.25f);
+				colors.highlightedColor = new Color(0.35f, 0.35f, 0.35f);
+				colors.pressedColor = new Color(0.15f, 0.15f, 0.15f);
+				clearClipboardButton.colors = colors;
+			}
+
+			// Clear Filter button
+			Button clearFilterButton = CreateButton(footer.transform, "Clear Filter", 240f, 50f);
+			clearFilterButton.onClick.AddListener(OnClearFilter);
+
+			// Style the clear filter button (red tint)
+			Image clearFilterImg = clearFilterButton.GetComponent<Image>();
+			if (clearFilterImg != null)
+			{
+				ColorBlock colors = clearFilterButton.colors;
+				colors.normalColor = new Color(0.5f, 0.2f, 0.2f);
+				colors.highlightedColor = new Color(0.6f, 0.3f, 0.3f);
+				colors.pressedColor = new Color(0.4f, 0.1f, 0.1f);
+				clearFilterButton.colors = colors;
+			}
+		}
+
 		private void CreateCategorySidebar(Transform parent)
 		{
 			categoryButtons.Clear();
@@ -175,7 +238,7 @@ namespace ItemConduit.GUI
 			sidebarRect.pivot = new Vector2(0, 1);
 
 			VerticalLayoutGroup vLayout = sidebar.AddComponent<VerticalLayoutGroup>();
-			vLayout.spacing = 2;
+			vLayout.spacing = 3;
 			vLayout.childForceExpandWidth = true;
 			vLayout.childForceExpandHeight = false;
 			vLayout.childAlignment = TextAnchor.UpperLeft;
@@ -202,7 +265,14 @@ namespace ItemConduit.GUI
 			Button button = CreateButton(parent, GetCategoryDisplayName(category), 150, 30);
 			LayoutElement layout = button.gameObject.GetComponent<LayoutElement>();
 			layout.preferredWidth = 150;
-			layout.preferredHeight = 30;
+			layout.preferredHeight = 45;
+			layout.minHeight = 45;
+
+			Text buttonText = button.GetComponentInChildren<Text>();
+			if (buttonText != null)
+			{
+				buttonText.fontSize = 42;
+			}
 
 			button.onClick.AddListener(() => SelectCategory(category));
 			categoryButtons[category] = button;
@@ -537,6 +607,95 @@ namespace ItemConduit.GUI
 			}
 		}
 
+		private void OnCopySettings()
+		{
+			if (node == null) return;
+
+			// Copy common settings to clipboard
+			Clipboard.ChannelId = node.ChannelId;
+			Clipboard.ItemFilter = new HashSet<string>(node.ItemFilter);
+			Clipboard.IsWhitelist = node.IsWhitelist;
+
+			// Copy priority if this is an InsertNode
+			if (node is InsertNode insertNode)
+			{
+				Clipboard.Priority = insertNode.Priority;
+			}
+			else
+			{
+				Clipboard.Priority = null; // Clear priority if not InsertNode
+			}
+
+			Clipboard.HasData = true;
+
+			if (DebugConfig.showDebug.Value)
+			{
+				string priorityInfo = Clipboard.Priority.HasValue ? $", Priority={Clipboard.Priority.Value}" : "";
+				Logger.LogInfo($"[ItemConduit] Copied settings: Channel={Clipboard.ChannelId}, Filter={Clipboard.ItemFilter.Count} items, Mode={Clipboard.IsWhitelist}{priorityInfo}");
+			}
+		}
+
+		private void OnPasteSettings()
+		{
+			if (node == null) return;
+
+			if (!Clipboard.HasData)
+			{
+				if (DebugConfig.showDebug.Value)
+				{
+					Logger.LogWarning("[ItemConduit] No settings to paste - use Copy first");
+				}
+				return;
+			}
+
+			// Paste common settings from clipboard
+			node.SetChannel(Clipboard.ChannelId);
+			node.SetFilter(new HashSet<string>(Clipboard.ItemFilter));
+			node.SetWhitelist(Clipboard.IsWhitelist);
+
+			// Paste priority only if clipboard has it AND current node is InsertNode
+			if (Clipboard.Priority.HasValue && node is InsertNode insertNode)
+			{
+				insertNode.SetPriority(Clipboard.Priority.Value);
+			}
+
+			// Update UI to reflect pasted settings
+			LoadNodeSettings();
+
+			if (DebugConfig.showDebug.Value)
+			{
+				string priorityInfo = Clipboard.Priority.HasValue ? $", Priority={Clipboard.Priority.Value}" : "";
+				Logger.LogInfo($"[ItemConduit] Pasted settings: Channel={Clipboard.ChannelId}, Filter={Clipboard.ItemFilter.Count} items, Mode={Clipboard.IsWhitelist}{priorityInfo}");
+			}
+		}
+
+		private void OnClearFilter()
+		{
+			if (node == null) return;
+
+			// Clear all filter settings
+			node.SetFilter(new HashSet<string>());
+
+			// Update UI
+			UpdateFilteredCountDisplay();
+			UpdateItemGrid();
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo("[ItemConduit] Cleared all filters");
+			}
+		}
+
+		private void OnClearClipboard()
+		{
+			Clipboard.Clear();
+
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo("[ItemConduit] Cleared clipboard");
+			}
+		}
+
 		protected virtual void LoadNodeSettings()
 		{
 			if (node == null)
@@ -621,5 +780,22 @@ namespace ItemConduit.GUI
 	public class ItemSlot : BaseItemSlot
 	{
 
+	}
+	public static class Clipboard
+	{
+		public static string ChannelId { get; set; }
+		public static HashSet<string> ItemFilter { get; set; }
+		public static int? Priority { get; set; }
+		public static bool IsWhitelist { get; set; }
+		public static bool HasData { get; set; }
+
+		public static void Clear()
+		{
+			ChannelId = null;
+			ItemFilter = null;
+			IsWhitelist = true;
+			Priority = null;
+			HasData = false;
+		}
 	}
 }
