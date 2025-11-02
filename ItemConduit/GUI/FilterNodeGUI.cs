@@ -27,6 +27,7 @@ namespace ItemConduit.GUI
 			BuildUI();
 			LoadItemDatabase();
 			LoadNodeSettings();
+			UpdateFilteredCountDisplay();
 			SelectCategory(Category.All);
 		}
 
@@ -455,6 +456,20 @@ namespace ItemConduit.GUI
 			LayoutRebuilder.ForceRebuildLayoutImmediate(itemGridContainer.GetComponent<RectTransform>());
 		}
 
+		private void UpdateFilteredCountDisplay()
+		{
+			if (categoryButtons.ContainsKey(Category.CurrentlyFiltered))
+			{
+				Button filteredButton = categoryButtons[Category.CurrentlyFiltered];
+				Text buttonText = filteredButton.GetComponentInChildren<Text>();
+
+				if (buttonText != null)
+				{
+					int filterCount = node?.ItemFilter?.Count ?? 0;
+					buttonText.text = $"Currently Filtered ({filterCount})";
+				}
+			}
+		}
 		private void OnChannelChanged(string newChannel)
 		{
 			if (node != null)
@@ -494,6 +509,7 @@ namespace ItemConduit.GUI
 
 			node.SetFilter(newFilter);
 			UpdateItemGrid();
+			UpdateFilteredCountDisplay();
 		}
 
 		private void OnModeButtonClicked()
@@ -552,6 +568,7 @@ namespace ItemConduit.GUI
 			}
 
 			OnAfterLoadNodeSettings();
+			UpdateFilteredCountDisplay();
 			UpdateItemGrid();
 		}
 
@@ -576,6 +593,25 @@ namespace ItemConduit.GUI
 		protected virtual float GetWhitelistLabelWidth() => 80f;
 		protected virtual string GetWhitelistToggleText() => "Whitelist";
 
+		protected string GetCategoryDisplayName(Category category)
+		{
+			switch (category)
+			{
+				case Category.CurrentlyFiltered:
+					int filterCount = node?.ItemFilter?.Count ?? 0;
+					return $"Currently Filtered ({filterCount})";
+				case Category.All: return "All";
+				case Category.Weapons: return "Weapons";
+				case Category.Armors: return "Armors";
+				case Category.Foods: return "Foods";
+				case Category.Materials: return "Materials";
+				case Category.Consumables: return "Consumables";
+				case Category.Tools: return "Tools";
+				case Category.Trophies: return "Trophies";
+				case Category.Misc: return "Misc";
+				default: return "Unknown";
+			}
+		}
 		protected abstract string GetTitleText();
 		protected virtual void AddTopRowContent(Transform topRow) { }
 

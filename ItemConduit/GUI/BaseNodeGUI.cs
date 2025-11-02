@@ -467,24 +467,6 @@ namespace ItemConduit.GUI
 			}
 		}
 
-		protected string GetCategoryDisplayName(Category category)
-		{
-			switch (category)
-			{
-				case Category.CurrentlyFiltered: return "Currently Filtered";
-				case Category.All: return "All";
-				case Category.Weapons: return "Weapons";
-				case Category.Armors: return "Armors";
-				case Category.Foods: return "Foods";
-				case Category.Materials: return "Materials";
-				case Category.Consumables: return "Consumables";
-				case Category.Tools: return "Tools";
-				case Category.Trophies: return "Trophies";
-				case Category.Misc: return "Misc";
-				default: return "Unknown";
-			}
-		}
-
 		#endregion
 
 		#region Styling
