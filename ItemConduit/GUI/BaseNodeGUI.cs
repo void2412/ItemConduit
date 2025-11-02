@@ -19,6 +19,8 @@ namespace ItemConduit.GUI
 		#region Fields
 
 		protected GameObject uiRoot;
+		protected Canvas uiCanvas;
+		protected Transform originalParent;
 		protected GameObject panel;
 		protected RectTransform panelRect;
 		protected bool isVisible = false;
@@ -110,11 +112,12 @@ namespace ItemConduit.GUI
 		protected virtual void CreateJotunnPanel()
 		{
 			uiRoot = new GameObject("ItemConduitUI");
-			uiRoot.transform.SetParent(JotunnGUI.CustomGUIFront.transform, false);
+			originalParent = JotunnGUI.CustomGUIBack.transform;
+			uiRoot.transform.SetParent(originalParent, false);
 
-			Canvas canvas = uiRoot.AddComponent<Canvas>();
-			canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-			canvas.sortingOrder = 100;
+			uiCanvas = uiRoot.AddComponent<Canvas>();
+			uiCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
+			uiCanvas.sortingOrder = 100;
 
 			CanvasScaler scaler = uiRoot.AddComponent<CanvasScaler>();
 			scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
