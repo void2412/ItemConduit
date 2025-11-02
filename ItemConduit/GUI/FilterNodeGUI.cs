@@ -14,6 +14,7 @@ namespace ItemConduit.GUI
 	{
 		protected TNode node;
 
+		protected Humanoid user;
 		protected InputField channelInput;
 		protected Button modeButton;
 		protected InputField searchInput;
@@ -25,9 +26,10 @@ namespace ItemConduit.GUI
 
 		
 
-		public void Initialize(TNode targetNode)
+		public void Initialize(TNode targetNode, Humanoid player)
 		{
 			node = targetNode;
+			user = player;
 			InitializeBaseNodeUI();
 			BuildUI();
 			LoadItemDatabase();
@@ -623,10 +625,12 @@ namespace ItemConduit.GUI
 			}
 			else
 			{
-				Clipboard.Priority = null; // Clear priority if not InsertNode
+				Clipboard.Priority = null;
 			}
 
 			Clipboard.HasData = true;
+
+			user.Message(MessageHud.MessageType.Center, "Setting Copied to Clipboard", 0, null);
 
 			if (DebugConfig.showDebug.Value)
 			{
@@ -661,6 +665,8 @@ namespace ItemConduit.GUI
 
 			// Update UI to reflect pasted settings
 			LoadNodeSettings();
+
+			user.Message(MessageHud.MessageType.Center, "Settings Pasted from Clipboard", 0, null);
 
 			if (DebugConfig.showDebug.Value)
 			{

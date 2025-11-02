@@ -395,12 +395,40 @@ namespace ItemConduit.Nodes
 			// Don't allow interaction with ghost pieces
 			if (!IsValidPlacedNode()) return false;
 
+			// Handle Shift+E for pasting settings
+			if (alt)
+			{
+				// Check if clipboard has data
+				if (!Clipboard.HasData)
+				{
+					// Show message to player
+					user.Message(MessageHud.MessageType.Center, "No Data in Clipboard", 0, null);
+					return true;
+				}
+
+				// Paste settings from clipboard
+				SetChannel(Clipboard.ChannelId);
+				SetFilter(new HashSet<string>(Clipboard.ItemFilter));
+				SetWhitelist(Clipboard.IsWhitelist);
+
+				// Show success message
+				user.Message(MessageHud.MessageType.Center, "Settings Pasted from Clipboard", 0, null);
+
+				if (DebugConfig.showDebug.Value)
+				{
+					Logger.LogInfo($"[ItemConduit] Pasted settings via Alt+E: Channel={Clipboard.ChannelId}, Filter={Clipboard.ItemFilter.Count} items, Mode={Clipboard.IsWhitelist}");
+				}
+
+				return true;
+			}
+
+			// Normal E interaction - open GUI
 			// Create GUI if it doesn't exist
 			if (gui == null)
 			{
 				GameObject guiObj = new GameObject("ExtractNodeGUI");
 				gui = guiObj.AddComponent<ExtractNodeGUI>();
-				((ExtractNodeGUI)gui).Initialize(this);
+				((ExtractNodeGUI)gui).Initialize(this, user);
 			}
 
 			// Show the GUI
@@ -418,7 +446,7 @@ namespace ItemConduit.Nodes
 			string baseText = base.GetHoverText();
 
 			// Add channel info
-			string channelInfo = $"[Channel: <color=cyan>{ChannelId}</color>]";
+			string channelInfo = $"[Channel: <color=#00FFFF>{ChannelId}</color>]";
 
 			// Add container status
 			string containerStatus;
@@ -451,7 +479,7 @@ namespace ItemConduit.Nodes
 			}
 
 			// Add interaction hint
-			string interactionHint = "\n[<color=yellow>E</color>] Configure";
+			string interactionHint = "\n[<color=yellow>E</color>] Configure  [<color=yellow>Shift+E</color>] Paste Settings";
 
 			return $"{baseText}\n{channelInfo}\n{containerStatus}{filterInfo}{interactionHint}";
 		}
