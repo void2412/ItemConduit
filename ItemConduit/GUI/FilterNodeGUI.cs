@@ -206,8 +206,6 @@ namespace ItemConduit.GUI
 
 		private void CreateItemGrid(Transform parent)
 		{
-			//itemSlots.Clear();
-
 			GameObject gridSection = new GameObject("GridSection");
 			gridSection.transform.SetParent(parent, false);
 
@@ -221,6 +219,7 @@ namespace ItemConduit.GUI
 			gridSectionLayout.flexibleHeight = 1;
 			gridSectionLayout.minWidth = 400;
 
+			// Create scroll view with viewport
 			GameObject scrollView = new GameObject("ScrollView");
 			scrollView.transform.SetParent(gridSection.transform, false);
 
@@ -232,19 +231,59 @@ namespace ItemConduit.GUI
 			Image scrollBg = scrollView.AddComponent<Image>();
 			scrollBg.color = new Color(0, 0, 0, 0.3f);
 
+			// ADD MASK - This clips content outside viewport
+			Mask mask = scrollView.AddComponent<Mask>();
+			mask.showMaskGraphic = true;
+
 			ScrollRect scroll = scrollView.AddComponent<ScrollRect>();
 			scroll.horizontal = false;
 			scroll.vertical = true;
 			scroll.movementType = ScrollRect.MovementType.Clamped;
+			scroll.scrollSensitivity = 100f;
+			scroll.inertia = true;
+			scroll.decelerationRate = 0.135f;
+			scroll.viewport = scrollRect; // Set viewport for clipping
 
+			// Create scrollbar
+			GameObject scrollbarObj = new GameObject("Scrollbar");
+			scrollbarObj.transform.SetParent(gridSection.transform, false);
+
+			RectTransform scrollbarRect = scrollbarObj.AddComponent<RectTransform>();
+			scrollbarRect.anchorMin = new Vector2(1, 0);
+			scrollbarRect.anchorMax = new Vector2(1, 1);
+			scrollbarRect.pivot = new Vector2(1, 1);
+			scrollbarRect.sizeDelta = new Vector2(20, 0);
+			scrollbarRect.anchoredPosition = new Vector2(-5, 0);
+
+			Image scrollbarBg = scrollbarObj.AddComponent<Image>();
+			scrollbarBg.color = new Color(0.2f, 0.2f, 0.2f, 0.8f);
+
+			Scrollbar scrollbar = scrollbarObj.AddComponent<Scrollbar>();
+			scrollbar.direction = Scrollbar.Direction.BottomToTop;
+
+			// Scrollbar handle
+			GameObject handleObj = new GameObject("Handle");
+			handleObj.transform.SetParent(scrollbarObj.transform, false);
+
+			RectTransform handleRect = handleObj.AddComponent<RectTransform>();
+			handleRect.anchorMin = Vector2.zero;
+			handleRect.anchorMax = Vector2.one;
+			handleRect.sizeDelta = Vector2.zero;
+
+			Image handleImg = handleObj.AddComponent<Image>();
+			handleImg.color = new Color(0.5f, 0.4f, 0.3f, 1f);
+
+			scrollbar.handleRect = handleRect;
+			scrollbar.targetGraphic = handleImg;
+
+			scroll.verticalScrollbar = scrollbar;
+			scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.AutoHideAndExpandViewport;
+
+			// Create content container
 			itemGridContainer = new GameObject("GridContainer");
 			itemGridContainer.transform.SetParent(scrollView.transform, false);
 
-			RectTransform gridRect = itemGridContainer.GetComponent<RectTransform>();
-			if (gridRect == null)
-			{
-				gridRect = itemGridContainer.AddComponent<RectTransform>();
-			}
+			RectTransform gridRect = itemGridContainer.AddComponent<RectTransform>();
 			gridRect.anchorMin = new Vector2(0, 1);
 			gridRect.anchorMax = new Vector2(1, 1);
 			gridRect.pivot = new Vector2(0.5f, 1);
@@ -263,11 +302,6 @@ namespace ItemConduit.GUI
 			fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
 			scroll.content = gridRect;
-
-			for (int i = 0; i < GRID_COLUMNS * GRID_ROWS; i++)
-			{
-				CreateItemSlot(itemGridContainer.transform, i);
-			}
 		}
 
 		private void CreateItemSlot(Transform parent, int index)
@@ -369,10 +403,21 @@ namespace ItemConduit.GUI
 
 		private void UpdateItemGrid()
 		{
+			int requiredSlots = filteredItems.Count;
+
+			// Create slots as needed
+			while (itemSlots.Count < requiredSlots)
+			{
+				CreateItemSlot(itemGridContainer.transform, itemSlots.Count);
+			}
+
+			// Update all slots (they're all active, mask handles visibility)
 			for (int i = 0; i < itemSlots.Count; i++)
 			{
-				if (i < filteredItems.Count)
+				if (i < requiredSlots)
 				{
+					// Update slot with item data
+					itemSlots[i].gameObject.SetActive(true);
 					ItemDrop.ItemData item = filteredItems[i];
 					itemSlots[i].SetItem(item);
 
@@ -382,10 +427,14 @@ namespace ItemConduit.GUI
 				}
 				else
 				{
-					itemSlots[i].Clear();
-					itemSlots[i].SetHighlight(false);
+					// Hide extra slots
+					itemSlots[i].gameObject.SetActive(false);
 				}
 			}
+
+			// Force layout rebuild
+			Canvas.ForceUpdateCanvases();
+			LayoutRebuilder.ForceRebuildLayoutImmediate(itemGridContainer.GetComponent<RectTransform>());
 		}
 
 		private void OnChannelChanged(string newChannel)
