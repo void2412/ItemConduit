@@ -141,32 +141,7 @@ namespace ItemConduit.GUI
 
 		#region Unity Events
 
-		/// <summary>
-		/// Handle global input and enforce input blocking every frame
-		/// </summary>
-		private void Update()
-		{
-			// Ensure cursor is always visible and unlocked when GUI is active
-			if (hasActiveGUI)
-			{
-				Cursor.visible = true;
-				Cursor.lockState = CursorLockMode.None;
-
-				// DIRECTLY disable camera mouse capture every frame
-				if (GameCamera.instance != null)
-				{
-					// Use Traverse to access private field
-					Traverse.Create(GameCamera.instance).Field("m_mouseCapture").SetValue(false);
-				}
-			}
-
-			// Close all GUIs when ESC is pressed (unless typing in input field)
-			if (hasActiveGUI && Input.GetKeyDown(KeyCode.Escape) && !hasInputFieldFocus)
-			{
-				CloseAll();
-			}
-		}
-
+	
 		/// <summary>
 		/// Clean up on destruction
 		/// </summary>
