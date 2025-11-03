@@ -17,6 +17,8 @@ namespace ItemConduit.GUI
 		/// <summary>
 		/// Create the tooltip (call this once in your GUI's Initialize or BuildUI)
 		/// </summary>
+
+
 		public void Create(Transform parent)
 		{
 			tooltipObject = new GameObject("ItemTooltip");

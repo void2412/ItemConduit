@@ -430,7 +430,9 @@ namespace ItemConduit.GUI
 			Button button = slotObj.AddComponent<Button>();
 			int slotIndex = index;
 			button.onClick.AddListener(() => OnItemSlotClicked(slotIndex));
-			slotObj.AddComponent<HoverUI>();
+			
+			HoverUI hover = slotObj.AddComponent<HoverUI>();
+			hover.itemTooltip.Create(parent);
 
 			ItemSlot slot = slotObj.AddComponent<ItemSlot>();
 			slot.background = bg;
