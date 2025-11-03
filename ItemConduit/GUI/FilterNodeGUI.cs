@@ -8,6 +8,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Logger = Jotunn.Logger;
 
+
 namespace ItemConduit.GUI
 {
 	public abstract class FilterNodeGUI<TNode> : BaseNodeGUI where TNode : BaseNode, IFilterNode
@@ -429,6 +430,7 @@ namespace ItemConduit.GUI
 			Button button = slotObj.AddComponent<Button>();
 			int slotIndex = index;
 			button.onClick.AddListener(() => OnItemSlotClicked(slotIndex));
+			slotObj.AddComponent<HoverUI>();
 
 			ItemSlot slot = slotObj.AddComponent<ItemSlot>();
 			slot.background = bg;
@@ -515,6 +517,9 @@ namespace ItemConduit.GUI
 					bool isInFilter = node.ItemFilter.Any(f =>
 						f.Equals(item.m_dropPrefab?.name ?? item.m_shared.m_name, System.StringComparison.OrdinalIgnoreCase));
 					itemSlots[i].SetHighlight(isInFilter);
+					HoverUI hover = itemSlots[i].GetComponent<HoverUI>();
+					hover.itemTooltip.itemName = item.m_shared?.m_name ?? "";
+					hover.itemTooltip.prefabName = item.m_dropPrefab?.name ?? "";
 				}
 				else
 				{
@@ -608,6 +613,7 @@ namespace ItemConduit.GUI
 				}
 			}
 		}
+
 
 		private void OnCopySettings()
 		{
@@ -805,4 +811,6 @@ namespace ItemConduit.GUI
 			HasData = false;
 		}
 	}
+
+
 }
