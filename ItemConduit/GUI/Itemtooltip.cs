@@ -6,7 +6,7 @@ namespace ItemConduit.GUI
 {
 	public class ItemTooltip
 	{
-		private GameObject tooltipObject;
+		public GameObject tooltipObject;
 		private Text tooltipText;
 		private RectTransform tooltipRect;
 		private Canvas tooltipCanvas;  // ✅ Store canvas reference
@@ -23,7 +23,7 @@ namespace ItemConduit.GUI
 			tooltipRect.anchorMin = new Vector2(0, 1);  // Top-left anchor
 			tooltipRect.anchorMax = new Vector2(0, 1);
 			tooltipRect.pivot = new Vector2(0, 1);      // Pivot at top-left
-			tooltipRect.sizeDelta = new Vector2(350, 80);  // Initial size
+			tooltipRect.sizeDelta = new Vector2(300, 50);  // Initial size
 
 			// Background
 			Image bg = tooltipObject.AddComponent<Image>();
@@ -50,11 +50,6 @@ namespace ItemConduit.GUI
 			tooltipText.alignment = TextAnchor.UpperLeft;
 			tooltipText.supportRichText = true;
 			tooltipText.raycastTarget = false;  // ✅ Don't block events
-
-			// Auto-size
-			ContentSizeFitter fitter = tooltipObject.AddComponent<ContentSizeFitter>();
-			fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-			fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
 			// ✅ FIX: Canvas setup for proper rendering
 			tooltipCanvas = tooltipObject.AddComponent<Canvas>();

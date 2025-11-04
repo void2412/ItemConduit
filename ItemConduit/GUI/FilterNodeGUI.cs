@@ -496,10 +496,10 @@ namespace ItemConduit.GUI
 				}
 			}
 
-			StartCoroutine(UpdateItemGrid());
+			UpdateItemGrid();
 		}
 
-		private IEnumerator UpdateItemGrid()
+		private void UpdateItemGrid()
 		{
 			int requiredSlots = filteredItems.Count;
 
@@ -525,7 +525,10 @@ namespace ItemConduit.GUI
 					HoverUI hover = itemSlots[i].GetComponent<HoverUI>();
 					if (hover != null)
 					{
-						hover.itemTooltip.Create(tooltipParent);
+						if (hover.itemTooltip.tooltipObject == null)
+						{
+							hover.itemTooltip.Create(tooltipParent);
+						}
 						hover.itemTooltip.itemData = item;
 					}
 				}
@@ -534,7 +537,7 @@ namespace ItemConduit.GUI
 					// Hide extra slots
 					itemSlots[i].gameObject.SetActive(false);
 				}
-				yield return null;
+
 			}
 
 			// Force layout rebuild
@@ -594,7 +597,7 @@ namespace ItemConduit.GUI
 			}
 
 			node.SetFilter(newFilter);
-			StartCoroutine(UpdateItemGrid());
+			UpdateItemGrid();
 			UpdateFilteredCountDisplay();
 		}
 
@@ -700,7 +703,7 @@ namespace ItemConduit.GUI
 
 			// Update UI
 			UpdateFilteredCountDisplay();
-			StartCoroutine(UpdateItemGrid());
+			UpdateItemGrid();
 
 			if (DebugConfig.showDebug.Value)
 			{
@@ -750,7 +753,7 @@ namespace ItemConduit.GUI
 
 			OnAfterLoadNodeSettings();
 			UpdateFilteredCountDisplay();
-			StartCoroutine(UpdateItemGrid());
+			UpdateItemGrid();
 		}
 
 		protected virtual void OnAfterLoadNodeSettings()
