@@ -2,6 +2,7 @@
 using ItemConduit.Interfaces;
 using ItemConduit.Nodes;
 using Jotunn.Managers;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
@@ -495,10 +496,10 @@ namespace ItemConduit.GUI
 				}
 			}
 
-			UpdateItemGrid();
+			StartCoroutine(UpdateItemGrid());
 		}
 
-		private void UpdateItemGrid()
+		private IEnumerator UpdateItemGrid()
 		{
 			int requiredSlots = filteredItems.Count;
 
@@ -533,6 +534,7 @@ namespace ItemConduit.GUI
 					// Hide extra slots
 					itemSlots[i].gameObject.SetActive(false);
 				}
+				yield return null;
 			}
 
 			// Force layout rebuild
@@ -592,7 +594,7 @@ namespace ItemConduit.GUI
 			}
 
 			node.SetFilter(newFilter);
-			UpdateItemGrid();
+			StartCoroutine(UpdateItemGrid());
 			UpdateFilteredCountDisplay();
 		}
 
@@ -698,7 +700,7 @@ namespace ItemConduit.GUI
 
 			// Update UI
 			UpdateFilteredCountDisplay();
-			UpdateItemGrid();
+			StartCoroutine(UpdateItemGrid());
 
 			if (DebugConfig.showDebug.Value)
 			{
@@ -748,7 +750,7 @@ namespace ItemConduit.GUI
 
 			OnAfterLoadNodeSettings();
 			UpdateFilteredCountDisplay();
-			UpdateItemGrid();
+			StartCoroutine(UpdateItemGrid());
 		}
 
 		protected virtual void OnAfterLoadNodeSettings()
