@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using ItemConduit.Config;
+using UnityEngine;
 using UnityEngine.UI;
 using Logger = Jotunn.Logger;
 
@@ -49,7 +50,7 @@ namespace ItemConduit.GUI
 			tooltipText.color = Color.white;
 			tooltipText.alignment = TextAnchor.UpperLeft;
 			tooltipText.supportRichText = true;
-			tooltipText.raycastTarget = false;  // ✅ Don't block events
+			tooltipText.raycastTarget = false;  
 
 			// ✅ FIX: Canvas setup for proper rendering
 			tooltipCanvas = tooltipObject.AddComponent<Canvas>();
@@ -87,32 +88,35 @@ namespace ItemConduit.GUI
 			Canvas.ForceUpdateCanvases();
 			LayoutRebuilder.ForceRebuildLayoutImmediate(tooltipRect);
 
-			// ✅ ENHANCED DEBUG - Log everything about the tooltip state
-			Logger.LogInfo($"=== TOOLTIP DEBUG START ===");
-			Logger.LogInfo($"📋 Item: '{itemData.m_shared.m_name}'");
-			Logger.LogInfo($"✅ Active: {tooltipObject.activeSelf}");
-			Logger.LogInfo($"📐 Rect Size: {tooltipRect.rect.size}");
-			Logger.LogInfo($"📍 Position: {tooltipRect.position}");
-			Logger.LogInfo($"📍 AnchoredPos: {tooltipRect.anchoredPosition}");
-			Logger.LogInfo($"📍 LocalPos: {tooltipRect.localPosition}");
-			Logger.LogInfo($"📝 Text Content: '{tooltipText.text}'");
-			Logger.LogInfo($"📝 Text Font: {(tooltipText.font != null ? tooltipText.font.name : "NULL")}");
-			Logger.LogInfo($"📝 Text FontSize: {tooltipText.fontSize}");
-			Logger.LogInfo($"🎨 Canvas sortingOrder: {tooltipCanvas?.sortingOrder}");
-			Logger.LogInfo($"🎨 Canvas overrideSorting: {tooltipCanvas?.overrideSorting}");
-			Logger.LogInfo($"👁️ Parent active: {tooltipObject.transform.parent.gameObject.activeSelf}");
-			Logger.LogInfo($"🖥️ Screen: {Screen.width}x{Screen.height}");
-			Logger.LogInfo($"🖱️ Mouse: {Input.mousePosition}");
+			if (DebugConfig.showDebug.Value)
+			{
+				// ✅ ENHANCED DEBUG - Log everything about the tooltip state
+				Logger.LogInfo($"=== TOOLTIP DEBUG START ===");
+				Logger.LogInfo($"📋 Item: '{itemData.m_shared.m_name}'");
+				Logger.LogInfo($"✅ Active: {tooltipObject.activeSelf}");
+				Logger.LogInfo($"📐 Rect Size: {tooltipRect.rect.size}");
+				Logger.LogInfo($"📍 Position: {tooltipRect.position}");
+				Logger.LogInfo($"📍 AnchoredPos: {tooltipRect.anchoredPosition}");
+				Logger.LogInfo($"📍 LocalPos: {tooltipRect.localPosition}");
+				Logger.LogInfo($"📝 Text Content: '{tooltipText.text}'");
+				Logger.LogInfo($"📝 Text Font: {(tooltipText.font != null ? tooltipText.font.name : "NULL")}");
+				Logger.LogInfo($"📝 Text FontSize: {tooltipText.fontSize}");
+				Logger.LogInfo($"🎨 Canvas sortingOrder: {tooltipCanvas?.sortingOrder}");
+				Logger.LogInfo($"🎨 Canvas overrideSorting: {tooltipCanvas?.overrideSorting}");
+				Logger.LogInfo($"👁️ Parent active: {tooltipObject.transform.parent.gameObject.activeSelf}");
+				Logger.LogInfo($"🖥️ Screen: {Screen.width}x{Screen.height}");
+				Logger.LogInfo($"🖱️ Mouse: {Input.mousePosition}");
 
-			// Check if tooltip is actually on screen
-			Vector3[] corners = new Vector3[4];
-			tooltipRect.GetWorldCorners(corners);
-			Logger.LogInfo($"📦 WorldCorners: BL={corners[0]}, TL={corners[1]}, TR={corners[2]}, BR={corners[3]}");
+				// Check if tooltip is actually on screen
+				Vector3[] corners = new Vector3[4];
+				tooltipRect.GetWorldCorners(corners);
+				Logger.LogInfo($"📦 WorldCorners: BL={corners[0]}, TL={corners[1]}, TR={corners[2]}, BR={corners[3]}");
 
-			bool onScreen = corners[0].x < Screen.width && corners[2].x > 0 &&
-							corners[0].y < Screen.height && corners[2].y > 0;
-			Logger.LogInfo($"👁️ Is on screen: {onScreen}");
-			Logger.LogInfo($"=== TOOLTIP DEBUG END ===");
+				bool onScreen = corners[0].x < Screen.width && corners[2].x > 0 &&
+								corners[0].y < Screen.height && corners[2].y > 0;
+				Logger.LogInfo($"👁️ Is on screen: {onScreen}");
+				Logger.LogInfo($"=== TOOLTIP DEBUG END ===");
+			}
 		}
 
 		public void Hide()
