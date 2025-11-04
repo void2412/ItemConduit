@@ -23,6 +23,7 @@ namespace ItemConduit.GUI
 		private GameObject itemGridContainer;
 		private readonly List<ItemSlot> itemSlots = new List<ItemSlot>();
 		private readonly Dictionary<Category, Button> categoryButtons = new Dictionary<Category, Button>();
+		private Transform tooltipParent;
 
 
 		
@@ -43,6 +44,7 @@ namespace ItemConduit.GUI
 
 		private void BuildUI()
 		{
+			tooltipParent = panel.transform;
 			GameObject content = new GameObject("Content");
 			content.transform.SetParent(panel.transform, false);
 
@@ -432,7 +434,7 @@ namespace ItemConduit.GUI
 			button.onClick.AddListener(() => OnItemSlotClicked(slotIndex));
 			
 			HoverUI hover = slotObj.AddComponent<HoverUI>();
-			hover.itemTooltip.Create(parent);
+			
 
 			ItemSlot slot = slotObj.AddComponent<ItemSlot>();
 			slot.background = bg;
@@ -520,8 +522,11 @@ namespace ItemConduit.GUI
 						f.Equals(item.m_dropPrefab?.name ?? item.m_shared.m_name, System.StringComparison.OrdinalIgnoreCase));
 					itemSlots[i].SetHighlight(isInFilter);
 					HoverUI hover = itemSlots[i].GetComponent<HoverUI>();
-					hover.itemTooltip.itemName = item.m_shared?.m_name ?? "";
-					hover.itemTooltip.prefabName = item.m_dropPrefab?.name ?? "";
+					if (hover != null)
+					{
+						hover.itemTooltip.Create(tooltipParent);
+						hover.itemTooltip.itemData = item;
+					}
 				}
 				else
 				{

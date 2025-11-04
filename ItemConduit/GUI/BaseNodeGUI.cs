@@ -419,7 +419,13 @@ namespace ItemConduit.GUI
 						Sprite icon = itemDrop.m_itemData.GetIcon();
 						if (icon != null)
 						{
+							itemDrop.m_itemData.m_dropPrefab = prefab;
 							allItems.Add(itemDrop.m_itemData);
+							if (DebugConfig.showDebug.Value) {
+								string prefabName = itemDrop.m_itemData.m_dropPrefab?.name ?? "";
+								Logger.LogInfo($"Added prefab {prefabName} to GUI");
+							}
+								
 						}
 					}
 					catch

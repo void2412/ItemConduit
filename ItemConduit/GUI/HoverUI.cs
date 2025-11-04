@@ -23,5 +23,13 @@ namespace ItemConduit.GUI
 			if(itemTooltip == null) return;
 			itemTooltip.Hide();
 		}
+
+		private void Update()
+		{
+			if (itemTooltip != null && itemTooltip.IsVisible())
+			{
+				itemTooltip.UpdatePosition();
+			}
+		}
 	}
 }

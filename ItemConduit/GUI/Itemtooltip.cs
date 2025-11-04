@@ -1,23 +1,16 @@
 ﻿using UnityEngine;
 using UnityEngine.UI;
+using Logger = Jotunn.Logger;
 
 namespace ItemConduit.GUI
 {
-	/// <summary>
-	/// Simple tooltip displayer - just call Show() and Hide()
-	/// </summary>
 	public class ItemTooltip
 	{
 		private GameObject tooltipObject;
 		private Text tooltipText;
 		private RectTransform tooltipRect;
-		public string itemName = "";
-		public string prefabName = "";
-
-		/// <summary>
-		/// Create the tooltip (call this once in your GUI's Initialize or BuildUI)
-		/// </summary>
-
+		private Canvas tooltipCanvas;  // ✅ Store canvas reference
+		public ItemDrop.ItemData itemData;
 
 		public void Create(Transform parent)
 		{
@@ -25,13 +18,17 @@ namespace ItemConduit.GUI
 			tooltipObject.transform.SetParent(parent, false);
 
 			tooltipRect = tooltipObject.AddComponent<RectTransform>();
-			tooltipRect.anchorMin = Vector2.zero;
-			tooltipRect.anchorMax = Vector2.zero;
-			tooltipRect.pivot = new Vector2(0, 1);
+
+			// ✅ FIX: Better anchor setup for positioning
+			tooltipRect.anchorMin = new Vector2(0, 1);  // Top-left anchor
+			tooltipRect.anchorMax = new Vector2(0, 1);
+			tooltipRect.pivot = new Vector2(0, 1);      // Pivot at top-left
+			tooltipRect.sizeDelta = new Vector2(350, 80);  // Initial size
 
 			// Background
 			Image bg = tooltipObject.AddComponent<Image>();
 			bg.color = new Color(0.05f, 0.05f, 0.05f, 0.95f);
+			bg.raycastTarget = false;  // ✅ Don't block events
 
 			// Border
 			Outline outline = tooltipObject.AddComponent<Outline>();
@@ -52,72 +49,139 @@ namespace ItemConduit.GUI
 			tooltipText.color = Color.white;
 			tooltipText.alignment = TextAnchor.UpperLeft;
 			tooltipText.supportRichText = true;
+			tooltipText.raycastTarget = false;  // ✅ Don't block events
 
 			// Auto-size
 			ContentSizeFitter fitter = tooltipObject.AddComponent<ContentSizeFitter>();
 			fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
 			fitter.verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
-			// Render on top
-			Canvas canvas = tooltipObject.AddComponent<Canvas>();
-			canvas.overrideSorting = true;
-			canvas.sortingOrder = 1000;
+			// ✅ FIX: Canvas setup for proper rendering
+			tooltipCanvas = tooltipObject.AddComponent<Canvas>();
+			tooltipCanvas.overrideSorting = true;
+			tooltipCanvas.sortingOrder = 1000;
+
+			// ✅ CRITICAL: Add GraphicRaycaster for proper rendering
+			tooltipObject.AddComponent<GraphicRaycaster>();
 
 			tooltipObject.SetActive(false);
+
+			Logger.LogInfo($"✅ Tooltip Created! Parent: {parent.name}");
 		}
 
-		/// <summary>
-		/// Show tooltip with item info
-		/// </summary>
 		public void Show()
 		{
-			if (tooltipText == null) return;
+			if (tooltipText == null)
+			{
+				Logger.LogError("❌ tooltipText is NULL! Create() was not called!");
+				return;
+			}
 
-			tooltipText.text = $"<b><size=16>{itemName}</size></b>\n" +
-							   $"<color=#CCCCCC><size=12>Prefab: {prefabName}</size></color>";
+			if (string.IsNullOrEmpty(itemData.m_shared.m_name) && string.IsNullOrEmpty(itemData.m_dropPrefab.name))
+			{
+				Logger.LogWarning("⚠️ Both itemName and prefabName are empty!");
+			}
+
+			tooltipText.text = $"<b><size=16>{itemData.m_shared.m_name}</size></b>\n" +
+							   $"<color=#CCCCCC><size=12>Prefab: {itemData.m_dropPrefab.name}</size></color>";
 
 			UpdatePosition();
 			tooltipObject.SetActive(true);
 
+			// Force UI update
 			Canvas.ForceUpdateCanvases();
 			LayoutRebuilder.ForceRebuildLayoutImmediate(tooltipRect);
+
+			// ✅ ENHANCED DEBUG - Log everything about the tooltip state
+			Logger.LogInfo($"=== TOOLTIP DEBUG START ===");
+			Logger.LogInfo($"📋 Item: '{itemData.m_shared.m_name}'");
+			Logger.LogInfo($"✅ Active: {tooltipObject.activeSelf}");
+			Logger.LogInfo($"📐 Rect Size: {tooltipRect.rect.size}");
+			Logger.LogInfo($"📍 Position: {tooltipRect.position}");
+			Logger.LogInfo($"📍 AnchoredPos: {tooltipRect.anchoredPosition}");
+			Logger.LogInfo($"📍 LocalPos: {tooltipRect.localPosition}");
+			Logger.LogInfo($"📝 Text Content: '{tooltipText.text}'");
+			Logger.LogInfo($"📝 Text Font: {(tooltipText.font != null ? tooltipText.font.name : "NULL")}");
+			Logger.LogInfo($"📝 Text FontSize: {tooltipText.fontSize}");
+			Logger.LogInfo($"🎨 Canvas sortingOrder: {tooltipCanvas?.sortingOrder}");
+			Logger.LogInfo($"🎨 Canvas overrideSorting: {tooltipCanvas?.overrideSorting}");
+			Logger.LogInfo($"👁️ Parent active: {tooltipObject.transform.parent.gameObject.activeSelf}");
+			Logger.LogInfo($"🖥️ Screen: {Screen.width}x{Screen.height}");
+			Logger.LogInfo($"🖱️ Mouse: {Input.mousePosition}");
+
+			// Check if tooltip is actually on screen
+			Vector3[] corners = new Vector3[4];
+			tooltipRect.GetWorldCorners(corners);
+			Logger.LogInfo($"📦 WorldCorners: BL={corners[0]}, TL={corners[1]}, TR={corners[2]}, BR={corners[3]}");
+
+			bool onScreen = corners[0].x < Screen.width && corners[2].x > 0 &&
+							corners[0].y < Screen.height && corners[2].y > 0;
+			Logger.LogInfo($"👁️ Is on screen: {onScreen}");
+			Logger.LogInfo($"=== TOOLTIP DEBUG END ===");
 		}
 
-		/// <summary>
-		/// Hide tooltip
-		/// </summary>
 		public void Hide()
 		{
 			if (tooltipObject != null)
+			{
 				tooltipObject.SetActive(false);
+				Logger.LogInfo("🚫 Tooltip hidden");
+			}
 		}
 
-		/// <summary>
-		/// Update position near mouse (call in Update if tooltip is visible)
-		/// </summary>
 		public void UpdatePosition()
 		{
 			if (tooltipRect == null) return;
 
+			// ✅ FIX: Use anchoredPosition for UI elements
 			Vector2 mousePos = Input.mousePosition;
-			tooltipRect.position = mousePos + new Vector2(15, -15);
+
+			// Convert screen position to local position in parent's space
+			RectTransform parentRect = tooltipRect.parent as RectTransform;
+			if (parentRect != null)
+			{
+				Vector2 localPoint;
+				RectTransformUtility.ScreenPointToLocalPointInRectangle(
+					parentRect,
+					mousePos,
+					null,  // null for overlay canvas
+					out localPoint
+				);
+
+				// Offset from cursor
+				tooltipRect.anchoredPosition = localPoint + new Vector2(15, -15);
+			}
+			else
+			{
+				// Fallback to direct screen position
+				tooltipRect.position = mousePos + new Vector2(15, -15);
+			}
 
 			// Keep within screen bounds
 			Vector3[] corners = new Vector3[4];
 			tooltipRect.GetWorldCorners(corners);
 
+			// Check if tooltip goes off right edge
 			if (corners[2].x > Screen.width)
-				tooltipRect.position = mousePos + new Vector2(-tooltipRect.rect.width - 15, -15);
+			{
+				Vector2 currentPos = tooltipRect.anchoredPosition;
+				tooltipRect.anchoredPosition = new Vector2(
+					currentPos.x - tooltipRect.rect.width - 30,  // Flip to left side
+					currentPos.y
+				);
+			}
 
+			// Check if tooltip goes off bottom edge
 			if (corners[0].y < 0)
-				tooltipRect.position = new Vector3(tooltipRect.position.x,
-												   mousePos.y + tooltipRect.rect.height + 15,
-												   tooltipRect.position.z);
+			{
+				Vector2 currentPos = tooltipRect.anchoredPosition;
+				tooltipRect.anchoredPosition = new Vector2(
+					currentPos.x,
+					currentPos.y + tooltipRect.rect.height + 30  // Flip to top side
+				);
+			}
 		}
 
-		/// <summary>
-		/// Check if tooltip is currently visible
-		/// </summary>
 		public bool IsVisible()
 		{
 			return tooltipObject != null && tooltipObject.activeSelf;
