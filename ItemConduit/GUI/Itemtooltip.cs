@@ -128,29 +128,10 @@ namespace ItemConduit.GUI
 		{
 			if (tooltipRect == null) return;
 
-			// ✅ FIX: Use anchoredPosition for UI elements
 			Vector2 mousePos = Input.mousePosition;
 
-			// Convert screen position to local position in parent's space
-			RectTransform parentRect = tooltipRect.parent as RectTransform;
-			if (parentRect != null)
-			{
-				Vector2 localPoint;
-				RectTransformUtility.ScreenPointToLocalPointInRectangle(
-					parentRect,
-					mousePos,
-					null,  // null for overlay canvas
-					out localPoint
-				);
-
-				// Offset from cursor
-				tooltipRect.anchoredPosition = localPoint + new Vector2(15, -15);
-			}
-			else
-			{
-				// Fallback to direct screen position
-				tooltipRect.position = mousePos + new Vector2(15, -15);
-			}
+			// Direct positioning in screen space
+			tooltipRect.position = mousePos + new Vector2(15, -15);
 
 			// Keep within screen bounds
 			Vector3[] corners = new Vector3[4];
@@ -159,20 +140,18 @@ namespace ItemConduit.GUI
 			// Check if tooltip goes off right edge
 			if (corners[2].x > Screen.width)
 			{
-				Vector2 currentPos = tooltipRect.anchoredPosition;
-				tooltipRect.anchoredPosition = new Vector2(
-					currentPos.x - tooltipRect.rect.width - 30,  // Flip to left side
-					currentPos.y
+				tooltipRect.position = new Vector2(
+					mousePos.x - tooltipRect.rect.width - 15,
+					tooltipRect.position.y
 				);
 			}
 
 			// Check if tooltip goes off bottom edge
 			if (corners[0].y < 0)
 			{
-				Vector2 currentPos = tooltipRect.anchoredPosition;
-				tooltipRect.anchoredPosition = new Vector2(
-					currentPos.x,
-					currentPos.y + tooltipRect.rect.height + 30  // Flip to top side
+				tooltipRect.position = new Vector2(
+					tooltipRect.position.x,
+					mousePos.y + tooltipRect.rect.height + 15
 				);
 			}
 		}

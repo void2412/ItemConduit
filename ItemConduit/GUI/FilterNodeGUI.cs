@@ -45,7 +45,7 @@ namespace ItemConduit.GUI
 
 		private void BuildUI()
 		{
-			tooltipParent = panel.transform;
+			tooltipParent = uiRoot.transform;
 			GameObject content = new GameObject("Content");
 			content.transform.SetParent(panel.transform, false);
 
