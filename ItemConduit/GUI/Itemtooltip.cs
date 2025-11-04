@@ -62,7 +62,11 @@ namespace ItemConduit.GUI
 
 			tooltipObject.SetActive(false);
 
-			Logger.LogInfo($"✅ Tooltip Created! Parent: {parent.name}");
+			if (DebugConfig.showDebug.Value)
+			{
+				Logger.LogInfo($"✅ Tooltip Created! Parent: {parent.name}");
+			}
+			
 		}
 
 		public void Show()
@@ -124,7 +128,11 @@ namespace ItemConduit.GUI
 			if (tooltipObject != null)
 			{
 				tooltipObject.SetActive(false);
-				Logger.LogInfo("🚫 Tooltip hidden");
+				if (DebugConfig.showDebug.Value)
+				{
+					Logger.LogInfo("🚫 Tooltip hidden");
+				}
+				
 			}
 		}
 
