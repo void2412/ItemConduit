@@ -24,6 +24,7 @@ namespace ItemConduit.GUI
 		protected GameObject panel;
 		protected RectTransform panelRect;
 		protected bool isVisible = false;
+		protected ItemDatabase itemDatabase;
 
 		protected const int GRID_COLUMNS = 8;
 		protected const int ITEM_SLOT_SIZE = 64;
@@ -59,6 +60,8 @@ namespace ItemConduit.GUI
 		protected virtual void Awake()
 		{
 			DontDestroyOnLoad(gameObject);
+			itemDatabase = ItemDatabase.Instance;
+			
 		}
 
 		protected virtual void Update()
@@ -403,41 +406,7 @@ namespace ItemConduit.GUI
 
 		#region Item Management
 
-		protected void LoadItemDatabase()
-		{
-			allItems.Clear();
-
-			if (ObjectDB.instance == null) return;
-
-			foreach (GameObject prefab in ObjectDB.instance.m_items)
-			{
-				ItemDrop itemDrop = prefab.GetComponent<ItemDrop>();
-				if (itemDrop != null && itemDrop.m_itemData != null)
-				{
-					try
-					{
-						Sprite icon = itemDrop.m_itemData.GetIcon();
-						if (icon != null)
-						{
-							itemDrop.m_itemData.m_dropPrefab = prefab;
-							allItems.Add(itemDrop.m_itemData);
-							if (DebugConfig.showDebug.Value) {
-								string prefabName = itemDrop.m_itemData.m_dropPrefab?.name ?? "";
-								Logger.LogInfo($"Added prefab {prefabName} to GUI");
-							}
-								
-						}
-					}
-					catch
-					{
-						if (DebugConfig.showDebug.Value)
-						{
-							Logger.LogWarning($"[ItemConduit] Skipping item with invalid icon: {prefab.name}");
-						}
-					}
-				}
-			}
-		}
+	
 
 		protected bool MatchesCategory(ItemDrop.ItemData item, Category category)
 		{

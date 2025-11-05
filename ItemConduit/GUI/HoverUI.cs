@@ -10,20 +10,28 @@ namespace ItemConduit.GUI
 {
 	public class HoverUI : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler
 	{
-		public ItemTooltip itemTooltip = new ItemTooltip();
+		public ItemTooltip itemTooltip;
+		private ItemDrop.ItemData itemData;
 		public void OnPointerEnter(PointerEventData eventData)
 		{
-			if (itemTooltip == null) return;
-
+			if (itemTooltip == null || itemData == null) return;
+			itemTooltip.itemData = itemData;
 			itemTooltip.Show();
 		}
 
 		public void OnPointerExit(PointerEventData eventData) 
 		{
-			if(itemTooltip == null) return;
+			if (itemTooltip == null) return;
 			itemTooltip.Hide();
 		}
-
+		public void SetSharedTooltip(ItemTooltip tooltip)
+		{
+			itemTooltip = tooltip;
+		}
+		public void SetItemData(ItemDrop.ItemData data)
+		{
+			itemData = data;
+		}
 		private void Update()
 		{
 			if (itemTooltip != null && itemTooltip.IsVisible())

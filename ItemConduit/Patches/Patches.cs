@@ -16,7 +16,8 @@ namespace ItemConduit.Patches
 	/// </summary>
 	public static class HarmonyPatches
 	{
-		
+
+
 
 		/// <summary>
 		/// Patch for game initialization
@@ -61,6 +62,10 @@ namespace ItemConduit.Patches
 
 					Logger.LogInfo("[ItemConduit] Managers initialized in ZNetScene");
 				}
+				if(ZNet.instance != null)
+				{
+					ItemDatabase.Instance.StartCoroutine(ItemDatabase.Instance.LoadDatabaseAsync());
+				}
 			}
 		}
 
@@ -79,7 +84,7 @@ namespace ItemConduit.Patches
 				// Clean shutdown of network manager
 				NetworkManager.Instance?.Shutdown();
 				RebuildManager.Instance?.CancelPendingRebuilds();
-
+				ItemDatabase.Instance?.ClearCache();
 				Logger.LogInfo("[ItemConduit] Network manager shutdown");
 			}
 		}

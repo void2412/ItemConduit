@@ -68,6 +68,12 @@ namespace ItemConduit.Nodes
 				zNetView.Register<string>("RPC_UpdateFilter", RPC_UpdateFilter);
 				zNetView.Register<bool>("RPC_UpdateMode", RPC_UpdateMode);
 			}
+			if (gui == null && zNetView.IsValid())
+			{
+				GameObject guiObj = new GameObject("ExtractNodeGUI");
+				gui = guiObj.AddComponent<ExtractNodeGUI>();
+				((ExtractNodeGUI)gui).Initialize(this);
+			}
 		}
 
 		protected override void Start()
@@ -423,14 +429,9 @@ namespace ItemConduit.Nodes
 			}
 
 			// Normal E interaction - open GUI
-			// Create GUI if it doesn't exist
-			if (gui == null)
-			{
-				GameObject guiObj = new GameObject("ExtractNodeGUI");
-				gui = guiObj.AddComponent<ExtractNodeGUI>();
-				((ExtractNodeGUI)gui).Initialize(this, user);
-			}
 
+			if (gui == null) return false;
+			gui.user = user;
 			// Show the GUI
 			gui.Show();
 			return true;

@@ -16,7 +16,7 @@ namespace ItemConduit.GUI
 	{
 		protected TNode node;
 
-		protected Humanoid user;
+		public Humanoid user;
 		protected InputField channelInput;
 		protected Button modeButton;
 		protected InputField searchInput;
@@ -25,21 +25,20 @@ namespace ItemConduit.GUI
 		private readonly List<ItemSlot> itemSlots = new List<ItemSlot>();
 		private readonly Dictionary<Category, Button> categoryButtons = new Dictionary<Category, Button>();
 		private Transform tooltipParent;
+		private ItemTooltip sharedTooltip;
 
 
-		
-
-		public void Initialize(TNode targetNode, Humanoid player)
+		public void Initialize(TNode targetNode)
 		{
 			node = targetNode;
-			user = player;
+
 			InitializeBaseNodeUI();
 			BuildUI();
-			LoadItemDatabase();
 			LoadNodeSettings();
 			UpdateFilteredCountDisplay();
 			SelectCategory(Category.All);
 		}
+
 
 		protected override Vector2 GetPanelSize() => new Vector2(1100, 850);
 
@@ -68,6 +67,8 @@ namespace ItemConduit.GUI
 
 			ApplyJotunnStyling(panel);
 			GUIManager.Instance.ApplyWoodpanelStyle(panel.GetComponent<RectTransform>());
+			sharedTooltip = new ItemTooltip();
+			sharedTooltip.Create(tooltipParent);
 		}
 
 		private void CreateTitle(Transform parent)
@@ -449,7 +450,7 @@ namespace ItemConduit.GUI
 		private void UpdateFilteredItems()
 		{
 			filteredItems.Clear();
-
+			allItems = itemDatabase.GetAllItems();
 			string searchText = searchInput != null ? searchInput.text.ToLower() : string.Empty;
 
 			if (currentCategory == Category.CurrentlyFiltered)
@@ -503,8 +504,7 @@ namespace ItemConduit.GUI
 		{
 			int requiredSlots = filteredItems.Count;
 
-			// Create slots as needed
-			while (itemSlots.Count < requiredSlots)
+			while (itemSlots.Count < filteredItems.Count)
 			{
 				CreateItemSlot(itemGridContainer.transform, itemSlots.Count);
 			}
@@ -525,11 +525,8 @@ namespace ItemConduit.GUI
 					HoverUI hover = itemSlots[i].GetComponent<HoverUI>();
 					if (hover != null)
 					{
-						if (hover.itemTooltip.tooltipObject == null)
-						{
-							hover.itemTooltip.Create(tooltipParent);
-						}
-						hover.itemTooltip.itemData = item;
+						hover.SetItemData(item);
+						hover.SetSharedTooltip(sharedTooltip);
 					}
 				}
 				else
