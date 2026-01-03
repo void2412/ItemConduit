@@ -373,3 +373,13 @@ Environment.props
 
 # not the generated dll for thunderstore
 */Package/plugins/*
+
+
+.claude
+.opencode
+plans
+.repomixignore
+CLAUDE.MD
+instruction.txt
+ItemConduit/libs/*
+deploy.env

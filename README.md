@@ -7,6 +7,27 @@ There is no actual plugin content included, just a minimum plugin class.
 
 Please see [Jötunn Docs](https://valheim-modding.github.io/Jotunn/guides/overview.html) detailed documentation and setup.
 
+## Quick Start: Build and Deploy
+
+### Automated Deployment (Recommended)
+
+1. **Configure deployment paths:**
+   ```bash
+   cp deploy.env.example deploy.env
+   # Edit deploy.env with your CLIENT_PATH and SERVER_PATH
+   ```
+
+2. **Run rebuild and deploy:**
+   ```bash
+   # Linux/Mac/Git Bash
+   ./scripts/rebuild-and-deploy.sh
+
+   # Windows PowerShell
+   .\scripts\rebuild-and-deploy.ps1
+   ```
+
+**See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment guide.**
+
 ### Post Build automations
 
 Included in this repo is a PowerShell script `publish.ps1`.
